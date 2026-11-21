@@ -1,5 +1,5 @@
 name = "lean-no-comments"
-defaultTargets = ["NoComments", "no-comments"]
+defaultTargets = ["NoCommentsCore"]
 
 [leanOptions]
 autoImplicit = false
@@ -7,8 +7,14 @@ relaxedAutoImplicit = false
 warningAsError = true
 
 [[lean_lib]]
-name = "NoComments"
-globs = ["NoComments.+"]
+name = "NoCommentsCore"
+roots = ["NoComments.Core", "NoComments.Config", "NoComments.RatchetCore"]
+globs = ["NoComments.Core", "NoComments.Config", "NoComments.RatchetCore"]
+
+[[lean_lib]]
+name = "NoCommentsCLI"
+roots = ["NoComments.ConfigIO", "NoComments.Ratchet", "NoComments.Runner", "NoComments.LakeEnv", "NoComments.Worker"]
+globs = ["NoComments.ConfigIO", "NoComments.Ratchet", "NoComments.Runner", "NoComments.LakeEnv", "NoComments.Worker"]
 
 [[lean_exe]]
 name = "no-comments"

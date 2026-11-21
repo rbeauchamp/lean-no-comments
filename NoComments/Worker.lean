@@ -3,7 +3,7 @@ import Std.Sync.Mutex
 import NoComments.Core
 import NoComments.Runner
 import NoComments.LakeEnv
-import NoComments.Ratchet
+import NoComments.RatchetCore
 
 namespace NoComments.Worker
 
@@ -86,7 +86,7 @@ private def prependSearchPath (front rest : String) : String :=
   else front ++ String.singleton System.SearchPath.separator ++ rest
 
 private def runSingleChildWorker (selfExe stageDir : System.FilePath) (entryLean? : Option System.FilePath)
-    (target : LakeEnv.WorkerTargetSetup) : IO Ratchet.FileAnalysis := do
+    (target : LakeEnv.WorkerTargetSetup) : IO RatchetCore.FileAnalysis := do
   let (cmd, args, leanPath, stdinPayload) :=
     match entryLean?, needsSharedLeanWorker target with
     | some entryLean, true =>
@@ -124,16 +124,16 @@ private def runSingleChildWorker (selfExe stageDir : System.FilePath) (entryLean
   if exitCode != 0 then
     throw <| IO.userError s!"worker failed on {target.relPath} (exit {exitCode}): {stderr.trimAscii.toString}"
   match parseWorkerStdout target.relPath stdout with
-  | .ok comments => return Ratchet.analyzeComments target.relPath comments
+  | .ok comments => return RatchetCore.analyzeComments target.relPath comments
   | .error e => throw <| IO.userError e
 
 private structure PoolState where
   nextIdx : Nat
-  results : Array (Option Ratchet.FileAnalysis)
+  results : Array (Option RatchetCore.FileAnalysis)
   firstError? : Option String
 
 def runWorkerPool (selfExe stageDir : System.FilePath) (targets : Array LakeEnv.WorkerTargetSetup)
-    (jobs : Nat) : IO (Array Ratchet.FileAnalysis) := do
+    (jobs : Nat) : IO (Array RatchetCore.FileAnalysis) := do
   if jobs == 0 then
     throw <| IO.userError "--jobs must be at least 1"
   if targets.isEmpty then
