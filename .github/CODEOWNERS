@@ -1,0 +1,7 @@
+# Claimed pure core, build/ratchet configuration, and GitHub config
+/lakefile.toml @rbeauchamp
+/NoComments/Core.lean @rbeauchamp
+/NoComments/Config.lean @rbeauchamp
+/NoComments/RatchetCore.lean @rbeauchamp
+/.no-comments.json @rbeauchamp
+/.github/ @rbeauchamp
