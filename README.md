@@ -114,7 +114,7 @@ Download the release binary and `.sha256` file matching your platform (`darwin-a
 
 ```bash
 TARGET="linux-x86_64" # or darwin-arm64
-VERSION="v0.1.0"
+VERSION="v0.1.1"
 BASE_URL="https://github.com/rbeauchamp/lean-no-comments/releases/download/${VERSION}"
 
 curl -fsSLO "${BASE_URL}/no-comments-${TARGET}"
