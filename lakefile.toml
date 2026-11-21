@@ -1,0 +1,16 @@
+name = "lean-no-comments"
+defaultTargets = ["NoComments", "no-comments"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+warningAsError = true
+
+[[lean_lib]]
+name = "NoComments"
+globs = ["NoComments.+"]
+
+[[lean_exe]]
+name = "no-comments"
+root = "NoComments.Main"
+supportInterpreter = true

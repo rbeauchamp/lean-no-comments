@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: Build, Verify Proofs & Self-Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure origin/main ref exists for merge-base check
+        run: |
+          if ! git rev-parse --verify --quiet origin/main^{commit}; then
+            git fetch --no-tags origin main:refs/remotes/origin/main
+          fi
+
+      - name: Install elan and Lean toolchain
+        shell: bash
+        run: |
+          TOOLCHAIN="$(tr -d '[:space:]' < lean-toolchain)"
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain "$TOOLCHAIN"
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Build NoComments library and no-comments binary
+        run: lake build
+
+      - name: Verify Core purity and logical axioms
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -nE '\b(partial|sorry|sorryAx|axiom|unsafe|implemented_by|extern)\b' NoComments/Core.lean; then
+            echo "Found forbidden keyword in NoComments/Core.lean"
+            exit 1
+          fi
+          THMS="$(grep -E '^theorem ' NoComments/Core.lean | sed -E 's/^theorem ([^ ({:]+).*/\1/')"
+          AXIOM_OUT="$(
+            {
+              echo "import NoComments.Core"
+              printf '%s\n' "$THMS" | sed 's/^/#print axioms NoComments.Core./'
+            } | lake env lean --stdin
+          )"
+          printf '%s\n' "$AXIOM_OUT"
+          THM_LIST="$THMS" AXIOM_TEXT="$AXIOM_OUT" python3 - <<'PY'
+          import os, re
+          thms = [t.strip() for t in os.environ["THM_LIST"].splitlines() if t.strip()]
+          lines = [l.strip() for l in os.environ["AXIOM_TEXT"].splitlines() if l.strip()]
+          allowed = {"propext", "Classical.choice", "Quot.sound"}
+          seen = {}
+          for line in lines:
+              m = re.match(r"^'NoComments\.Core\.([^']+)' depends on axioms: \[(.*)\]$", line)
+              if m:
+                  name = m.group(1)
+                  axioms = [a.strip() for a in m.group(2).split(",") if a.strip()]
+                  bad = set(axioms) - allowed
+                  if bad:
+                      raise SystemExit(f"Forbidden axioms for {name}: {sorted(bad)}")
+                  seen[name] = axioms
+                  continue
+              m2 = re.match(r"^'NoComments\.Core\.([^']+)' does not depend on any axioms$", line)
+              if m2:
+                  seen[m2.group(1)] = []
+                  continue
+              raise SystemExit(f"Unexpected #print axioms line: {line}")
+          missing = set(thms) - set(seen)
+          if missing:
+              raise SystemExit(f"Missing axiom check for theorems: {sorted(missing)}")
+          print(f"Verified {len(thms)}/{len(thms)} Core theorems strictly within allowlist {sorted(allowed)}")
+          PY
+
+      - name: Verify zero Lean comments via self-check
+        run: |
+          ./.lake/build/bin/no-comments --version
+          INV_OUT="$(./.lake/build/bin/no-comments inventory)"
+          echo "$INV_OUT"
+          ./.lake/build/bin/no-comments check
+          echo "$INV_OUT" | grep -q "0 comment(s), 0 line(s)"
