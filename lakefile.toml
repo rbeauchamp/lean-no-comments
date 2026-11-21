@@ -13,8 +13,8 @@ globs = ["NoComments.Core", "NoComments.Config", "NoComments.RatchetCore"]
 
 [[lean_lib]]
 name = "NoCommentsCLI"
-roots = ["NoComments.ConfigIO", "NoComments.Ratchet", "NoComments.Runner", "NoComments.LakeEnv", "NoComments.Worker"]
-globs = ["NoComments.ConfigIO", "NoComments.Ratchet", "NoComments.Runner", "NoComments.LakeEnv", "NoComments.Worker"]
+roots = ["NoComments.ConfigIO", "NoComments.Ratchet", "NoComments.Runner", "NoComments.LakeEnv", "NoComments.Worker", "NoComments.TestListing"]
+globs = ["NoComments.ConfigIO", "NoComments.Ratchet", "NoComments.Runner", "NoComments.LakeEnv", "NoComments.Worker", "NoComments.TestListing"]
 
 [[lean_exe]]
 name = "no-comments"
