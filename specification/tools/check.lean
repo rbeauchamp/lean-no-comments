@@ -82,10 +82,57 @@ private def implDecls (env : Environment) : CoreM (List Name) := do
       | _ => pure ()
     if modCount == 0 then
       throwError "no implementation declarations found in {modName}"
-  unless acc.any (fun n => isPrivateName n &&
-      privateToUserName n == `NoComments.Config.stripLeadingDotSlashChars) do
-    throwError "expected private helper NoComments.Config.stripLeadingDotSlashChars in implDecls"
   return acc.reverse
+
+private def delegatedRecordNames : List String :=
+  [ "NoCommentsSpecification.CoreRecords.fingerprintRecord"
+  , "NoCommentsSpecification.CoreRecords.checkTokenRecord"
+  , "NoCommentsSpecification.CoreRecords.collectRangesRecord"
+  , "NoCommentsSpecification.CoreRecords.missingFromRecord"
+  , "NoCommentsSpecification.ConfigRecords.parseConfigRecord"
+  , "NoCommentsSpecification.ConfigRecords.classifyFileRecord"
+  , "NoCommentsSpecification.ConfigRecords.classifyTrackedRecord"
+  , "NoCommentsSpecification.RatchetRecords.parseRatchetRecord"
+  , "NoCommentsSpecification.RatchetRecords.checkExactSyncRecord"
+  , "NoCommentsSpecification.RatchetRecords.checkMonotonicFileRecord"
+  , "NoCommentsSpecification.RatchetRecords.validateCheckRecord" ]
+
+private def checkDelegationBoundary (confirmed : Confirmation.Report) : MetaM Unit := do
+  let ownerId : LeanIntent.Ident := NoCommentsSpecification.Explanations.ownerId
+  let agentId : LeanIntent.Ident := NoCommentsSpecification.Explanations.agentId
+  let agentDelId : LeanIntent.Ident := NoCommentsSpecification.Explanations.agentDelegationId
+  let expectedCount := recordNames.length + delegatedRecordNames.length
+  unless confirmed.decisions.length == expectedCount do
+    throwError "expected {expectedCount} answer decisions, got {confirmed.decisions.length}"
+  for (stmt, dec) in confirmed.decisions do
+    unless dec.isOk do
+      throwError "unaccepted or refused answer statement {stmt.id.toString}"
+  unless confirmed.counted.length == expectedCount do
+    throwError "expected {expectedCount} counted answers, got {confirmed.counted.length}"
+  for (stmt, ans) in confirmed.counted do
+    unless stmt.source.recorded do
+      throwError "counted answer {stmt.id.toString} is missing source provenance"
+    if ans.consequence == LeanIntent.Confirmation.restatement.consequence || ans.kind != .possibility then
+      unless ans.author == ⟨ownerId, none⟩ && ans.verdict == .confirmed do
+        throwError "owner-level question {ans.consequence} on {ans.record} requires direct owner authority"
+    else
+      if let some d := ans.author.delegation then
+        unless ans.author == ⟨agentId, some agentDelId⟩ && d == agentDelId &&
+            ans.verdict == .confirmed && delegatedRecordNames.contains ans.record do
+          throwError "delegated answer {stmt.id.toString} on {ans.record} exceeds below-owner delegation scope"
+      else
+        unless ans.author == ⟨ownerId, none⟩ && ans.verdict == .confirmed do
+          throwError "non-delegated answer {stmt.id.toString} has unexpected authority"
+  let texts ← Confirmation.Read.logTexts ``NoCommentsSpecification.OwnersLog.noCommentsOwnersLog
+  for t in texts do
+    let some stmt := Statement.parse t
+      | throwError "unparseable statement in OwnersLog"
+    if let .delegation del := stmt.body then
+      unless del.delegator == ⟨ownerId, none⟩ && del.delegate.name == agentId &&
+          del.scope.records == .only delegatedRecordNames &&
+          del.scope.confirm && !del.scope.decline && !del.scope.retract &&
+          !del.mayPassOn do
+        throwError "delegation {stmt.id.toString} exceeds confirmed below-owner-level grant"
 
 private def expectedAuditTargets : List Name :=
   [ ``NoCommentsSpecification.AdequacyCore.isFingerprint_verdicts
@@ -112,8 +159,9 @@ open NoCommentsSpecification.Refinement.Core
 open NoCommentsSpecification.Refinement.Config
 open NoCommentsSpecification.Refinement.Ratchet
 
-private def expectedRequired : List (Name × List Name) :=
+private def expectedRequired : List (Name × Name × List Name) :=
   [ (``NoCommentsSpecification.Required.isFingerprintRequired,
+      ``NoCommentsSpecification.Deliverables.isFingerprintDeliverable,
       [ ``isFingerprint_o2, ``isFingerprint_o2Run, ``isFingerprint_o3
       , ``isFingerprint_o4, ``isFingerprint_o5, ``isFingerprint_oPair_whole
       , ``isFingerprint_perInput_pairOf, ``isFingerprint_perInput_oPair_table
@@ -122,6 +170,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``isFingerprint_refuses_empty, ``isFingerprint_accepts_zero
       , ``isFingerprint_meets, ``isFingerprint_fulfilled ])
   , (``NoCommentsSpecification.Required.fingerprintRequired,
+      ``NoCommentsSpecification.Deliverables.fingerprintDeliverable,
       [ ``fingerprint_o2, ``fingerprint_o2Run, ``fingerprint_o3
       , ``fingerprint_o4, ``fingerprint_o5, ``fingerprint_not_o5_eq
       , ``fingerprint_oPair_whole, ``fpValid_perInput_pairOf
@@ -131,6 +180,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``NoCommentsSpecification.Refinement.Core.fingerprint_nonconstant, ``fingerprint_allows_zero_empty
       , ``fingerprint_meets, ``fingerprint_fulfilled ])
   , (``NoCommentsSpecification.Required.checkTokenRequired,
+      ``NoCommentsSpecification.Deliverables.checkTokenDeliverable,
       [ ``checkToken_o2, ``checkToken_o2Run, ``checkToken_o3
       , ``checkToken_o4, ``checkToken_o5, ``checkToken_not_o5_eq
       , ``checkToken_interim_const_fails, ``checkToken_healthy_owed
@@ -141,6 +191,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``checkToken_refuses_raw_opener, ``checkToken_allows_custom_error
       , ``checkToken_meets, ``checkToken_fulfilled ])
   , (``NoCommentsSpecification.Required.collectRangesRequired,
+      ``NoCommentsSpecification.Deliverables.collectRangesDeliverable,
       [ ``collectRanges_o2, ``collectRanges_o2Run, ``collectRanges_o3
       , ``collectRanges_o4, ``collectRanges_o5, ``collectRanges_not_o5_eq
       , ``collectRanges_healthy_owed, ``collectRanges_healthy_nonempty
@@ -153,12 +204,14 @@ private def expectedRequired : List (Name × List Name) :=
       , ``collectRanges_new_span_fingerprint, ``collectRanges_meets
       , ``collectRanges_fulfilled ])
   , (``NoCommentsSpecification.Required.sourceOrderRequired,
+      ``NoCommentsSpecification.Deliverables.sourceOrderDeliverable,
       [ ``sourceOrder_o2, ``sourceOrder_o2Run, ``sourceOrder_o3
       , ``sourceOrder_o4, ``sourceOrder_o5, ``sourceOrder_interim_const_fails
       , ``sourceOrder_oPair_whole, ``sourceOrder_meets_iff
       , ``sourceOrder_members_recorded, ``sourceOrder_meets
       , ``sourceOrder_fulfilled ])
   , (``NoCommentsSpecification.Required.distinctCommentLinesRequired,
+      ``NoCommentsSpecification.Deliverables.distinctCommentLinesDeliverable,
       [ ``distinctCommentLines_o2, ``distinctCommentLines_o2Run, ``distinctCommentLines_o3
       , ``distinctCommentLines_o4, ``distinctCommentLines_o5
       , ``distinctCommentLines_oPair_whole, ``distinct_perInput_pairOf
@@ -167,6 +220,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``diff_distinctLines_zero_line, ``distinctCommentLines_empty_zero
       , ``distinctCommentLines_meets, ``distinctCommentLines_fulfilled ])
   , (``NoCommentsSpecification.Required.firstOutOfOrderRequired,
+      ``NoCommentsSpecification.Deliverables.firstOutOfOrderDeliverable,
       [ ``firstOutOfOrder_o2, ``firstOutOfOrder_o2Run, ``firstOutOfOrder_o3
       , ``firstOutOfOrder_o4, ``firstOutOfOrder_o5
       , ``firstOutOfOrder_oPair_whole, ``firstOutOfOrder_verdicts
@@ -174,12 +228,14 @@ private def expectedRequired : List (Name × List Name) :=
       , ``firstOutOfOrder_nil_none, ``firstOutOfOrder_meets
       , ``firstOutOfOrder_fulfilled ])
   , (``NoCommentsSpecification.Required.sortFingerprintsRequired,
+      ``NoCommentsSpecification.Deliverables.sortFingerprintsDeliverable,
       [ ``sortFingerprints_o2, ``sortFingerprints_o2Run, ``sortFingerprints_o3
       , ``sortFingerprints_o4, ``sortFingerprints_o5
       , ``sortFingerprints_interim_const_fails, ``sortFingerprints_oPair_whole
       , ``sortFingerprints_meets_iff, ``sortFingerprints_sorted
       , ``sortFingerprints_meets, ``sortFingerprints_fulfilled ])
   , (``NoCommentsSpecification.Required.missingFromRequired,
+      ``NoCommentsSpecification.Deliverables.missingFromDeliverable,
       [ ``missingFrom_o2, ``missingFrom_o2Run, ``missingFrom_o3
       , ``missingFrom_o4, ``missingFrom_o5, ``missingFrom_not_o5_eq
       , ``missingFrom_interim_degenerate, ``missingFrom_oPair_whole
@@ -187,6 +243,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``missingFrom_allows_unsorted_output, ``missingFrom_meets
       , ``missingFrom_fulfilled ])
   , (``NoCommentsSpecification.Required.parseConfigRequired,
+      ``NoCommentsSpecification.Deliverables.parseConfigDeliverable,
       [ ``parseConfig_o2_of_oracle, ``parseConfig_o2Run, ``parseConfig_o3_of_oracle
       , ``parseConfig_o4, ``parseConfig_o5, ``parseConfig_not_o5_eq_of_oracle
       , ``parseConfig_oPair_whole, ``parseConfig_perInput_pairOf
@@ -198,6 +255,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``parseConfig_allows_custom_error, ``parseConfigJson_meets
       , ``parseConfigJson_fulfilled ])
   , (``NoCommentsSpecification.Required.classifyFileRequired,
+      ``NoCommentsSpecification.Deliverables.classifyFileDeliverable,
       [ ``classifyFile_o2, ``classifyFile_o2Run, ``classifyFile_o3
       , ``classifyFile_o4, ``classifyFile_o5, ``classifyFile_not_o5_eq
       , ``classifyFile_oPair_whole, ``classifyFile_perInput_pairOf
@@ -208,6 +266,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``classifyFile_allows_custom_error, ``classifyFile_meets
       , ``classifyFile_fulfilled ])
   , (``NoCommentsSpecification.Required.classifyTrackedRequired,
+      ``NoCommentsSpecification.Deliverables.classifyTrackedDeliverable,
       [ ``classifyTracked_o2, ``classifyTracked_o2Run, ``classifyTracked_o3
       , ``classifyTracked_o4, ``classifyTracked_o5, ``classifyTracked_not_o5_eq
       , ``classifyTracked_oPair_whole, ``classifyTracked_perInput_pairOf
@@ -217,6 +276,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``classifyTracked_healthy_entailment, ``classifyTracked_allows_custom_error
       , ``classifyTrackedFiles_meets, ``classifyTrackedFiles_fulfilled ])
   , (``NoCommentsSpecification.Required.analyzeCommentsRequired,
+      ``NoCommentsSpecification.Deliverables.analyzeCommentsDeliverable,
       [ ``analyzeComments_o2, ``analyzeComments_o2Run, ``analyzeComments_o3
       , ``analyzeComments_o4, ``analyzeComments_o5
       , ``analyzeComments_oPair_whole, ``analyzeComments_perInput_pairOf
@@ -224,6 +284,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``analyzeComments_equiv_of_pos, ``analyzeComments_preserves_file
       , ``analyzeComments_meets, ``analyzeComments_fulfilled ])
   , (``NoCommentsSpecification.Required.parseRatchetRequired,
+      ``NoCommentsSpecification.Deliverables.parseRatchetDeliverable,
       [ ``parseRatchet_o2_of_oracle, ``parseRatchet_o2Run, ``parseRatchet_o3_of_oracle
       , ``parseRatchet_o4, ``parseRatchet_o5, ``parseRatchet_not_o5_eq_of_oracle
       , ``parseRatchet_oPair_whole, ``parseRatchet_perInput_pairOf
@@ -234,6 +295,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``parseRatchet_healthy_entailment, ``parseRatchet_allows_custom_error
       , ``parseRatchetJson_meets, ``parseRatchetJson_fulfilled ])
   , (``NoCommentsSpecification.Required.checkExactSyncRequired,
+      ``NoCommentsSpecification.Deliverables.checkExactSyncDeliverable,
       [ ``checkExactSync_o2, ``checkExactSync_o2Run, ``checkExactSync_o3
       , ``checkExactSync_o4, ``checkExactSync_o5, ``checkExactSync_not_o5_eq
       , ``checkExactSync_oPair_whole, ``checkExactSync_perInput_pairOf
@@ -243,6 +305,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``checkExactSync_accepts_sync, ``checkExactSync_allows_custom_error
       , ``checkExactSync_meets, ``checkExactSync_fulfilled ])
   , (``NoCommentsSpecification.Required.checkMonotonicFileRequired,
+      ``NoCommentsSpecification.Deliverables.checkMonotonicFileDeliverable,
       [ ``checkMonotonicFile_o2, ``checkMonotonicFile_o2Run, ``checkMonotonicFile_o3
       , ``checkMonotonicFile_o4, ``checkMonotonicFile_o5, ``checkMonotonicFile_not_o5_eq
       , ``checkMonotonicFile_oPair_whole, ``checkMonotonicFile_perInput_pairOf
@@ -252,6 +315,7 @@ private def expectedRequired : List (Name × List Name) :=
       , ``checkMonotonicFile_accepts_monotonic, ``checkMonotonicFile_allows_custom_error
       , ``checkMonotonicFile_meets, ``checkMonotonicFile_fulfilled ])
   , (``NoCommentsSpecification.Required.validateCheckRequired,
+      ``NoCommentsSpecification.Deliverables.validateCheckDeliverable,
       [ ``validateCheck_o2, ``validateCheck_o2Run, ``validateCheck_o3
       , ``validateCheck_o4, ``validateCheck_o5, ``validateCheck_not_o5_eq
       , ``validateCheck_oPair_whole, ``validateCheck_perInput_pairOf
@@ -275,12 +339,25 @@ private def checkAuditTargets (actual : List Name) : MetaM Unit := do
   unless actual.length == expectedAuditTargets.length do
     throwError "CodeAudit target count mismatch: expected {expectedAuditTargets.length}, got {actual.length}"
 
-private def checkRequiredMembership (actual : List (Name × Implementation.Constant)) : MetaM Unit := do
+private def checkRequiredMembership (built : Array Name)
+    (actual : List (Name × Implementation.Constant)) : MetaM Unit := do
   let expectedEntries := expectedRequired.map Prod.fst
+  let expectedDelivs := expectedRequired.map (·.2.1)
+  unless expectedDelivs.Nodup do
+    throwError "duplicate deliverable in expectedRequired"
+  let builtDelivs ← Confirmation.Read.declaredIn built ``LeanIntent.Deliverable
+  unless builtDelivs.toList == (expectedDelivs.toArray.qsort Name.lt).toList do
+    throwError "built deliverables mismatch expectedRequired deliverables"
   for (r, _) in actual do
     unless expectedEntries.contains r do
       throwError "unexpected Required entry in report: {r}"
-  for (reqName, expectedThms) in expectedRequired do
+  for (reqName, delivName, expectedThms) in expectedRequired do
+    let ci ← getConstInfo reqName
+    let reqType ← LeanIntent.Render.readWhnf ci.type
+    unless reqType.isAppOfArity ``LeanIntent.Required 2 do
+      throwError "{reqName} does not have type LeanIntent.Required <deliverable>"
+    unless reqType.appArg!.consumeMData.isConstOf delivName do
+      throwError "{reqName} is bound to wrong deliverable (expected {delivName})"
     unless expectedThms.Nodup do
       throwError "duplicate theorem in expectedRequired for {reqName}"
     let foundThms := actual.filterMap fun (r, c) => if r == reqName then some c.name else none
@@ -330,7 +407,7 @@ private def loadBuiltModules : IO (Array Name) := do
   | .ok ms => return ms
   | .error err => throw <| IO.userError s!"invalid lake module list: {err}"
 
-private def loadAllExecutables : IO (Array (Name × Name)) := do
+private def loadParentExecutables : IO (Array (Name × Name)) := do
   let (elan?, lean?, lake?) ← Lake.findInstall?
   let some lean := lean? | throw <| IO.userError "Lake found no Lean installation"
   let some lake := lake? | throw <| IO.userError "Lake found no Lake installation"
@@ -338,21 +415,18 @@ private def loadAllExecutables : IO (Array (Name × Name)) := do
     | .ok e => pure e
     | .error err => throw <| IO.userError err
   let cwd ← IO.currentDir
-  let loadPkg (dir : System.FilePath) : IO Lake.Package := do
-    let some pkg ← (Lake.loadPackage {
-      lakeEnv, wsDir := dir, relConfigFile := "lakefile.toml", configLang? := some .toml
-    }).toBaseIO
-      | throw <| IO.userError s!"Lake could not load {dir / "lakefile.toml"}"
-    return pkg
-  let specPkg ← loadPkg cwd
-  let parentPkg ← loadPkg (cwd / "..")
-  return Execution.lakeExecutables parentPkg ++ Execution.lakeExecutables specPkg
+  let parentDir := cwd / ".."
+  let some parentPkg ← (Lake.loadPackage {
+    lakeEnv, wsDir := parentDir, relConfigFile := "lakefile.toml", configLang? := some .toml
+  }).toBaseIO
+    | throw <| IO.userError s!"Lake could not load {parentDir / "lakefile.toml"}"
+  return Execution.lakeExecutables parentPkg
 
 public unsafe def main : IO Unit := do
   initSearchPath (← findSysroot)
   enableInitializersExecution
   let built ← loadBuiltModules
-  let exes ← loadAllExecutables
+  let exes ← loadParentExecutables
   let mods : Array Import :=
     #[ { module := `NoComments.Core, importAll := true }
      , { module := `NoComments.Config, importAll := true }
@@ -377,6 +451,7 @@ public unsafe def main : IO Unit := do
     let confirmed ← Confirmation.Read.check built
     unless confirmed.findings.isEmpty do
       throwError "confirmation findings: {confirmed.findings.length}"
+    checkDelegationBoundary confirmed
     let implemented ← Implementation.Read.check built
     unless implemented.findings.isEmpty do
       throwError "implementation findings: {repr implemented.findings}"
@@ -387,7 +462,7 @@ public unsafe def main : IO Unit := do
     let required ← Required.Read.check built
     unless required.findings.isEmpty do
       throwError "required-theorems findings:\n{"\n".intercalate (required.findings.map (·.message))}"
-    checkRequiredMembership required.theorems
+    checkRequiredMembership built required.theorems
     let executed ← Execution.Read.check built exes
     unless executed.findings.isEmpty do
       throwError "execution findings: {repr executed.findings}"

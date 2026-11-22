@@ -10,7 +10,7 @@ Report potential soundness defects, uncounted comments, coverage gaps, or ratche
 
 - **`NoCommentsCore` vs. `NoCommentsCLI`:** Keep pure, linted core modules (`NoComments.Core`, which carries the kernel-checked theorems, plus `NoComments.Config` and `NoComments.RatchetCore`) strictly separate from `NoCommentsCLI` (`NoComments.ConfigIO`, `NoComments.Ratchet`, `NoComments.Runner`, `NoComments.LakeEnv`, `NoComments.Worker`, `NoComments.TestListing`) and `NoComments.Main`. Every module in `NoCommentsCore` must start with `module`, carry zero `IO` or `Lake` imports, stay within `[propext, Classical.choice, Quot.sound]`, and contain zero `sorry`, custom `axiom` declarations, `unsafe`, `partial`, `while`/`repeat`, `partial_fixpoint`, `@[implemented_by]`, `@[extern]`, `@[csimp]`, or `!`-panics (`[i]!`, `get!`, `panic!`).
 - **Zero Lean comments:** `comment-ratchet.json` enforces `[]` across every tracked `.lean` file. Do not introduce `--`, `/- ... -/`, `/-- ... -/`, or `/-! ... -/` comments anywhere in `.lean` code.
-- **Tests forbidden as evidence (`tests_as_evidence: forbid`):** Do not add test files, Lake test drivers, unit/scenario suites, `#guard`/`#eval`/`#check`/`#print` commands, or `example` declarations. Claims rest on kernel-checked Lean proofs in `NoComments.Core` and the compiled verification commands below.
+- **Tests forbidden as evidence (`tests_as_evidence: forbid`):** Do not add test files, Lake test drivers, unit/scenario suites, `#guard`/`#eval`/`#check`/`#print` commands, or `example` declarations. Claims rest on kernel-checked Lean proofs in `NoComments.Core` and `specification/` (`NoCommentsSpecification`) together with the compiled verification commands below.
 
 ## Local Verification
 
@@ -18,9 +18,9 @@ Run these commands cleanly before opening a pull request:
 
 ```sh
 lake build --wfail
-lake lint
+env -u REGULA_FULL lake lint
 lake build no-comments
-(cd specification && lake build --wfail)
+(cd specification && lake build --wfail && env -u REGULA_FULL lake lint && lake build spec-check --wfail && lake exe spec-check)
 ./.lake/build/bin/no-comments inventory
 ./.lake/build/bin/no-comments check
 libdir="$(lean --print-libdir)"

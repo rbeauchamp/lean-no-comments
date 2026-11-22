@@ -229,28 +229,6 @@ theorem lineEnd_bounds {str : String} {stopPos : String.Pos.Raw} :
       | nl hlt2 _ => exact absurd hlt2 hnot
       | step hlt2 _ _ => exact absurd hlt2 hnot
 
-theorem lineEnd_self {str : String} {stopPos p eol : String.Pos.Raw}
-    (hp : p ≤ stopPos) (h : LineEnd str stopPos p eol) :
-    LineEnd str eol p eol := by
-  induction h with
-  | done hnot => exact LineEnd.done hnot
-  | nl _ _ =>
-    exact LineEnd.done (fun hlt => Nat.lt_irrefl _ (String.Pos.Raw.lt_iff.mp hlt))
-  | @step p eol' hlt hne hnext ih =>
-    by_cases hnx : String.Pos.Raw.next str p ≤ stopPos
-    · have hbe := lineEnd_bounds hnx hnext
-      have hplt : p < eol' := by
-        have h1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str p)
-        have h2 := String.Pos.Raw.le_iff.mp hbe.1
-        exact String.Pos.Raw.lt_iff.mpr (by omega)
-      exact LineEnd.step hplt hne (ih hnx)
-    · have hnot : ¬ String.Pos.Raw.next str p < stopPos := fun hlt2 =>
-        hnx (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hlt2)))
-      cases hnext with
-      | done _ => exact LineEnd.step hlt hne (LineEnd.done hnot)
-      | nl hlt2 _ => exact absurd hlt2 hnot
-      | step hlt2 _ _ => exact absurd hlt2 hnot
-
 theorem blockStep_bounds {str : String} {stopPos : String.Pos.Raw} :
     ∀ {n : Nat} {pos endPos : String.Pos.Raw},
       BlockStep str stopPos n pos endPos → pos < endPos ∧ endPos ≤ stopPos
@@ -273,55 +251,6 @@ theorem blockStep_bounds {str : String} {stopPos : String.Pos.Raw} :
     have hp := String.Pos.Raw.lt_next str pos
     ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp ih.1)), ih.2⟩
 
-theorem blockStep_self {str : String} {stopPos : String.Pos.Raw} {n : Nat}
-    {pos endPos : String.Pos.Raw}
-    (h : BlockStep str stopPos n pos endPos) :
-    BlockStep str endPos n pos endPos := by
-  induction h with
-  | @closeTop n1 pos1 hn1 _ h1 _ h2 _ =>
-    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
-    have hp2 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos1))
-    exact BlockStep.closeTop hn1
-      (String.Pos.Raw.lt_iff.mpr (by omega)) h1
-      (String.Pos.Raw.lt_iff.mpr (by omega)) h2
-      (String.Pos.Raw.le_iff.mpr (Nat.le_refl _))
-  | @closeNested n1 pos1 ep hne hn _ h1 _ h2 _ hrest ih =>
-    have hbe := blockStep_bounds hrest
-    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
-    have hp2 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos1))
-    have hb1 := String.Pos.Raw.lt_iff.mp hbe.1
-    exact BlockStep.closeNested hne hn
-      (String.Pos.Raw.lt_iff.mpr (by omega)) h1
-      (String.Pos.Raw.lt_iff.mpr (by omega)) h2
-      (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt hb1)) ih
-  | @openNested n1 pos1 ep hn _ h1 _ h2 _ hrest ih =>
-    have hbe := blockStep_bounds hrest
-    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
-    have hp2 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos1))
-    have hb1 := String.Pos.Raw.lt_iff.mp hbe.1
-    exact BlockStep.openNested hn
-      (String.Pos.Raw.lt_iff.mpr (by omega)) h1
-      (String.Pos.Raw.lt_iff.mpr (by omega)) h2
-      (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt hb1)) ih
-  | @other n1 pos1 ep hn _ hc ho hrest ih =>
-    have hbe := blockStep_bounds hrest
-    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
-    have hb1 := String.Pos.Raw.lt_iff.mp hbe.1
-    have hlt_ep : pos1 < ep := String.Pos.Raw.lt_iff.mpr (by omega)
-    have hc' : ¬ (String.Pos.Raw.get str pos1 = '-' ∧
-        String.Pos.Raw.next str pos1 < ep ∧
-        String.Pos.Raw.get str (String.Pos.Raw.next str pos1) = '/') := by
-      rintro ⟨g1, g2, g3⟩
-      exact hc ⟨g1, String.Pos.Raw.lt_iff.mpr
-        (Nat.lt_of_lt_of_le (String.Pos.Raw.lt_iff.mp g2) (String.Pos.Raw.le_iff.mp hbe.2)), g3⟩
-    have ho' : ¬ (String.Pos.Raw.get str pos1 = '/' ∧
-        String.Pos.Raw.next str pos1 < ep ∧
-        String.Pos.Raw.get str (String.Pos.Raw.next str pos1) = '-') := by
-      rintro ⟨g1, g2, g3⟩
-      exact ho ⟨g1, String.Pos.Raw.lt_iff.mpr
-        (Nat.lt_of_lt_of_le (String.Pos.Raw.lt_iff.mp g2) (String.Pos.Raw.le_iff.mp hbe.2)), g3⟩
-    exact BlockStep.other hn hlt_ep hc' ho' ih
-
 def GenuineCommentSpan (ctx : Parser.ParserContextCore) (stx : Syntax) (sb eb : Nat)
     (c : Core.Comment) : Prop :=
   sb < eb ∧
@@ -336,8 +265,7 @@ def GenuineCommentSpan (ctx : Parser.ParserContextCore) (stx : Syntax) (sb eb : 
       let p2 := String.Pos.Raw.next ctx.fileMap.source p1
       String.Pos.Raw.get ctx.fileMap.source p0 = '-' ∧
       String.Pos.Raw.get ctx.fileMap.source p1 = '-' ∧
-      p2.byteIdx ≤ eb ∧
-      LineEnd ctx.fileMap.source ⟨eb⟩ p2 ⟨eb⟩) ∨
+      p2.byteIdx ≤ eb) ∨
     (c.kind = "block" ∧
       let p0 : String.Pos.Raw := ⟨sb⟩
       let p1 := String.Pos.Raw.next ctx.fileMap.source p0
@@ -349,7 +277,6 @@ def GenuineCommentSpan (ctx : Parser.ParserContextCore) (stx : Syntax) (sb eb : 
       String.Pos.Raw.get ctx.fileMap.source p2 ≠ '-' ∧
       String.Pos.Raw.get ctx.fileMap.source p2 ≠ '!' ∧
       p3.byteIdx ≤ eb ∧
-      BlockStep ctx.fileMap.source ⟨eb⟩ 1 p3 ⟨eb⟩ ∧
       ∃ pm ps : String.Pos.Raw,
         ps = String.Pos.Raw.next ctx.fileMap.source pm ∧
         eb = (String.Pos.Raw.next ctx.fileMap.source ps).byteIdx ∧

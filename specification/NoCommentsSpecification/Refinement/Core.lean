@@ -677,8 +677,7 @@ theorem scanTriviaGo_ok_props (ctx : Parser.ParserContextCore) (stx : Syntax)
                 · refine Or.inr ⟨Nat.le_refl _, String.Pos.Raw.le_iff.mp heolB.2,
                     ⟨hltSpan, Nat.le_trans (String.Pos.Raw.le_iff.mp heolB.2) (String.Pos.Raw.le_iff.mp hstop),
                       by simp [CoreSpec.validCommentKind, hk], hfp, hsl, hel, Or.inl ⟨hk, ?_⟩⟩, hfeq⟩
-                  exact ⟨hline.1.1, hline.2, String.Pos.Raw.le_iff.mp heolB.1,
-                    CoreSpec.lineEnd_self hafter hlineEnd⟩
+                  exact ⟨hline.1.1, hline.2, String.Pos.Raw.le_iff.mp heolB.1⟩
               · have hlt1 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source pos
                 have hlt2 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos)
                 have hleEol := String.Pos.Raw.le_iff.mp heolB.1
@@ -734,10 +733,9 @@ theorem scanTriviaGo_ok_props (ctx : Parser.ParserContextCore) (stx : Syntax)
                           have hlt3 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source
                             (String.Pos.Raw.next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos))
                           have hltEnd := String.Pos.Raw.lt_iff.mp hfbB.1
-                          have hblkSelf := CoreSpec.blockStep_self hbstep
                           cases pos
                           exact ⟨hblk.1.1, hblk.2, by dsimp only; omega, hnotdoc.1, hnotdoc.2,
-                            by dsimp only; omega, hblkSelf, pm, ps, hps, congrArg String.Pos.Raw.byteIdx hend,
+                            by dsimp only; omega, pm, ps, hps, congrArg String.Pos.Raw.byteIdx hend,
                             hpm, hpsC⟩
                       · have hlt1 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source pos
                         have hlt2 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos)

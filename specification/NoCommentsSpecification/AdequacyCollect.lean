@@ -987,8 +987,7 @@ theorem triviaAcc_new_spans {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp
       · exact .inl hacc
       · refine .inr ⟨hlo, Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi, ?_, hfeq⟩
         refine ⟨hpos_lt_eol, Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi) hend,
-          ?_, hfpC, hsl, hel, .inl ⟨hkind, hc1, hc2, String.Pos.Raw.le_iff.mp hbe.1,
-            lineEnd_self (String.Pos.Raw.le_iff.mp ha) heol⟩⟩
+          ?_, hfpC, hsl, hel, .inl ⟨hkind, hc1, hc2, String.Pos.Raw.le_iff.mp hbe.1⟩⟩
         rw [hkind]
         simp [validCommentKind]
     · exact .inr hnew
@@ -1012,7 +1011,7 @@ theorem triviaAcc_new_spans {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp
         refine ⟨hpos_lt_end, Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi) hend,
           ?_, hfpC, hsl, hel, .inr (.inl ⟨hkind, hc1, hc2, hp2_lt, hnd1, hnd2,
             String.Pos.Raw.le_iff.mp (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hbe.1))),
-            blockStep_self hb, blockStep_ends_slash_minus hb⟩)⟩
+            blockStep_ends_slash_minus hb⟩)⟩
         rw [hkind]
         simp [validCommentKind]
     · exact .inr hnew
@@ -1913,7 +1912,7 @@ theorem collectRanges_o2 : O2 collectRangesRecord := by
   rcases List.mem_cons.mp hp with rfl | hp
   · refine ⟨(dashCtx, .missing, 0, 2, c0), ?_⟩
     dsimp [GenuineCommentSpan]
-    refine ⟨by omega, ?_, ?_, zeroFp_valid, rfl, rfl, .inl ⟨rfl, by decide, by decide, by decide, .done (by decide)⟩⟩
+    refine ⟨by omega, ?_, ?_, zeroFp_valid, rfl, rfl, .inl ⟨rfl, by decide, by decide, by decide⟩⟩
     · exact Nat.le_refl 2
     · simp [validCommentKind, c0]
   rcases List.mem_cons.mp hp with rfl | hp
