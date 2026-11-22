@@ -18,6 +18,12 @@ public import NoCommentsSpecification.Comparison
 public import NoCommentsSpecification.Refinement.Core
 public import NoCommentsSpecification.Refinement.Config
 public import NoCommentsSpecification.Refinement.Ratchet
+public import NoCommentsSpecification.Explanations
+public import NoCommentsSpecification.Deliverables
+public import NoCommentsSpecification.OwnersLog
+public import NoCommentsSpecification.Implementations
+public import NoCommentsSpecification.Required
+public import NoCommentsSpecification.Execution
 
 public section
 

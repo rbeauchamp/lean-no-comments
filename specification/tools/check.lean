@@ -1,7 +1,15 @@
 module
 
+public import Lean
+public import Lake
+public import Lake.Load.Package
 public import LeanIntent.Cone
 public import LeanIntent.CodeAudit
+public import LeanIntent.Confirmation.Read
+public import LeanIntent.Implementation.Read
+public import LeanIntent.Required.Read
+public import LeanIntent.Execution.Lake
+public import LeanIntent.Execution.Read
 public import NoCommentsSpecification
 
 open Lean
@@ -75,17 +83,49 @@ private def hasCodeAuditTarget (ci : ConstantInfo) : Bool :=
     consts.contains ``LeanIntent.HasCode ||
     consts.contains ``LeanIntent.ExactCode
 
-public def main : IO Unit := do
+private def loadBuiltModules : IO (Array Name) := do
+  let out ← IO.Process.output {
+    cmd := "lake"
+    args := #["query", "--json", "@/NoCommentsSpecification:modules"]
+  }
+  unless out.exitCode == 0 do
+    throw <| IO.userError s!"lake query failed:\n{out.stderr}"
+  match Required.Read.queryModules out.stdout with
+  | .ok ms => return ms
+  | .error err => throw <| IO.userError s!"invalid lake module list: {err}"
+
+private def loadAllExecutables : IO (Array (Name × Name)) := do
+  let (elan?, lean?, lake?) ← Lake.findInstall?
+  let some lean := lean? | throw <| IO.userError "Lake found no Lean installation"
+  let some lake := lake? | throw <| IO.userError "Lake found no Lake installation"
+  let lakeEnv ← match ← (Lake.Env.compute lake lean elan?).toBaseIO with
+    | .ok e => pure e
+    | .error err => throw <| IO.userError err
+  let cwd ← IO.currentDir
+  let loadPkg (dir : System.FilePath) : IO Lake.Package := do
+    let some pkg ← (Lake.loadPackage {
+      lakeEnv, wsDir := dir, relConfigFile := "lakefile.toml", configLang? := some .toml
+    }).toBaseIO
+      | throw <| IO.userError s!"Lake could not load {dir / "lakefile.toml"}"
+    return pkg
+  let specPkg ← loadPkg cwd
+  let parentPkg ← loadPkg (cwd / "..")
+  return Execution.lakeExecutables parentPkg ++ Execution.lakeExecutables specPkg
+
+public unsafe def main : IO Unit := do
   initSearchPath (← findSysroot)
+  enableInitializersExecution
+  let built ← loadBuiltModules
+  let exes ← loadAllExecutables
   let mods : Array Import :=
     #[ { module := `NoComments.Core, importAll := true }
      , { module := `NoComments.Config, importAll := true }
      , { module := `NoComments.RatchetCore, importAll := true }
      , { module := `NoCommentsSpecification, importAll := true } ]
-  let env ← importModules mods {}
+  let env ← importModules mods {} (loadExts := true)
   let impl := implDecls env
   let ctx : Core.Context := { fileName := "<check>", fileMap := default }
-  let ((auditCount, axCount), _) ← (do
+  let ((auditCount, axCount, confCount, implCount, reqCount, execCount), _) ← (Meta.MetaM.run' (do
     for recName in recordNames do
       Cone.requireIndependent recName impl
     let auditTargets := env.constants.fold (init := []) fun acc n ci =>
@@ -93,11 +133,26 @@ public def main : IO Unit := do
           hasCodeAuditTarget ci then
         n :: acc
       else acc
-    let audited ← Meta.MetaM.run' do
-      for tgt in auditTargets do
-        CodeAudit.requireCodes tgt
-      pure auditTargets.length
+    for tgt in auditTargets do
+      CodeAudit.requireCodes tgt
+    let confirmed ← Confirmation.Read.check built
+    unless confirmed.findings.isEmpty do
+      throwError "confirmation findings: {confirmed.findings.length}"
+    let implemented ← Implementation.Read.check built
+    unless implemented.findings.isEmpty do
+      throwError "implementation findings: {repr implemented.findings}"
+    unless implemented.awaiting.isEmpty do
+      throwError "deliverables still awaiting implementation: {repr implemented.awaiting}"
+    let required ← Required.Read.check built
+    unless required.findings.isEmpty do
+      throwError "required-theorems findings:\n{"\n".intercalate (required.findings.map (·.message))}"
+    let executed ← Execution.Read.check built exes
+    unless executed.findings.isEmpty do
+      throwError "execution findings: {repr executed.findings}"
+    unless executed.notRun.isEmpty do
+      throwError "deliverables not claimed by any executable: {repr executed.notRun}"
     let axCount ← checkAxioms
-    pure (audited, axCount)
-    : CoreM (Nat × Nat)).toIO ctx { env := env }
-  IO.println s!"check ok: records={recordNames.length} impl_excluded={impl.length} code_audited={auditCount} axiom_checked={axCount}"
+    pure (auditTargets.length, axCount, confirmed.counted.length,
+      implemented.implementations.length, required.theorems.length, executed.reached.length)
+    : Meta.MetaM (Nat × Nat × Nat × Nat × Nat × Nat))).toIO ctx { env := env }
+  IO.println s!"check ok: records={recordNames.length} impl_excluded={impl.length} code_audited={auditCount} confirmed_answers={confCount} implemented={implCount} required_theorems={reqCount} executed={execCount} axiom_checked={axCount}"

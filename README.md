@@ -10,7 +10,7 @@ Comments in Lean 4 codebases tend to drift into three failure modes: restating w
 
 ## Trusted Computing Base (TCB)
 
-Every check separates a **pure, linted core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, checked under `regula` `standard-logical`, with kernel-checked proofs in `NoComments.Core` and `specification/`'s `NoCommentsSpecification` proving adequacy, blind second-model comparison, and end-to-end refinement for all 17 pure contracts across `Core`, `Config`, and `RatchetCore`) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`; see [specification/README.md](specification/README.md) for formal accounting and remaining trusted-base boundaries):
+Every check separates a **pure, linted core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, checked under `regula` `standard-logical`, with kernel-checked proofs in `NoComments.Core` and `specification/`'s `NoCommentsSpecification` proving adequacy, blind second-model comparison, owner confirmation via `LeanIntent.Confirmation`, end-to-end refinement for all 17 pure contracts, required-theorem coverage, and IR reachability from `no-comments` via `LeanIntent.Execution`) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`; see [specification/README.md](specification/README.md) and [specification/confirmation.md](specification/confirmation.md) for formal accounting and remaining trusted-base boundaries):
 
 ### Formally Verified Across `NoComments.Core` and `specification/`
 

@@ -28,3 +28,4 @@ name = "NoCommentsSpecification"
 [[lean_exe]]
 name = "spec-check"
 root = "tools.check"
+supportInterpreter = true
