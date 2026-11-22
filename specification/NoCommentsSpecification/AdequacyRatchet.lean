@@ -822,14 +822,6 @@ theorem checkMonotonicFile_negative_external_model :
     (fun _ _ _ _ _ h => by simp at h),
     ⟨fun a => by simp [Core.SortedFingerprints.empty], Nat.le_refl 0⟩, by simp⟩
 
-theorem validateOk_iff_healthy (analyses : Array RatchetCore.FileAnalysis)
-    (checkedFiles excludedFiles : Array String)
-    (currentRatchet : Std.HashMap String RatchetCore.RatchetEntry)
-    (baseRatchet? : Option (Std.HashMap String RatchetCore.RatchetEntry))
-    (targetFile? : Option String) :
-    Healthy.ValidateInput analyses checkedFiles excludedFiles currentRatchet baseRatchet? targetFile? ↔
-      ValidateOk analyses checkedFiles excludedFiles currentRatchet baseRatchet? targetFile? := Iff.rfl
-
 theorem validateOk_total (analyses : Array RatchetCore.FileAnalysis)
     (checkedFiles excludedFiles : Array String)
     (currentRatchet : Std.HashMap String RatchetCore.RatchetEntry)

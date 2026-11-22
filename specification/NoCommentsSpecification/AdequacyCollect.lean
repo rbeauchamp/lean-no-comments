@@ -658,10 +658,6 @@ theorem rangesAccWith_total (fp : FingerprintFn) (ranges : List Core.CommandRang
       · exact .inr (.syntaxFails h1 h2 hsf)
     · exact .inr (.badBounds hb)
 
-theorem rangesAcc_total (ranges : List Core.CommandRange) (acc : Core.CommentAcc) :
-    (∃ acc', RangesAcc ranges acc acc') ∨ CollectRefusal ranges acc :=
-  rangesAccWith_total fpModel ranges acc
-
 theorem triviaAcc_preserves {fp : FingerprintFn} {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
     {acc acc' : Core.CommentAcc} (h : TriviaAcc fp fileMap stopPos pos acc acc') :
     ∀ (sb eb : Nat) (c : Core.Comment),

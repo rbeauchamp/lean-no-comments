@@ -58,10 +58,6 @@ private theorem forIn_congr_body {α β : Type} {m : Type → Type} [Monad m]
     forIn l b f = forIn l b g := by
   congr 1; funext x s; exact hfg x s
 
-private theorem except_bind_pure_unit (x : Except String Unit) :
-    (x >>= fun _ => pure ()) = x := by
-  cases x <;> rfl
-
 private theorem ite_eq_true_elim {α : Type} (c : Bool) (t e : α) :
     (if c = true then t else e) = (match c with | true => t | false => e) := by
   cases c <;> rfl
@@ -276,62 +272,12 @@ private theorem checkMonotonicFile_empty (f : String)
       rw [h] at hempty
       simp [Array.isEmpty] at hempty
 
-private theorem ratchetCheckAllowedKeysLoop_iff (ctx : String) (allowed : Array String)
-    (l : List (String × Json)) :
-    (forIn (m := Except String) l () fun x _ =>
-      if allowed.contains x.1 = true then
-        Except.ok (ForInStep.yield ())
-      else
-        Except.error s!"unknown key '{x.1}' in {ctx}") = Except.ok () ↔
-      ∀ kv ∈ l, kv.1 ∈ allowed.toList := by
-  induction l with
-  | nil =>
-    rw [List.forIn_nil]
-    constructor
-    · intro _ _ h; cases h
-    · intro _; rfl
-  | cons hd tl ih =>
-    rw [List.forIn_cons]
-    by_cases hmem : hd.1 ∈ allowed.toList
-    · have hcont : allowed.contains hd.1 = true := by
-        simpa [Array.contains_iff_mem, Array.mem_toList_iff] using hmem
-      simp only [hcont, ↓reduceIte]
-      dsimp only [bind, Except.bind, pure, Except.pure]
-      rw [ih]
-      exact ⟨fun h kv hkv => by
-        rcases List.mem_cons.mp hkv with rfl | hkv
-        · exact hmem
-        · exact h kv hkv,
-        fun h kv hkv => h kv (List.mem_cons_of_mem hd hkv)⟩
-    · have hcont : allowed.contains hd.1 = false := by
-        cases hc : allowed.contains hd.1 with
-        | false => rfl
-        | true =>
-          have hmem' : hd.1 ∈ allowed.toList := by
-            simpa [Array.contains_iff_mem, Array.mem_toList_iff] using hc
-          exact False.elim (hmem hmem')
-      simp only [hcont, Bool.false_eq_true, ↓reduceIte]
-      dsimp only [bind, Except.bind]
-      simp only [List.mem_cons, forall_eq_or_imp]
-      constructor
-      · intro h; cases h
-      · rintro ⟨hbad, _⟩; exact False.elim (hmem hbad)
-
 private theorem ratchetCheckAllowedKeys_iff (ctx : String)
     (obj : Std.TreeMap.Raw String Json compare) (allowed : Array String) :
     NoComments.RatchetCore.checkAllowedKeys ctx obj allowed = Except.ok () ↔
       ∀ kv ∈ obj.toList, kv.1 ∈ allowed.toList := by
   unfold NoComments.RatchetCore.checkAllowedKeys
-  dsimp only
-  rw [except_bind_pure_unit]
-  rw [forIn_congr_body obj.toList () _
-    (fun x _ =>
-      if allowed.contains x.1 = true then
-        Except.ok (ForInStep.yield ())
-      else
-        Except.error s!"unknown key '{x.1}' in {ctx}")
-    fun ⟨k, _⟩ _ => by cases allowed.contains k <;> rfl]
-  exact ratchetCheckAllowedKeysLoop_iff ctx allowed obj.toList
+  exact Refinement.Config.checkAllowedKeysLoop_iff ctx allowed obj.toList
 
 private theorem ratchetGetRequiredField_iff (ctx : String)
     (obj : Std.TreeMap.Raw String Json compare) (key : String) (v : Json) :

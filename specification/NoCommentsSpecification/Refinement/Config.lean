@@ -506,11 +506,6 @@ private theorem getRequiredField_iff (ctx : String) (obj : Std.TreeMap.Raw Strin
   unfold NoComments.Config.getRequiredField
   cases obj.get? key <;> simp
 
-theorem getObj_iff (j : Json) (obj : Std.TreeMap.Raw String Json compare) :
-    j.getObj? = .ok obj ↔ j = .obj obj := by
-  unfold Lean.Json.getObj?
-  cases j <;> simp [pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
-
 theorem getArr_iff (j : Json) (arr : Array Json) :
     j.getArr? = .ok arr ↔ j = .arr arr := by
   unfold Lean.Json.getArr?

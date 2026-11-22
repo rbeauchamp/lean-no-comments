@@ -105,12 +105,6 @@ theorem normRelFile_unique {raw out1 out2 : String}
   rcases h2 with ⟨_, _, _, _, _, _, _, rfl⟩
   rfl
 
-theorem normPrefix_unique {raw out1 out2 : String}
-    (h1 : NormPrefix raw out1) (h2 : NormPrefix raw out2) : out1 = out2 := by
-  rcases h1 with ⟨_, _, _, _, _, _, _, _, rfl⟩
-  rcases h2 with ⟨_, _, _, _, _, _, _, _, rfl⟩
-  rfl
-
 theorem validWorkspaceJson_dir_unique {j : Json} {w1 w2 : Config.WorkspaceConfig}
     (h1 : ValidWorkspaceJson j w1) (h2 : ValidWorkspaceJson j w2) : w1.dir = w2.dir := by
   rcases h1 with ⟨obj1, dir1, rfl, _, hd1, hnr1, _⟩

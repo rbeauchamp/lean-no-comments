@@ -949,10 +949,6 @@ theorem genuineSpan_docNode_mono {ctx : Parser.ParserContextCore} {arg root : Sy
   · exact ⟨h1, h2, h3, h4, h5, h6, Or.inr (Or.inl h7)⟩
   · exact ⟨h1, h2, h3, h4, h5, h6, Or.inr (Or.inr ⟨hk, hmono _ _ _ hdoc⟩)⟩
 
-theorem isDocCommentKind_eq (k : SyntaxNodeKind) :
-    NoComments.Core.isDocCommentKind k = CoreSpec.docKind k :=
-  rfl
-
 mutual
 
 theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw)
