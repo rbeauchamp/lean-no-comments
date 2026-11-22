@@ -33,29 +33,7 @@ jobs:
           fi
 
       - name: Install Lean from lean-toolchain with SHA-256 verification
-        shell: bash
-        run: |
-          set -euo pipefail
-          V="$(sed 's/^.*:v//' lean-toolchain | tr -d '[:space:]')"
-          [ "$V" = "4.36.0" ] || { echo "unexpected lean-toolchain version '$V'; update checksums" >&2; exit 1; }
-          OS="$(uname -s)"
-          ARCH="$(uname -m)"
-          if [ "$OS" = "Linux" ] && [ "$ARCH" = "x86_64" ]; then
-            PKG="lean-$V-linux"
-            SHA="92a996be487b48e1c2f2985be6b150490475c94d02f5a5e26665a9dab780902a"
-            SUM_CMD=(sha256sum --check)
-          elif [ "$OS" = "Darwin" ] && [ "$ARCH" = "arm64" ]; then
-            PKG="lean-$V-darwin_aarch64"
-            SHA="35ea8a8eba3d014feb16414610454322f6aad7679f8f0d9f09fb63754bb16e39"
-            SUM_CMD=(shasum -a 256 -c)
-          else
-            echo "unsupported runner $OS/$ARCH" >&2
-            exit 1
-          fi
-          curl -sSfL -o "$RUNNER_TEMP/lean.zip" "https://github.com/leanprover/lean4/releases/download/v$V/$PKG.zip"
-          printf '%s  %s\n' "$SHA" "$RUNNER_TEMP/lean.zip" | "${SUM_CMD[@]}"
-          unzip -q "$RUNNER_TEMP/lean.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/$PKG/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/install-lean
 
       - name: Build NoCommentsCore, run Regula lint, and build no-comments
         shell: bash
@@ -83,8 +61,4 @@ jobs:
           LIB="$LIBDIR/libLake_shared.dylib"
           [ -e "$LIB" ] || LIB="$LIBDIR/libLake_shared.so"
           [ -e "$LIB" ] || { echo "missing libLake_shared under $LIBDIR" >&2; exit 1; }
-          OUT="$(lake env lean --load-dynlib="$LIB" --run NoComments/TestListing.lean --check)"
-          if [ -n "$OUT" ]; then
-            printf '%s\n' "$OUT"
-            exit 1
-          fi
+          lake env lean --load-dynlib="$LIB" --run NoComments/TestListing.lean --check

@@ -107,28 +107,6 @@ private def parseArgs (args : List String) (st : CliOptions := {}) :
       parseArgs rest { st with mode? := some (.check file? baseRef? true) }
     | _ =>
       throw "--bootstrap is supported only with `check`"
-  | "inventory" :: rest =>
-    if st.mode?.isNone then
-      parseArgs rest { st with mode? := some (.inventory none false) }
-    else
-      match st.mode? with
-      | some (.inventory none asJson) =>
-        parseArgs rest { st with mode? := some (.inventory (some "inventory") asJson) }
-      | some (.inventory (some _) _) =>
-        throw "unexpected extra positional argument 'inventory'"
-      | _ =>
-        throw "unexpected argument 'inventory'"
-  | "check" :: rest =>
-    if st.mode?.isNone then
-      parseArgs rest { st with mode? := some (.check none none false) }
-    else
-      match st.mode? with
-      | some (.inventory none asJson) =>
-        parseArgs rest { st with mode? := some (.inventory (some "check") asJson) }
-      | some (.inventory (some _) _) =>
-        throw "unexpected extra positional argument 'check'"
-      | _ =>
-        throw "unexpected argument 'check'"
   | arg :: rest =>
     if arg.startsWith "--repo=" then
       parseArgs rest { st with repo? := some (← requireArgValue "--repo=" (arg.drop 7).toString) }
@@ -162,6 +140,10 @@ private def parseArgs (args : List String) (st : CliOptions := {}) :
         throw "duplicate --base-ref"
       | _ =>
         throw "--base-ref is supported only with `check`"
+    else if arg == "inventory" && st.mode?.isNone then
+      parseArgs rest { st with mode? := some (.inventory none false) }
+    else if arg == "check" && st.mode?.isNone then
+      parseArgs rest { st with mode? := some (.check none none false) }
     else if !arg.startsWith "-" then
       match st.mode? with
       | some (.inventory none asJson) =>

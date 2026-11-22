@@ -10,7 +10,7 @@ Comments in Lean 4 codebases tend to drift into three failure modes: restating w
 
 ## Trusted Computing Base (TCB)
 
-Every check separates a **pure proved core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, verified under `regula` `standard-logical`) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`):
+Every check separates a **pure, linted core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, checked under `regula` `standard-logical`, with kernel-checked theorems in `NoComments.Core` and pure executable config-classification and ratchet-validation decisions in `NoComments.Config` and `NoComments.RatchetCore` whose end-to-end refinement proofs are tracked in [#2](https://github.com/rbeauchamp/lean-no-comments/issues/2)) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`):
 
 ### Formally Verified in `NoComments.Core` (Standard Logical Axioms Only)
 
