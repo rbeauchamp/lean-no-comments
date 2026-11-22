@@ -1,0 +1,23 @@
+module
+
+public import LeanIntent.Record
+public import NoCommentsSpecification.Types
+public import NoCommentsSpecification.Healthy
+public import NoCommentsSpecification.CoreSpec
+public import NoCommentsSpecification.CoreRecords
+public import NoCommentsSpecification.ConfigSpec
+public import NoCommentsSpecification.ConfigRecords
+public import NoCommentsSpecification.RatchetSpec
+public import NoCommentsSpecification.RatchetRecords
+public import NoCommentsSpecification.AdequacyCore
+public import NoCommentsSpecification.AdequacyCollect
+public import NoCommentsSpecification.AdequacyConfig
+public import NoCommentsSpecification.AdequacyRatchet
+
+public section
+
+namespace NoCommentsSpecification
+
+def specVersion : String := "0.2.0"
+
+end NoCommentsSpecification

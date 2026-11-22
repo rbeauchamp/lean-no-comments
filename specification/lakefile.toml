@@ -1,0 +1,30 @@
+name = "no_comments_specification"
+defaultTargets = ["NoCommentsSpecification"]
+lintDriver = "regula/lint"
+lintDriverArgs = ["standard-logical"]
+
+[[require]]
+name = "lean-intent"
+git = "https://github.com/rbeauchamp/lean-intent"
+rev = "4d952bfccc8d877a741477f9668c5aa8fb0c63b2"
+
+[[require]]
+name = "regula"
+git = "https://github.com/rbeauchamp/regula"
+rev = "v0.15.0"
+
+[[require]]
+name = "lean-no-comments"
+path = ".."
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+warningAsError = true
+
+[[lean_lib]]
+name = "NoCommentsSpecification"
+
+[[lean_exe]]
+name = "spec-check"
+root = "tools.check"
