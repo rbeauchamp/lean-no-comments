@@ -55,83 +55,60 @@ private def readLakeTestDriver : IO (Option String) := do
     if pkg.testDriver == "" then return none
     else return some pkg.testDriver
 
-public def forbiddenAtoms : List String :=
-  ["#eval", "#eval!", "#guard", "#guard_msgs", "#guard_panic", "#guard_expr",
-   "#check", "#check_simp", "#check_tactic", "#check_tactic_failure",
-   "#print", "#reduce", "run_cmd", "run_elab", "run_meta", "run_tac",
-   "by_elab", "test_extern", "native_decide", "example"]
+public def forbiddenCommandKinds : List SyntaxNodeKind :=
+  [``Lean.Parser.Command.eval,
+   ``Lean.Parser.Command.evalBang,
+   ``Lean.Parser.Command.guardCmd,
+   ``Lean.guardMsgsCmd,
+   ``Lean.guardPanicCmd,
+   ``Lean.Parser.Command.guardExprCmd,
+   ``Lean.Parser.Command.check,
+   ``Lean.Parser.Command.check_failure,
+   ``Lean.Parser.checkSimp,
+   ``Lean.Parser.checkSimpFailure,
+   ``Lean.Parser.checkTactic,
+   ``Lean.Parser.checkTacticFailure,
+   ``Lean.Parser.Command.print,
+   ``Lean.Parser.Command.printAxioms,
+   ``Lean.Parser.Command.printSig,
+   ``Lean.Parser.Command.printEqns,
+   ``Lean.Parser.Command.printTacTags,
+   ``Lean.Parser.Command.example]
 
-public def forbiddenAttrs : List String :=
-  ["test_driver", "test"]
-
-private def isLiteralNodeKind (k : SyntaxNodeKind) : Bool :=
-  k == `str || k == `char || k == `interpolatedStrLit
+public def forbiddenAttrs : List Name :=
+  [`test_driver, `Lake.test_driver]
 
 private def lineOfPos (ictx : Parser.InputContext) (stx : Syntax) : Nat :=
   match stx.getPos? with
   | some pos => (ictx.fileMap.toPosition pos).line
   | none => 1
 
-private def isTestIdentSegment (s : String) : Bool :=
-  let lower := s.toLower
-  lower == "test" || lower == "tests" ||
-    lower.startsWith "test_" || lower.endsWith "_test" || lower.endsWith "_tests" ||
-    s.startsWith "test" || s.startsWith "Test" ||
-    s.endsWith "Test" || s.endsWith "Tests"
-
 public partial def scanSyntax (ictx : Parser.InputContext) (file : String) (stx : Syntax)
     (acc : Array String) : Array String :=
   match stx with
-  | .missing => acc
-  | .atom _ val =>
-    if forbiddenAtoms.contains val then
-      acc.push s!"{file}:{lineOfPos ictx stx}:cmd:{val}"
-    else
-      acc
-  | .ident _ _ n _ =>
-    if n == `native_decide || n == `Lean.ofReduceBool then
-      acc.push s!"{file}:{lineOfPos ictx stx}:ident:{n}"
-    else
-      acc
   | .node _ k args =>
-    if isLiteralNodeKind k then
-      acc
-    else if k == ``Lean.Parser.Command.declId then
-      let acc' :=
+    let acc' :=
+      if forbiddenCommandKinds.contains k then
+        acc.push s!"{file}:{lineOfPos ictx stx}:cmd:{k}"
+      else if k == ``Lean.Parser.Attr.simple then
         if h : 0 < args.size then
           match args[0] with
           | .ident _ _ n _ =>
-            let parts := n.components.filterMap fun
-              | .str _ s => some s
-              | _ => none
-            if parts.any isTestIdentSegment && n != `NoComments.TestListing then
-              acc.push s!"{file}:{lineOfPos ictx args[0]}:decl:{n}"
-            else
-              acc
-          | _ => acc
-        else
-          acc
-      args.foldl (fun a c => scanSyntax ictx file c a) acc'
-    else if k == ``Lean.Parser.Attr.simple then
-      let acc' :=
-        if h : 0 < args.size then
-          match args[0] with
-          | .ident _ _ n _ =>
-            if forbiddenAttrs.contains n.toString then
+            if forbiddenAttrs.contains n then
               acc.push s!"{file}:{lineOfPos ictx args[0]}:attr:{n}"
             else
               acc
           | _ => acc
         else
           acc
-      args.foldl (fun a c => scanSyntax ictx file c a) acc'
-    else
-      args.foldl (fun a c => scanSyntax ictx file c a) acc
+      else
+        acc
+    args.foldl (fun a c => scanSyntax ictx file c a) acc'
+  | _ => acc
 
-public def hasTestFilePath (file : String) : Bool :=
-  file.startsWith "test/" || file.startsWith "tests/" ||
-    (file.splitOn "/").contains "test" || (file.splitOn "/").contains "tests" ||
-    file.endsWith "Test.lean" || file.endsWith "Tests.lean"
+public def hasTestDirectory (file : String) : Bool :=
+  let dirs := (file.splitOn "/").dropLast
+  dirs.contains "test" || dirs.contains "tests"
 
 private def listTrackedLeanFiles : IO (Array String) := do
   let out ← IO.Process.output {
@@ -178,7 +155,7 @@ public def collectTestFindings : IO (Array String) := do
   let pmctx : Parser.ParserModuleContext := { env, options := {} }
   let files ← listTrackedLeanFiles
   for file in files do
-    if hasTestFilePath file then
+    if hasTestDirectory file then
       findings := findings.push s!"file:{file}"
     let text ← IO.FS.readFile file
     let ictx := Parser.mkInputContext text file
