@@ -28,7 +28,7 @@ jobs:
       - name: Ensure origin/main ref exists for merge-base check
         shell: bash
         run: |
-          if ! git rev-parse --verify --quiet origin/main^{commit}; then
+          if ! git rev-parse --verify --quiet 'origin/main^{commit}'; then
             git fetch --no-tags origin main:refs/remotes/origin/main
           fi
 

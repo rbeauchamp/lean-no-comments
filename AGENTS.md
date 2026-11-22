@@ -10,7 +10,7 @@ This repository (`rbeauchamp/lean-no-comments`) is **public**. Follow these rule
   - `NoComments.RatchetCore`: Pure `module` ratchet manifest parsing, exact-sync validation, and monotonicity verification (`RatchetCore.validateCheck`), zero `IO`, zero `Lake`.
 - **`NoCommentsCLI`** (unclaimed thin runtime harness) and **`no-comments` executable**:
   - `NoComments.ConfigIO`, `NoComments.Ratchet`, `NoComments.Runner`, `NoComments.LakeEnv`, `NoComments.Worker`, `NoComments.TestListing`, and `NoComments.Main` isolate all `IO`, filesystem, `git`, `Lake`, and worker-process effects outside `NoCommentsCore`.
-  - `lakefile.toml` intentionally sets `defaultTargets = ["NoCommentsCore"]` so strict logical linting (`lake lint`) audits every pure verified decision module without claiming `NoCommentsCLI` or the CLI binary.
+  - `lakefile.toml` intentionally sets `defaultTargets = ["NoCommentsCore"]` so strict logical linting (`lake lint`) audits every pure decision module without claiming `NoCommentsCLI` or the CLI binary.
 
 ## Required Build & Verification Commands
 
@@ -24,12 +24,12 @@ lake build no-comments
 ./.lake/build/bin/no-comments check
 libdir="$(lean --print-libdir)"
 lib="$libdir/libLake_shared.dylib"; [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
-lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean --check
+lake env lean -DwarningAsError=true --load-dynlib="$lib" --run NoComments/TestListing.lean --check
 ```
 
 ## Repository Policy
 
 - **Zero Lean comments:** `comment-ratchet.json` is `[]` (ratchet floor is `0` comments and `0` comment lines across all tracked `.lean` files). Never introduce `--`, `/- ... -/`, `/-- ... -/`, or `/-! ... -/` comments anywhere in `.lean` files. Verify with `./.lake/build/bin/no-comments inventory` (`0/10 files with comments, 0 comment(s), 0 line(s)`) and `./.lake/build/bin/no-comments check`.
 - **Strict purity in `NoCommentsCore`:** Every module in `NoCommentsCore` must start with `module`, use zero `sorry`, custom axioms, `unsafe`, `partial`, `while`/`repeat`, `partial_fixpoint`, `@[implemented_by]`, `@[extern]`, `@[csimp]`, or `!`-panicking operations (`[i]!`, `get!`, `panic!`), and build cleanly with `warningAsError = true`.
-- **Tests forbidden as evidence (`tests_as_evidence: forbid`):** Add zero test files, test targets, unit/scenario suites, or scratch `#check`/`#print` test harnesses. Verification rests strictly on kernel-checked Lean proofs in `NoCommentsCore` and clean execution of the built checks above (including `NoComments/TestListing.lean`).
+- **Tests forbidden as evidence (`tests_as_evidence: forbid`):** Add zero test files, test targets, unit/scenario suites, or scratch `#check`/`#print` test harnesses. Verification rests strictly on kernel-checked Lean proofs in `NoComments.Core` and clean execution of the built checks above (including `NoComments/TestListing.lean`).
 - **Public & commit hygiene:** Include zero AI co-author lines in commits or PR descriptions, use Conventional Commits, keep Markdown and GitHub issue/PR paragraphs and list items single-line (no hard line wraps), and never mention private repositories, internal tools, internal coordination details, or local filesystem paths.

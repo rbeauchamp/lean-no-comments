@@ -24,7 +24,7 @@ lake build no-comments
 ./.lake/build/bin/no-comments check
 libdir="$(lean --print-libdir)"
 lib="$libdir/libLake_shared.dylib"; [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
-lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean --check
+lake env lean -DwarningAsError=true --load-dynlib="$lib" --run NoComments/TestListing.lean --check
 ```
 
 ## Pull Requests & Commits
