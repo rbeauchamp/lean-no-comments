@@ -64,7 +64,8 @@ private def implDecls (env : Environment) : CoreM (List Name) := do
   for modName in implModules do
     let some modIdx := env.getModuleIdx? modName
       | throwError "implementation module {modName} is not imported in environment"
-    let modData := env.header.moduleData[modIdx.toNat]!
+    let some modData := env.header.moduleData[modIdx.toNat]?
+      | throwError "missing moduleData for {modName}"
     let mut modCount := 0
     for ci in modData.constants do
       match ci with
@@ -365,7 +366,8 @@ public unsafe def main : IO Unit := do
     for recName in recordNames do
       Cone.requireIndependent recName impl
     let auditTargets := env.constants.fold (init := []) fun acc n ci =>
-      if n.toString.startsWith "NoCommentsSpecification." && !n.isInternal &&
+      let userName := privateToUserName n
+      if userName.toString.startsWith "NoCommentsSpecification." && !userName.isInternal &&
           hasCodeAuditTarget ci then
         n :: acc
       else acc
@@ -393,6 +395,8 @@ public unsafe def main : IO Unit := do
       throwError "deliverables not claimed by any executable: {repr executed.notRun}"
     unless executed.reached.length == recordNames.length do
       throwError "execution count mismatch: expected {recordNames.length}, got {executed.reached.length}"
+    unless executed.reached.all (fun (_, exe, _) => exe == `«no-comments») do
+      throwError "unexpected executable in execution report: {repr executed.reached}"
     let axCount ← checkAxioms
     pure (impl.length, auditTargets.length, axCount, confirmed.counted.length,
       implemented.implementations.length, required.theorems.length, executed.reached.length)
