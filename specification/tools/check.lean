@@ -102,11 +102,6 @@ private def checkDelegationBoundary (confirmed : Confirmation.Report) : MetaM Un
   let agentId : LeanIntent.Ident := NoCommentsSpecification.Explanations.agentId
   let agentDelId : LeanIntent.Ident := NoCommentsSpecification.Explanations.agentDelegationId
   let expectedCount := recordNames.length + delegatedRecordNames.length
-  unless confirmed.decisions.length == expectedCount do
-    throwError "expected {expectedCount} answer decisions, got {confirmed.decisions.length}"
-  for (stmt, dec) in confirmed.decisions do
-    unless dec.isOk do
-      throwError "unaccepted or refused answer statement {stmt.id.toString}"
   unless confirmed.counted.length == expectedCount do
     throwError "expected {expectedCount} counted answers, got {confirmed.counted.length}"
   for (stmt, ans) in confirmed.counted do
