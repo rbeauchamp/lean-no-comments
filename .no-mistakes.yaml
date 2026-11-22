@@ -13,8 +13,15 @@ commands:
   test: |
     set -eu
     lake build --wfail
-    lake lint
+    env -u REGULA_FULL lake lint
     lake build no-comments
+    (
+      cd specification
+      lake build --wfail
+      env -u REGULA_FULL lake lint
+      lake build spec-check --wfail
+      lake exe spec-check
+    )
     ./.lake/build/bin/no-comments check
     libdir="$(lean --print-libdir)"
     lib="$libdir/libLake_shared.dylib"
@@ -31,18 +38,19 @@ test:
   no_surface: proceed
   instructions: |
     `lean-no-comments` establishes core comment extraction, token-boundary safety, byte coverage,
-    distinct line counting, and multiset monotonicity through kernel-checked proofs in `NoComments/Core.lean`,
-    paired with pure, Regula-linted decision modules (`NoComments/Config.lean`, `NoComments/RatchetCore.lean`)
-    in `NoCommentsCore`, `lake lint`, and self-enforcement via `./.lake/build/bin/no-comments check`.
+    distinct line counting, multiset monotonicity, `.no-comments.json` parsing/classification, and
+    ratchet parsing/sync/monotonicity checks in `NoCommentsCore` (`NoComments.Core`, `NoComments.Config`,
+    `NoComments.RatchetCore`) through kernel-checked proofs in `NoComments/Core.lean` and
+    end-to-end refinement proofs against the 17 `LeanIntent` records in `specification/` (`NoCommentsSpecification`,
+    checked under `lake lint`, `lake exe spec-check`), plus self-enforcement via `./.lake/build/bin/no-comments check`
+    across both root and `specification/`.
     Decide each claim by what it alters:
     1. Drive `./.lake/build/bin/no-comments` directly on a temporary Git checkout under an ignored task-owned
        directory inside the worktree such as `build/` (and remove the temporary checkout afterward) when a
-       change alters CLI flag parsing, git/ratchet resolution, Lake workspace setup, multi-process worker
-       behavior in `NoCommentsCLI` / `NoComments/Main.lean`, or unproved pure decision logic in
-       `NoComments/Config.lean` / `NoComments/RatchetCore.lean` that is not proved by theorems in
-       `NoComments/Core.lean`. Report exit code and observed output cleanly.
-    2. Do not invent live test runs for pure proof changes inside `NoComments/Core.lean` covered by kernel
-       proofs and `lake build --wfail`, or for documentation/policy/CI metadata changes (`no-surface`).
+       change alters CLI flag parsing, IO config/ratchet loading, git/ratchet resolution, Lake workspace setup,
+       or multi-process worker behavior in `NoCommentsCLI` / `NoComments.Main`. Report exit code and observed output cleanly.
+    2. Do not invent live test runs for pure proof or specification changes covered by kernel proofs, `lake build --wfail`,
+       `lake lint`, and `lake exe spec-check` in root or `specification/`, or for documentation/policy/CI metadata changes (`no-surface`).
   tests_as_evidence:
     policy: forbid
     list_command: |

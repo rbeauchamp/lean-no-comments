@@ -10,22 +10,24 @@ Comments in Lean 4 codebases tend to drift into three failure modes: restating w
 
 ## Trusted Computing Base (TCB)
 
-Every check separates a **pure, linted core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, checked under `regula` `standard-logical`, with kernel-checked theorems in `NoComments.Core` and pure executable config-classification and ratchet-validation decisions in `NoComments.Config` and `NoComments.RatchetCore` whose end-to-end refinement proofs are tracked in [#2](https://github.com/rbeauchamp/lean-no-comments/issues/2)) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`):
+Every check separates a **pure, linted core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, checked under `regula` `standard-logical`, with kernel-checked proofs in `NoComments.Core` and `specification/`'s `NoCommentsSpecification` proving adequacy, blind second-model comparison, and end-to-end refinement for all 17 pure contracts across `Core`, `Config`, and `RatchetCore`) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`; see [specification/README.md](specification/README.md) for formal accounting and remaining trusted-base boundaries):
 
-### Formally Verified in `NoComments.Core` (Standard Logical Axioms Only)
+### Formally Verified Across `NoComments.Core` and `specification/`
 
-All 41 theorems in `NoComments/Core.lean` depend solely on standard logical axioms (`[propext, Classical.choice, Quot.sound]` or `[propext, Quot.sound]`):
+Every theorem in `NoComments/Core.lean` and `specification/NoCommentsSpecification/` depends solely on standard logical axioms (`[propext, Classical.choice, Quot.sound]` or subsets thereof), verified under `regula/lint` (`standard-logical`) and `lake exe spec-check`:
 
-- **Trivia and syntax byte-interval completeness:** `scanTrivia_coverage`, `checkSlice_coverage`, `collectSyntax_coverage`, `collectRanges_coverage`, and `sourceOrder_mem_iff` prove that `scanTrivia` and `collectSyntax` run with total structural/well-founded recursion (zero `partial` functions) and account for **every single byte** in `[0, endPos)` across every command range—either covered by an original syntax leaf passing `checkToken`, a recorded comment span in `CommentAcc.spans`, or scanned whitespace (`ByteAccounted`).
-- **Token boundary safety:** `checkToken_ok_iff` proves a parser token passes `checkToken` if and only if it contains no `--` / `/-` sequence and no `--` / `/-` boundary crossing, parses identically as a literal/identifier, or matches a registered symbol parser.
-- **Exact distinct line counting:** `distinctCommentLines_exact` and `distinctCommentLines_unique` prove `distinctCommentLines` computes the exact cardinality of the sorted, duplicate-free union of all line intervals `[startLine, endLine]` covered by detected comments.
-- **Ratchet sorting & multiset monotonicity:** `firstOutOfOrder_eq_none_iff`, `sortFingerprints_count`, `missingFrom_count`, `missingFrom_isEmpty_iff`, and `missingFrom_both_isEmpty_iff` prove sortedness validation (`Pairwise (· ≤ ·)`), count-preserving sorting, and exact multiset subset / equality semantics for comment fingerprints.
+- **Trivia and syntax byte-interval completeness:** `scanTrivia_coverage`, `checkSlice_coverage`, `collectSyntax_coverage`, `collectRanges_coverage`, and `sourceOrder_mem_iff` (with `collectRanges_meets` and `sourceOrder_meets` in `NoCommentsSpecification.Refinement.Core`) prove that `scanTrivia` and `collectSyntax` run with total structural/well-founded recursion (zero `partial` functions) and account for **every single byte** in `[0, endPos)` across every command range—either covered by an original syntax leaf passing `checkToken`, a recorded comment span in `CommentAcc.spans`, or scanned whitespace (`ByteAccounted`).
+- **Token boundary safety:** `checkToken_ok_iff` and `checkToken_meets` prove a parser token passes `checkToken` if and only if it contains no `--` / `/-` sequence and no `--` / `/-` boundary crossing, parses identically as a literal/identifier, or matches a registered symbol parser.
+- **Exact distinct line counting and comment extraction:** `distinctCommentLines_exact`, `distinctCommentLines_unique`, `isFingerprint_meets`, `fingerprint_meets`, `distinctCommentLines_meets`, and `analyzeComments_meets` establish exact cardinality of the sorted duplicate-free line union, 16-char lowercase hex fingerprints, and pure per-file comment summaries.
+- **Ratchet sorting, multiset monotonicity, and check validation:** `firstOutOfOrder_eq_none_iff`, `sortFingerprints_count`, `missingFrom_count`, `missingFrom_isEmpty_iff`, `missingFrom_both_isEmpty_iff`, `parseRatchetJson_meets`, `checkExactSync_meets`, `checkMonotonicFile_meets`, and `validateCheck_meets` prove sortedness validation (`Pairwise (· ≤ ·)`), count-preserving sorting, exact multiset subset/equality semantics, ratchet JSON validation, exact sync, and strict downward merge-base monotonicity.
+- **Configuration parsing and exhaustive unambiguous classification:** `parseConfigJson_meets`, `classifyFile_meets`, and `classifyTrackedFiles_meets` prove strict `.no-comments.json` normalization/schema validation and fail-closed classification where every tracked file matches at most one `exclude` prefix and (when unexcluded) exactly one workspace.
 
-### Unproved Harness TCB
+### Unproved Harness TCB (`NoCommentsCLI` and External Boundaries)
 
-- Lean `v4.36.0` runtime, dynamic library loader, `Lean.Parser.parseHeader`, `Elab.processHeaderCore`, and `Elab.Frontend.processCommand`.
+- Unproved `NoCommentsCLI` and binary modules (`NoComments.ConfigIO`, `NoComments.Ratchet`, `NoComments.Runner`, `NoComments.LakeEnv`, `NoComments.Worker`, `NoComments.TestListing`, and `NoComments.Main`): filesystem reads/writes, subprocess execution, CLI flag parsing, multi-worker IPC, and `lakefile.toml` / workspace discovery.
+- Lean `v4.36.0` runtime, dynamic library loader (`Lean.loadDynlib`), opaque `Lean.Json.parse` / `Json.Parser.anyCore`, `Lean.Parser.parseHeader`, `Elab.processHeaderCore`, `Elab.Frontend.processCommand`, and `Parser.runParserCategory` / `Parser.tokenFn` / `Parser.symbolFn`.
 - `Lake` workspace/environment evaluation (`lake env`, `Lake.loadWorkspace`, `lake setup-file --no-build`) and toolchain version checks (`lean --version` version + commit hash).
-- Git invocation (`git ls-files -z -- '*.lean'`, `git merge-base`, `git ls-tree`, `git show`) and the `.no-comments.json` configuration (`workspaces`, `exclude`, `ratchet`).
+- Git invocation (`git ls-files --full-name -z -- '*.lean'`, `git merge-base`, `git ls-tree`, `git show`) and operating-system filesystem behavior.
 
 ## Configuration: `.no-comments.json`
 
@@ -134,8 +136,9 @@ Requires Lean matching `lean-toolchain` (`leanprover/lean4:v4.36.0`):
 git clone https://github.com/rbeauchamp/lean-no-comments.git
 cd lean-no-comments
 lake build --wfail
-lake lint
+env -u REGULA_FULL lake lint
 lake build no-comments
+(cd specification && lake build --wfail && env -u REGULA_FULL lake lint && lake build spec-check --wfail && lake exe spec-check)
 ./.lake/build/bin/no-comments check
 ```
 

@@ -5,6 +5,13 @@
       "srcDir": ".",
       "lakeArgs": [],
       "toolPrefixes": [],
+      "excludePrefixes": ["specification/"]
+    },
+    {
+      "dir": "specification",
+      "srcDir": ".",
+      "lakeArgs": [],
+      "toolPrefixes": ["tools/"],
       "excludePrefixes": []
     }
   ],
