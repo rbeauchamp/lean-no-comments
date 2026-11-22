@@ -13,6 +13,8 @@ public import NoCommentsSpecification.AdequacyCore
 public import NoCommentsSpecification.AdequacyCollect
 public import NoCommentsSpecification.AdequacyConfig
 public import NoCommentsSpecification.AdequacyRatchet
+public import NoCommentsSpecification.BlindSecondModel
+public import NoCommentsSpecification.Comparison
 
 public section
 
