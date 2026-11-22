@@ -148,46 +148,8 @@ def ContiguousFrom : String.Pos.Raw → String.Pos.Raw → List Core.CommandRang
 def validCommentKind (kind : String) : Prop :=
   kind ∈ ["line", "block", "doc", "moddoc"]
 
-def GenuineCommentSpan (ctx : Parser.ParserContextCore) (stx : Syntax) (sb eb : Nat)
-    (c : Core.Comment) : Prop :=
-  sb < eb ∧
-  eb ≤ ctx.endPos.byteIdx ∧
-  validCommentKind c.kind ∧
-  IsFingerprint c.fingerprint ∧
-  c.startLine = (ctx.fileMap.toPosition ⟨sb⟩).line ∧
-  c.endLine = (ctx.fileMap.toPosition (String.Pos.Raw.prev ctx.fileMap.source ⟨eb⟩)).line ∧
-  ((c.kind = "line" ∧
-      let p0 : String.Pos.Raw := ⟨sb⟩
-      let p1 := String.Pos.Raw.next ctx.fileMap.source p0
-      let p2 := String.Pos.Raw.next ctx.fileMap.source p1
-      String.Pos.Raw.get ctx.fileMap.source p0 = '-' ∧
-      String.Pos.Raw.get ctx.fileMap.source p1 = '-' ∧
-      p2.byteIdx ≤ eb) ∨
-    (c.kind = "block" ∧
-      let p0 : String.Pos.Raw := ⟨sb⟩
-      let p1 := String.Pos.Raw.next ctx.fileMap.source p0
-      let p2 := String.Pos.Raw.next ctx.fileMap.source p1
-      let p3 := String.Pos.Raw.next ctx.fileMap.source p2
-      String.Pos.Raw.get ctx.fileMap.source p0 = '/' ∧
-      String.Pos.Raw.get ctx.fileMap.source p1 = '-' ∧
-      p2.byteIdx < eb ∧
-      String.Pos.Raw.get ctx.fileMap.source p2 ≠ '-' ∧
-      String.Pos.Raw.get ctx.fileMap.source p2 ≠ '!' ∧
-      p3.byteIdx ≤ eb ∧
-      ∃ pm ps : String.Pos.Raw,
-        ps = String.Pos.Raw.next ctx.fileMap.source pm ∧
-        eb = (String.Pos.Raw.next ctx.fileMap.source ps).byteIdx ∧
-        String.Pos.Raw.get ctx.fileMap.source pm = '-' ∧
-        String.Pos.Raw.get ctx.fileMap.source ps = '/') ∨
-    ((c.kind = "doc" ∨ c.kind = "moddoc") ∧ DocNodeIn stx c.kind sb eb))
-
-abbrev SpanState : Type := Nat → Option (Nat × String)
-
-def stateOfAcc (acc : Core.CommentAcc) : SpanState :=
-  fun sb => (acc.spans[sb]?).map fun p => (p.1, p.2.kind)
-
-def insertSpan (state : SpanState) (kind : String) (sb eb : Nat) : SpanState :=
-  fun k => if k == sb then some (eb, kind) else state k
+def commentText (fileMap : FileMap) (sb eb : Nat) : String :=
+  (⟨fileMap.source, ⟨sb⟩, ⟨eb⟩⟩ : Substring.Raw).toString
 
 inductive LineEnd (str : String) (stopPos : String.Pos.Raw) :
     String.Pos.Raw → String.Pos.Raw → Prop where
@@ -234,6 +196,174 @@ inductive BlockStep (str : String) (stopPos : String.Pos.Raw) :
           String.Pos.Raw.get str (String.Pos.Raw.next str pos) = '-') →
       BlockStep str stopPos nesting (String.Pos.Raw.next str pos) endPos →
       BlockStep str stopPos nesting pos endPos
+
+theorem lineEnd_bounds {str : String} {stopPos : String.Pos.Raw} :
+    ∀ {p eol : String.Pos.Raw}, p ≤ stopPos → LineEnd str stopPos p eol →
+      p ≤ eol ∧ eol ≤ stopPos
+  | p, _, hp, .done hnot => by
+    have hlt : p.byteIdx ≤ stopPos.byteIdx := String.Pos.Raw.le_iff.mp hp
+    have hge : stopPos.byteIdx ≤ p.byteIdx := by
+      have : ¬ p.byteIdx < stopPos.byteIdx := fun h => hnot (String.Pos.Raw.lt_iff.mpr h)
+      omega
+    have heq : p = stopPos := by
+      have : p.byteIdx = stopPos.byteIdx := Nat.le_antisymm hlt hge
+      cases p; cases stopPos; cases this; rfl
+    subst heq
+    exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_refl _), String.Pos.Raw.le_iff.mpr (Nat.le_refl _)⟩
+  | _, _, _, .nl hlt _ =>
+    ⟨String.Pos.Raw.le_iff.mpr (Nat.le_refl _),
+      String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hlt))⟩
+  | p, _, _, .step hlt _ hnext => by
+    have hnx : String.Pos.Raw.next str p ≤ stopPos ∨ ¬ String.Pos.Raw.next str p < stopPos := by
+      by_cases h : String.Pos.Raw.next str p < stopPos
+      · exact .inl (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp h)))
+      · exact .inr h
+    rcases hnx with hnx | hnot
+    · obtain ⟨h1, h2⟩ := lineEnd_bounds hnx hnext
+      have hpn : p < String.Pos.Raw.next str p := String.Pos.Raw.lt_next str p
+      exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (Nat.lt_of_lt_of_le (String.Pos.Raw.lt_iff.mp hpn) (String.Pos.Raw.le_iff.mp h1))), h2⟩
+    · cases hnext with
+      | done _ =>
+        exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hlt)),
+          String.Pos.Raw.le_iff.mpr (Nat.le_refl _)⟩
+      | nl hlt2 _ => exact absurd hlt2 hnot
+      | step hlt2 _ _ => exact absurd hlt2 hnot
+
+theorem lineEnd_self {str : String} {stopPos p eol : String.Pos.Raw}
+    (hp : p ≤ stopPos) (h : LineEnd str stopPos p eol) :
+    LineEnd str eol p eol := by
+  induction h with
+  | done hnot => exact LineEnd.done hnot
+  | nl _ _ =>
+    exact LineEnd.done (fun hlt => Nat.lt_irrefl _ (String.Pos.Raw.lt_iff.mp hlt))
+  | @step p eol' hlt hne hnext ih =>
+    by_cases hnx : String.Pos.Raw.next str p ≤ stopPos
+    · have hbe := lineEnd_bounds hnx hnext
+      have hplt : p < eol' := by
+        have h1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str p)
+        have h2 := String.Pos.Raw.le_iff.mp hbe.1
+        exact String.Pos.Raw.lt_iff.mpr (by omega)
+      exact LineEnd.step hplt hne (ih hnx)
+    · have hnot : ¬ String.Pos.Raw.next str p < stopPos := fun hlt2 =>
+        hnx (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hlt2)))
+      cases hnext with
+      | done _ => exact LineEnd.step hlt hne (LineEnd.done hnot)
+      | nl hlt2 _ => exact absurd hlt2 hnot
+      | step hlt2 _ _ => exact absurd hlt2 hnot
+
+theorem blockStep_bounds {str : String} {stopPos : String.Pos.Raw} :
+    ∀ {n : Nat} {pos endPos : String.Pos.Raw},
+      BlockStep str stopPos n pos endPos → pos < endPos ∧ endPos ≤ stopPos
+  | _, pos, _, .closeTop _ _ _ _ _ hle =>
+    have hp := String.Pos.Raw.lt_next str pos
+    have hp2 := String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos)
+    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp hp2)), hle⟩
+  | _, pos, _, .closeNested _ _ _ _ _ _ _ hrest =>
+    have ih := blockStep_bounds hrest
+    have hp := String.Pos.Raw.lt_next str pos
+    have hp2 := String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos)
+    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp hp2)) (String.Pos.Raw.lt_iff.mp ih.1)), ih.2⟩
+  | _, pos, _, .openNested _ _ _ _ _ _ hrest =>
+    have ih := blockStep_bounds hrest
+    have hp := String.Pos.Raw.lt_next str pos
+    have hp2 := String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos)
+    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp hp2)) (String.Pos.Raw.lt_iff.mp ih.1)), ih.2⟩
+  | _, pos, _, .other _ _ _ _ hrest =>
+    have ih := blockStep_bounds hrest
+    have hp := String.Pos.Raw.lt_next str pos
+    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp ih.1)), ih.2⟩
+
+theorem blockStep_self {str : String} {stopPos : String.Pos.Raw} {n : Nat}
+    {pos endPos : String.Pos.Raw}
+    (h : BlockStep str stopPos n pos endPos) :
+    BlockStep str endPos n pos endPos := by
+  induction h with
+  | @closeTop n1 pos1 hn1 _ h1 _ h2 _ =>
+    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
+    have hp2 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos1))
+    exact BlockStep.closeTop hn1
+      (String.Pos.Raw.lt_iff.mpr (by omega)) h1
+      (String.Pos.Raw.lt_iff.mpr (by omega)) h2
+      (String.Pos.Raw.le_iff.mpr (Nat.le_refl _))
+  | @closeNested n1 pos1 ep hne hn _ h1 _ h2 _ hrest ih =>
+    have hbe := blockStep_bounds hrest
+    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
+    have hp2 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos1))
+    have hb1 := String.Pos.Raw.lt_iff.mp hbe.1
+    exact BlockStep.closeNested hne hn
+      (String.Pos.Raw.lt_iff.mpr (by omega)) h1
+      (String.Pos.Raw.lt_iff.mpr (by omega)) h2
+      (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt hb1)) ih
+  | @openNested n1 pos1 ep hn _ h1 _ h2 _ hrest ih =>
+    have hbe := blockStep_bounds hrest
+    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
+    have hp2 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos1))
+    have hb1 := String.Pos.Raw.lt_iff.mp hbe.1
+    exact BlockStep.openNested hn
+      (String.Pos.Raw.lt_iff.mpr (by omega)) h1
+      (String.Pos.Raw.lt_iff.mpr (by omega)) h2
+      (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt hb1)) ih
+  | @other n1 pos1 ep hn _ hc ho hrest ih =>
+    have hbe := blockStep_bounds hrest
+    have hp1 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next str pos1)
+    have hb1 := String.Pos.Raw.lt_iff.mp hbe.1
+    have hlt_ep : pos1 < ep := String.Pos.Raw.lt_iff.mpr (by omega)
+    have hc' : ¬ (String.Pos.Raw.get str pos1 = '-' ∧
+        String.Pos.Raw.next str pos1 < ep ∧
+        String.Pos.Raw.get str (String.Pos.Raw.next str pos1) = '/') := by
+      rintro ⟨g1, g2, g3⟩
+      exact hc ⟨g1, String.Pos.Raw.lt_iff.mpr
+        (Nat.lt_of_lt_of_le (String.Pos.Raw.lt_iff.mp g2) (String.Pos.Raw.le_iff.mp hbe.2)), g3⟩
+    have ho' : ¬ (String.Pos.Raw.get str pos1 = '/' ∧
+        String.Pos.Raw.next str pos1 < ep ∧
+        String.Pos.Raw.get str (String.Pos.Raw.next str pos1) = '-') := by
+      rintro ⟨g1, g2, g3⟩
+      exact ho ⟨g1, String.Pos.Raw.lt_iff.mpr
+        (Nat.lt_of_lt_of_le (String.Pos.Raw.lt_iff.mp g2) (String.Pos.Raw.le_iff.mp hbe.2)), g3⟩
+    exact BlockStep.other hn hlt_ep hc' ho' ih
+
+def GenuineCommentSpan (ctx : Parser.ParserContextCore) (stx : Syntax) (sb eb : Nat)
+    (c : Core.Comment) : Prop :=
+  sb < eb ∧
+  eb ≤ ctx.endPos.byteIdx ∧
+  validCommentKind c.kind ∧
+  IsFingerprint c.fingerprint ∧
+  c.startLine = (ctx.fileMap.toPosition ⟨sb⟩).line ∧
+  c.endLine = (ctx.fileMap.toPosition (String.Pos.Raw.prev ctx.fileMap.source ⟨eb⟩)).line ∧
+  ((c.kind = "line" ∧
+      let p0 : String.Pos.Raw := ⟨sb⟩
+      let p1 := String.Pos.Raw.next ctx.fileMap.source p0
+      let p2 := String.Pos.Raw.next ctx.fileMap.source p1
+      String.Pos.Raw.get ctx.fileMap.source p0 = '-' ∧
+      String.Pos.Raw.get ctx.fileMap.source p1 = '-' ∧
+      p2.byteIdx ≤ eb ∧
+      LineEnd ctx.fileMap.source ⟨eb⟩ p2 ⟨eb⟩) ∨
+    (c.kind = "block" ∧
+      let p0 : String.Pos.Raw := ⟨sb⟩
+      let p1 := String.Pos.Raw.next ctx.fileMap.source p0
+      let p2 := String.Pos.Raw.next ctx.fileMap.source p1
+      let p3 := String.Pos.Raw.next ctx.fileMap.source p2
+      String.Pos.Raw.get ctx.fileMap.source p0 = '/' ∧
+      String.Pos.Raw.get ctx.fileMap.source p1 = '-' ∧
+      p2.byteIdx < eb ∧
+      String.Pos.Raw.get ctx.fileMap.source p2 ≠ '-' ∧
+      String.Pos.Raw.get ctx.fileMap.source p2 ≠ '!' ∧
+      p3.byteIdx ≤ eb ∧
+      BlockStep ctx.fileMap.source ⟨eb⟩ 1 p3 ⟨eb⟩ ∧
+      ∃ pm ps : String.Pos.Raw,
+        ps = String.Pos.Raw.next ctx.fileMap.source pm ∧
+        eb = (String.Pos.Raw.next ctx.fileMap.source ps).byteIdx ∧
+        String.Pos.Raw.get ctx.fileMap.source pm = '-' ∧
+        String.Pos.Raw.get ctx.fileMap.source ps = '/') ∨
+    ((c.kind = "doc" ∨ c.kind = "moddoc") ∧ DocNodeIn stx c.kind sb eb))
+
+abbrev SpanState : Type := Nat → Option (Nat × String)
+
+def stateOfAcc (acc : Core.CommentAcc) : SpanState :=
+  fun sb => (acc.spans[sb]?).map fun p => (p.1, p.2.kind)
+
+def insertSpan (state : SpanState) (kind : String) (sb eb : Nat) : SpanState :=
+  fun k => if k == sb then some (eb, kind) else state k
 
 inductive BlockFails (str : String) (stopPos : String.Pos.Raw) :
     Nat → String.Pos.Raw → Prop where
@@ -524,6 +654,16 @@ inductive ListStep (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw) :
       ListStep ctx nextPos (arg :: rest) pos state stop state2
 
 end
+
+inductive RangesStep : List Core.CommandRange → SpanState → SpanState → Prop where
+  | nil {state} : RangesStep [] state state
+  | cons {r rest state mid state1 state2 state'} :
+      r.prevPos ≤ r.nextPos →
+      r.nextPos ≤ r.ctx.endPos →
+      SyntaxStep r.ctx r.nextPos r.stx r.prevPos state mid state1 →
+      TriviaStep r.ctx.fileMap r.nextPos mid state1 state2 →
+      RangesStep rest state2 state' →
+      RangesStep (r :: rest) state state'
 
 mutual
 

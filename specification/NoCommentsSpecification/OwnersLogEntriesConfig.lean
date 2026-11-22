@@ -45,7 +45,7 @@ revision 1167
 | ```
 | 
 | - **Requires:** Returns .ok cfg only when ValidConfigJson holds with normalized paths, allowed keys, and unique dirs.
-| - **Rules out:** Unknown keys, empty workspace list, duplicate workspace dirs, traversal/backslash/control paths, or blank reasons.
+| - **Rules out:** Unknown keys, empty workspace list, duplicate workspace dirs, '..'/backslash/NUL/newline/CR/tab paths, or blank reasons.
 | - **Still allows:** Valid normalized RepoConfig values.
 | - **Freedom O5 leaves:** Valid normalized field order/hash specifics.
 | 
@@ -1231,7 +1231,7 @@ revision 1167
 | ```
 | 
 | - **Requires:** Returns .ok cfg only when ValidConfigJson holds with normalized paths, allowed keys, and unique dirs.
-| - **Rules out:** Unknown keys, empty workspace list, duplicate workspace dirs, traversal/backslash/control paths, or blank reasons.
+| - **Rules out:** Unknown keys, empty workspace list, duplicate workspace dirs, '..'/backslash/NUL/newline/CR/tab paths, or blank reasons.
 | - **Still allows:** Valid normalized RepoConfig values.
 | - **Freedom O5 leaves:** Valid normalized field order/hash specifics.
 | 

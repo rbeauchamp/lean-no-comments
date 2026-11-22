@@ -257,10 +257,17 @@ theorem collectRanges_healthy_entailment :
       ∀ ranges acc, Healthy.Collect ranges acc → ∃ acc', f ranges acc = .ok acc' :=
   fun f hf ranges acc hh => collectRanges_healthy_owed f ranges acc hf hh
 
+theorem collectRanges_exact_scanner :
+    ∀ f : CollectRangesFn, collectRangesRecord.Meets f →
+      ∀ ranges acc acc', f ranges acc = .ok acc' →
+        RangesStep ranges (stateOfAcc acc) (stateOfAcc acc') :=
+  fun _ hf => hf.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)))
+
 theorem collectRanges_allows_custom_error :
     ∃ f : CollectRangesFn, collectRangesRecord.Meets f ∧
       (∀ ranges acc, (¬ ∃ acc', RangesAcc ranges acc acc') → f ranges acc = .error "denied") := by
-  refine ⟨collectRangesModelWith "denied", collectRangesModelWith_meets "denied", fun ranges acc hna => ?_⟩
+  refine ⟨collectRangesModelWith fpModel "denied",
+    collectRangesModelWith_meets fpModel fpModel_meets "denied", fun ranges acc hna => ?_⟩
   simp only [collectRangesModelWith]
   split
   · contradiction
@@ -286,10 +293,18 @@ def collectRangesExplained : Explanation collectRangesRecord where
       rulesOut := "Unchecked slices inside command ranges."
       allows := "ByteAccounted partitions."
       freedom := "Valid span keys." },
-    { requires := "Every newly added span comes from a genuine comment within some range."
-      rulesOut := "Fabricated comment spans not present in parsed ranges/trivia."
-      allows := "All authentic line, block, doc, module-doc, and plainDocComment spans."
-      freedom := "Non-conflicting span fingerprints." },
+    { requires := "Produces exact SpanState equality with deterministic RangesStep traversal (SyntaxStep + TriviaStep) on .ok acc'."
+      rulesOut := "Dropped, merged, split, or endpoint-shifted comment spans."
+      allows := "Exact scanner occurrences matching every line, block, doc, and module-doc delimiter and closing rule."
+      freedom := "Unique span start, stop, and kind per input (RangesStep determinism)." },
+    { requires := "Every newly added span comes from a genuine single comment within some range satisfying LineEnd/BlockStep closing and doc syntax rules."
+      rulesOut := "Fabricated or multi-comment merged spans not closed at their own line/block delimiter."
+      allows := "Authentic single line, nested-balanced block, doc, module-doc, and plainDocComment spans."
+      freedom := "Exact SpanState fixed by RangesStep." },
+    { requires := "Uses a conforming nonconstant 16-char lowercase hex digest fp so every new span carries fp of its comment source slice."
+      rulesOut := "Placeholder or constant comment fingerprints ignoring the comment source text under the chosen digest."
+      allows := "Any valid nonconstant FingerprintFn applied verbatim to each new comment source slice."
+      freedom := "Choice of FingerprintFn modulo source-text equality (O5 CollectRangesFreedom)." },
     { requires := "Returns .error only when CollectRefusal holds."
       rulesOut := "False failures on healthy command ranges."
       allows := "Refusal on unsafe tokens, unclosed comments, bounds errors, or conflicts."
@@ -299,10 +314,14 @@ def collectRangesExplained : Explanation collectRangesRecord where
       rulesOut := "Unaccounted non-whitespace gaps."
       allows := "Complete byte coverage."
       freedom := "Byte classification vocabulary." },
-    { requires := "GenuineCommentSpan witnesses an actual syntax/trivia comment in the input."
-      rulesOut := "Spurious spans."
+    { requires := "GenuineCommentSpan witnesses an actual syntax/trivia single-comment span closing under LineEnd/BlockStep or DocNodeIn."
+      rulesOut := "Spurious or multi-comment merged spans."
       allows := "Authentic comment spans."
-      freedom := "Valid fingerprint details." },
+      freedom := "Valid digest format." },
+    { requires := "RangesStep composes deterministic SyntaxStep and TriviaStep traversals across command ranges."
+      rulesOut := "Missing, merged, split, or endpoint-shifted comment occurrences."
+      allows := "Exact scanner SpanState transitions."
+      freedom := "Deterministically determines output SpanState." },
     { requires := "CollectRefusal witnesses malformed bounds, unclosed block comments, unsafe tokens, or conflicts."
       rulesOut := "Healthy range sequences."
       allows := "Sound refusal causes."
@@ -317,6 +336,16 @@ def collectRangesExplained : Explanation collectRangesRecord where
           rulesOut := "Spurious errors on valid Lean files."
           allows := "Any valid byte-covering accumulator."
           freedom := "Success guaranteed on healthy input." }
+      settled := .derived },
+    { consequence := ⟨"matches exact scanner comment spans", .entailment,
+        fun f => ∀ ranges acc acc', f ranges acc = .ok acc' →
+          RangesStep ranges (stateOfAcc acc) (stateOfAcc acc')⟩
+      holds := collectRanges_exact_scanner
+      gloss :=
+        { requires := "Every conforming collector produces the exact SpanState of RangesStep."
+          rulesOut := "Missed, merged, or shifted comment spans on successful collection."
+          allows := "Any faithful scanner subject to CollectRangesFreedom."
+          freedom := "Exact span endpoints and kinds fixed deterministically." }
       settled := .derived },
     { consequence := ⟨"leaves refusal diagnostic wording unconstrained", .possibility,
         fun f => ∀ ranges acc, (¬ ∃ acc', RangesAcc ranges acc acc') → f ranges acc = .error "denied"⟩
@@ -486,17 +515,6 @@ theorem missingFrom_self_empty :
     rw [hres, List.count_cons, Nat.sub_self] at hcnt
     simp at hcnt
 
-def missingFromUnsortedModel : MissingFromFn :=
-  fun xs ys => (ys.values.toList.foldl (fun acc y => acc.erase y) xs.values.toList).reverse.toArray
-
-theorem missingFromUnsortedModel_meets : missingFromRecord.Meets missingFromUnsortedModel := by
-  refine ⟨(fun _ h => nomatch h), fun p hp => ?_⟩
-  rcases List.mem_cons.mp hp with rfl | hp
-  · intro xs ys a
-    have h1 := missingFromModel_meets.2 _ List.mem_cons_self xs ys a
-    simpa [missingFromUnsortedModel, missingFromModel, List.count_reverse] using h1
-  exact nomatch hp
-
 theorem missingFrom_allows_unsorted_output :
     ∃ f : MissingFromFn, missingFromRecord.Meets f ∧ ∃ xs ys, ¬ (f xs ys).toList.Pairwise (· ≤ ·) := by
   let xs : Core.SortedFingerprints :=
@@ -571,7 +589,7 @@ def parseConfigExplained : Explanation parseConfigRecord where
   dom := []
   props := [
     { requires := "Returns .ok cfg only when ValidConfigJson holds with normalized paths, allowed keys, and unique dirs."
-      rulesOut := "Unknown keys, empty workspace list, duplicate workspace dirs, traversal/backslash/control paths, or blank reasons."
+      rulesOut := "Unknown keys, empty workspace list, duplicate workspace dirs, '..'/backslash/NUL/newline/CR/tab paths, or blank reasons."
       allows := "Valid normalized RepoConfig values."
       freedom := "Valid normalized field order/hash specifics." },
     { requires := "Returns .error only when ConfigRefusal holds."
@@ -958,20 +976,20 @@ def validateCheckExplained : Explanation validateCheckRecord where
       freedom := "Only fixes the pure function signature." }
   dom := []
   props := [
-    { requires := "Returns .ok () only when current/base ratchets contain no excluded/untracked files and target/all analyses satisfy ExactSyncOk and MonotonicOk."
-      rulesOut := "Stale excluded entries, dropped file coverage, missing target analysis, out-of-sync manifests, or merge-base regressions."
-      allows := "Full repository or single-file passing checks."
+    { requires := "Returns .ok () only when currentRatchet contains no excluded or untracked files, baseRatchet? contains no excluded files, and target/all supplied analyses satisfy ExactSyncOk and MonotonicOk."
+      rulesOut := "Stale excluded entries in current or base ratchets, untracked current-ratchet entries, missing target analysis, out-of-sync manifests, or merge-base regressions."
+      allows := "Full repository or single-file passing checks, including base entries for deleted files no longer checked or excluded."
       freedom := "Error formatting." },
     { requires := "Returns .error only when ValidateRefusal holds."
       rulesOut := "Rejecting healthy valid checks."
       allows := "Refusing violations with arbitrary error messages."
       freedom := "Error wording left free (O5 ValidateCheckFreedom)." } ]
   vocab := [
-    { requires := "ValidateOk enforces current/base coverage invariants and sync + monotonicity over target or all analyses."
-      rulesOut := "Coverage holes, excluded ratchet entries, or ratchet regressions."
+    { requires := "ValidateOk enforces non-excluded/checkedFiles membership for currentRatchet, non-excluded membership for baseRatchet?, and sync + monotonicity over target or all supplied analyses."
+      rulesOut := "Current-ratchet coverage holes, excluded ratchet entries, or ratchet regressions."
       allows := "Clean sync and downward-monotonic checks."
       freedom := "Exact overall validation predicate." },
-    { requires := "ValidateRefusal enumerates missing targets, excluded/untracked ratchet entries, sync mismatches, and regressions."
+    { requires := "ValidateRefusal enumerates missing targets, excluded current/base or untracked current ratchet entries, sync mismatches, and regressions."
       rulesOut := "Healthy passing check inputs."
       allows := "All check failures."
       freedom := "Disjoint from ValidateOk." } ]

@@ -19,7 +19,7 @@ open NoCommentsSpecification.CoreSpec
 open NoCommentsSpecification.CoreRecords
 open NoCommentsSpecification.AdequacyCore
 
-def updateAcc (acc : Core.CommentAcc) (fileMap : FileMap) (kind : String)
+def updateAcc (fp : FingerprintFn) (acc : Core.CommentAcc) (fileMap : FileMap) (kind : String)
     (startPos stopPos : String.Pos.Raw) : Core.CommentAcc :=
   match acc.spans[startPos.byteIdx]? with
   | some _ => acc
@@ -29,13 +29,13 @@ def updateAcc (acc : Core.CommentAcc) (fileMap : FileMap) (kind : String)
       { kind := kind
         startLine := (fileMap.toPosition startPos).line
         endLine := (fileMap.toPosition lastPos).line
-        fingerprint := zeroFp }
+        fingerprint := fp (commentText fileMap startPos.byteIdx stopPos.byteIdx) }
     { spans := acc.spans.insert startPos.byteIdx (stopPos.byteIdx, comment) }
 
-theorem stateOfAcc_updateAcc {acc : Core.CommentAcc} {fileMap : FileMap} {kind : String}
-    {startPos stopPos : String.Pos.Raw}
+theorem stateOfAcc_updateAcc {fp : FingerprintFn} {acc : Core.CommentAcc} {fileMap : FileMap}
+    {kind : String} {startPos stopPos : String.Pos.Raw}
     (hnc : ¬ SpanConflict (stateOfAcc acc) kind startPos.byteIdx stopPos.byteIdx) :
-    stateOfAcc (updateAcc acc fileMap kind startPos stopPos) =
+    stateOfAcc (updateAcc fp acc fileMap kind startPos stopPos) =
       insertSpan (stateOfAcc acc) kind startPos.byteIdx stopPos.byteIdx := by
   funext k
   simp only [stateOfAcc, insertSpan, updateAcc]
@@ -66,11 +66,11 @@ theorem stateOfAcc_updateAcc {acc : Core.CommentAcc} {fileMap : FileMap} {kind :
     · have h2 : (k == startPos.byteIdx) = false := Bool.eq_false_iff.mpr (by simpa [beq_iff_eq] using hk)
       simp [h2]
 
-theorem updateAcc_preserves {acc : Core.CommentAcc} {fileMap : FileMap} {kind : String}
-    {startPos stopPos : String.Pos.Raw} :
+theorem updateAcc_preserves {fp : FingerprintFn} {acc : Core.CommentAcc} {fileMap : FileMap}
+    {kind : String} {startPos stopPos : String.Pos.Raw} :
     ∀ (sb eb : Nat) (c : Core.Comment),
       acc.spans[sb]? = some (eb, c) →
-      (updateAcc acc fileMap kind startPos stopPos).spans[sb]? = some (eb, c) := by
+      (updateAcc fp acc fileMap kind startPos stopPos).spans[sb]? = some (eb, c) := by
   intro sb eb c h
   dsimp [updateAcc]
   cases hcur : acc.spans[startPos.byteIdx]? with
@@ -84,15 +84,17 @@ theorem updateAcc_preserves {acc : Core.CommentAcc} {fileMap : FileMap} {kind : 
       contradiction
     · exact h
 
-theorem updateAcc_new_span {acc : Core.CommentAcc} {fileMap : FileMap} {kind : String}
+theorem updateAcc_new_span {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp s))
+    {acc : Core.CommentAcc} {fileMap : FileMap} {kind : String}
     {startPos stopPos : String.Pos.Raw} :
     ∀ (sb eb : Nat) (c : Core.Comment),
-      (updateAcc acc fileMap kind startPos stopPos).spans[sb]? = some (eb, c) →
+      (updateAcc fp acc fileMap kind startPos stopPos).spans[sb]? = some (eb, c) →
       acc.spans[sb]? = some (eb, c) ∨
         (sb = startPos.byteIdx ∧ eb = stopPos.byteIdx ∧ c.kind = kind ∧
           IsFingerprint c.fingerprint ∧
           c.startLine = (fileMap.toPosition startPos).line ∧
-          c.endLine = (fileMap.toPosition (String.Pos.Raw.prev fileMap.source stopPos)).line) := by
+          c.endLine = (fileMap.toPosition (String.Pos.Raw.prev fileMap.source stopPos)).line ∧
+          c.fingerprint = fp (commentText fileMap sb eb)) := by
   intro sb eb c h
   dsimp [updateAcc] at h
   cases hcur : acc.spans[startPos.byteIdx]? with
@@ -105,40 +107,9 @@ theorem updateAcc_new_span {acc : Core.CommentAcc} {fileMap : FileMap} {kind : S
     split at h <;> rename_i heq
     · have hsb : startPos.byteIdx = sb := by simpa using heq
       cases h
-      exact .inr ⟨hsb.symm, rfl, rfl, zeroFp_valid, rfl, rfl⟩
+      subst hsb
+      exact .inr ⟨rfl, rfl, rfl, hfp _, rfl, rfl, rfl⟩
     · exact .inl h
-
-theorem lineEnd_bounds {str : String} {stopPos : String.Pos.Raw} :
-    ∀ {p eol : String.Pos.Raw}, p ≤ stopPos → LineEnd str stopPos p eol →
-      p ≤ eol ∧ eol ≤ stopPos
-  | p, _, hp, .done hnot => by
-    have hlt : p.byteIdx ≤ stopPos.byteIdx := String.Pos.Raw.le_iff.mp hp
-    have hge : stopPos.byteIdx ≤ p.byteIdx := by
-      have : ¬ p.byteIdx < stopPos.byteIdx := fun h => hnot (String.Pos.Raw.lt_iff.mpr h)
-      omega
-    have heq : p = stopPos := by
-      have : p.byteIdx = stopPos.byteIdx := Nat.le_antisymm hlt hge
-      cases p; cases stopPos; cases this; rfl
-    subst heq
-    exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_refl _), String.Pos.Raw.le_iff.mpr (Nat.le_refl _)⟩
-  | _, _, _, .nl hlt _ =>
-    ⟨String.Pos.Raw.le_iff.mpr (Nat.le_refl _),
-      String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hlt))⟩
-  | p, _, _, .step hlt _ hnext => by
-    have hnx : String.Pos.Raw.next str p ≤ stopPos ∨ ¬ String.Pos.Raw.next str p < stopPos := by
-      by_cases h : String.Pos.Raw.next str p < stopPos
-      · exact .inl (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp h)))
-      · exact .inr h
-    rcases hnx with hnx | hnot
-    · obtain ⟨h1, h2⟩ := lineEnd_bounds hnx hnext
-      have hpn : p < String.Pos.Raw.next str p := String.Pos.Raw.lt_next str p
-      exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (Nat.lt_of_lt_of_le (String.Pos.Raw.lt_iff.mp hpn) (String.Pos.Raw.le_iff.mp h1))), h2⟩
-    · cases hnext with
-      | done _ =>
-        exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hlt)),
-          String.Pos.Raw.le_iff.mpr (Nat.le_refl _)⟩
-      | nl hlt2 _ => exact absurd hlt2 hnot
-      | step hlt2 _ _ => exact absurd hlt2 hnot
 
 theorem lineEnd_total (str : String) (stopPos p : String.Pos.Raw) :
     ∃ eol, LineEnd str stopPos p eol := by
@@ -172,28 +143,6 @@ theorem lineEnd_det {str : String} {stopPos p e1 e2 : String.Pos.Raw}
     | done h => exact absurd hlt h
     | nl _ hnl => exact absurd hnl hne
     | step _ _ hrest => exact ih hrest
-
-theorem blockStep_bounds {str : String} {stopPos : String.Pos.Raw} :
-    ∀ {n : Nat} {pos endPos : String.Pos.Raw},
-      BlockStep str stopPos n pos endPos → pos < endPos ∧ endPos ≤ stopPos
-  | _, pos, _, .closeTop _ _ _ _ _ hle =>
-    have hp := String.Pos.Raw.lt_next str pos
-    have hp2 := String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos)
-    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp hp2)), hle⟩
-  | _, pos, _, .closeNested _ _ _ _ _ _ _ hrest =>
-    have ih := blockStep_bounds hrest
-    have hp := String.Pos.Raw.lt_next str pos
-    have hp2 := String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos)
-    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp hp2)) (String.Pos.Raw.lt_iff.mp ih.1)), ih.2⟩
-  | _, pos, _, .openNested _ _ _ _ _ _ hrest =>
-    have ih := blockStep_bounds hrest
-    have hp := String.Pos.Raw.lt_next str pos
-    have hp2 := String.Pos.Raw.lt_next str (String.Pos.Raw.next str pos)
-    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp hp2)) (String.Pos.Raw.lt_iff.mp ih.1)), ih.2⟩
-  | _, pos, _, .other _ _ _ _ hrest =>
-    have ih := blockStep_bounds hrest
-    have hp := String.Pos.Raw.lt_next str pos
-    ⟨String.Pos.Raw.lt_iff.mpr (Nat.lt_trans (String.Pos.Raw.lt_iff.mp hp) (String.Pos.Raw.lt_iff.mp ih.1)), ih.2⟩
 
 theorem blockStep_ends_slash_minus {str : String} {stopPos : String.Pos.Raw} {n : Nat}
     {pos endPos : String.Pos.Raw} (h : BlockStep str stopPos n pos endPos) :
@@ -283,15 +232,15 @@ theorem blockStep_det {str : String} {stopPos : String.Pos.Raw} {n : Nat} {pos e
     | openNested _ _ ho _ hm _ _ => exact absurd ⟨ho, ‹_›, hm⟩ hop
     | other _ _ _ _ hr => exact ih hr
 
-inductive TriviaAcc (fileMap : FileMap) (stopPos : String.Pos.Raw) :
+inductive TriviaAcc (fp : FingerprintFn) (fileMap : FileMap) (stopPos : String.Pos.Raw) :
     String.Pos.Raw → Core.CommentAcc → Core.CommentAcc → Prop where
-  | done {pos acc} : ¬ pos < stopPos → TriviaAcc fileMap stopPos pos acc acc
+  | done {pos acc} : ¬ pos < stopPos → TriviaAcc fp fileMap stopPos pos acc acc
   | ws {pos acc acc'} :
       pos < stopPos →
       (String.Pos.Raw.get fileMap.source pos).isWhitespace = true →
       String.Pos.Raw.next fileMap.source pos ≤ stopPos →
-      TriviaAcc fileMap stopPos (String.Pos.Raw.next fileMap.source pos) acc acc' →
-      TriviaAcc fileMap stopPos pos acc acc'
+      TriviaAcc fp fileMap stopPos (String.Pos.Raw.next fileMap.source pos) acc acc' →
+      TriviaAcc fp fileMap stopPos pos acc acc'
   | line {pos eol acc acc'} :
       pos < stopPos →
       String.Pos.Raw.get fileMap.source pos = '-' →
@@ -301,8 +250,8 @@ inductive TriviaAcc (fileMap : FileMap) (stopPos : String.Pos.Raw) :
       LineEnd fileMap.source stopPos
         (String.Pos.Raw.next fileMap.source (String.Pos.Raw.next fileMap.source pos)) eol →
       ¬ SpanConflict (stateOfAcc acc) "line" pos.byteIdx eol.byteIdx →
-      TriviaAcc fileMap stopPos eol (updateAcc acc fileMap "line" pos eol) acc' →
-      TriviaAcc fileMap stopPos pos acc acc'
+      TriviaAcc fp fileMap stopPos eol (updateAcc fp acc fileMap "line" pos eol) acc' →
+      TriviaAcc fp fileMap stopPos pos acc acc'
   | block {pos endPos acc acc'} :
       pos < stopPos →
       String.Pos.Raw.get fileMap.source pos = '/' →
@@ -320,90 +269,92 @@ inductive TriviaAcc (fileMap : FileMap) (stopPos : String.Pos.Raw) :
           (String.Pos.Raw.next fileMap.source (String.Pos.Raw.next fileMap.source pos)))
         endPos →
       ¬ SpanConflict (stateOfAcc acc) "block" pos.byteIdx endPos.byteIdx →
-      TriviaAcc fileMap stopPos endPos (updateAcc acc fileMap "block" pos endPos) acc' →
-      TriviaAcc fileMap stopPos pos acc acc'
+      TriviaAcc fp fileMap stopPos endPos (updateAcc fp acc fileMap "block" pos endPos) acc' →
+      TriviaAcc fp fileMap stopPos pos acc acc'
 
 mutual
 
-inductive SyntaxAcc (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw) :
+inductive SyntaxAcc (fp : FingerprintFn) (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw) :
     Syntax → String.Pos.Raw → Core.CommentAcc → String.Pos.Raw → Core.CommentAcc → Prop where
   | atomOrig {l start t stop val pos acc acc1} :
       pos ≤ start → start ≤ stop → stop ≤ nextPos →
-      TriviaAcc ctx.fileMap start pos acc acc1 →
+      TriviaAcc fp ctx.fileMap start pos acc acc1 →
       TokenSafe ctx (Syntax.atom (.original l start t stop) val)
         (ctx.extract start stop) (ctx.get stop) →
-      SyntaxAcc ctx nextPos (Syntax.atom (.original l start t stop) val) pos acc stop acc1
+      SyntaxAcc fp ctx nextPos (Syntax.atom (.original l start t stop) val) pos acc stop acc1
   | identOrig {l start t stop rawVal val pre pos acc acc1} :
       pos ≤ start → start ≤ stop → stop ≤ nextPos →
-      TriviaAcc ctx.fileMap start pos acc acc1 →
+      TriviaAcc fp ctx.fileMap start pos acc acc1 →
       TokenSafe ctx (Syntax.ident (.original l start t stop) rawVal val pre)
         (ctx.extract start stop) (ctx.get stop) →
-      SyntaxAcc ctx nextPos (Syntax.ident (.original l start t stop) rawVal val pre) pos acc stop acc1
+      SyntaxAcc fp ctx nextPos (Syntax.ident (.original l start t stop) rawVal val pre) pos acc stop acc1
   | doc {info k args l1 start t1 s1 l2 s2 t2 stop pos acc acc1 kind} :
       docKind k = true →
       (Syntax.node info k args).getHeadInfo? = some (.original l1 start t1 s1) →
       (Syntax.node info k args).getTailInfo? = some (.original l2 s2 t2 stop) →
       pos ≤ start → start ≤ stop → stop ≤ nextPos →
-      TriviaAcc ctx.fileMap start pos acc acc1 →
+      TriviaAcc fp ctx.fileMap start pos acc acc1 →
       kind = (if k == ``Parser.Command.moduleDoc then "moddoc" else "doc") →
       ¬ SpanConflict (stateOfAcc acc1) kind start.byteIdx stop.byteIdx →
-      SyntaxAcc ctx nextPos (Syntax.node info k args) pos acc stop
-        (updateAcc acc1 ctx.fileMap kind start stop)
+      SyntaxAcc fp ctx nextPos (Syntax.node info k args) pos acc stop
+        (updateAcc fp acc1 ctx.fileMap kind start stop)
   | choice {info first alts pos acc stop acc1 acc2} :
-      SyntaxAcc ctx nextPos first pos acc stop acc1 →
-      AltsAcc ctx nextPos pos stop alts acc1 acc2 →
-      SyntaxAcc ctx nextPos (Syntax.node info choiceKind ⟨first :: alts⟩) pos acc stop acc2
+      SyntaxAcc fp ctx nextPos first pos acc stop acc1 →
+      AltsAcc fp ctx nextPos pos stop alts acc1 acc2 →
+      SyntaxAcc fp ctx nextPos (Syntax.node info choiceKind ⟨first :: alts⟩) pos acc stop acc2
   | singletonAtomNode {info k atomInfo val l start t stop pos acc acc1} :
       docKind k = false →
       k ≠ choiceKind →
       atomInfo = .original l start t stop →
       pos ≤ start → start ≤ stop → stop ≤ nextPos →
-      TriviaAcc ctx.fileMap start pos acc acc1 →
+      TriviaAcc fp ctx.fileMap start pos acc acc1 →
       TokenSafe ctx (Syntax.node info k #[.atom atomInfo val])
         (ctx.extract start stop) (ctx.get stop) →
-      SyntaxAcc ctx nextPos (Syntax.node info k #[.atom atomInfo val]) pos acc stop acc1
+      SyntaxAcc fp ctx nextPos (Syntax.node info k #[.atom atomInfo val]) pos acc stop acc1
   | nodeList {info k args pos acc stop acc'} :
       docKind k = false →
       k ≠ choiceKind →
       (∀ l start t stop val, args ≠ #[.atom (.original l start t stop) val]) →
-      ListAcc ctx nextPos args.toList pos acc stop acc' →
-      SyntaxAcc ctx nextPos (Syntax.node info k args) pos acc stop acc'
+      ListAcc fp ctx nextPos args.toList pos acc stop acc' →
+      SyntaxAcc fp ctx nextPos (Syntax.node info k args) pos acc stop acc'
   | other {s pos acc} :
       (∀ l start t stop val, s ≠ .atom (.original l start t stop) val) →
       (∀ l start t stop rawVal val pre, s ≠ .ident (.original l start t stop) rawVal val pre) →
       (∀ info k args, s ≠ .node info k args) →
-      SyntaxAcc ctx nextPos s pos acc pos acc
+      SyntaxAcc fp ctx nextPos s pos acc pos acc
 
-inductive AltsAcc (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw) :
+inductive AltsAcc (fp : FingerprintFn) (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw) :
     String.Pos.Raw → String.Pos.Raw → List Syntax → Core.CommentAcc → Core.CommentAcc → Prop where
-  | nil {pos stop acc} : AltsAcc ctx nextPos pos stop [] acc acc
+  | nil {pos stop acc} : AltsAcc fp ctx nextPos pos stop [] acc acc
   | cons {pos stop alt rest acc acc1 acc2} :
-      SyntaxAcc ctx nextPos alt pos acc stop acc1 →
-      AltsAcc ctx nextPos pos stop rest acc1 acc2 →
-      AltsAcc ctx nextPos pos stop (alt :: rest) acc acc2
+      SyntaxAcc fp ctx nextPos alt pos acc stop acc1 →
+      AltsAcc fp ctx nextPos pos stop rest acc1 acc2 →
+      AltsAcc fp ctx nextPos pos stop (alt :: rest) acc acc2
 
-inductive ListAcc (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw) :
+inductive ListAcc (fp : FingerprintFn) (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw) :
     List Syntax → String.Pos.Raw → Core.CommentAcc → String.Pos.Raw → Core.CommentAcc → Prop where
-  | nil {pos acc} : ListAcc ctx nextPos [] pos acc pos acc
+  | nil {pos acc} : ListAcc fp ctx nextPos [] pos acc pos acc
   | cons {arg rest pos acc mid acc1 stop acc2} :
-      SyntaxAcc ctx nextPos arg pos acc mid acc1 →
-      ListAcc ctx nextPos rest mid acc1 stop acc2 →
-      ListAcc ctx nextPos (arg :: rest) pos acc stop acc2
+      SyntaxAcc fp ctx nextPos arg pos acc mid acc1 →
+      ListAcc fp ctx nextPos rest mid acc1 stop acc2 →
+      ListAcc fp ctx nextPos (arg :: rest) pos acc stop acc2
 
 end
 
-inductive RangesAcc : List Core.CommandRange → Core.CommentAcc → Core.CommentAcc → Prop where
-  | nil {acc} : RangesAcc [] acc acc
+inductive RangesAccWith (fp : FingerprintFn) : List Core.CommandRange → Core.CommentAcc → Core.CommentAcc → Prop where
+  | nil {acc} : RangesAccWith fp [] acc acc
   | cons {r rest acc mid acc1 acc2 acc'} :
       r.prevPos ≤ r.nextPos →
       r.nextPos ≤ r.ctx.endPos →
-      SyntaxAcc r.ctx r.nextPos r.stx r.prevPos acc mid acc1 →
-      TriviaAcc r.ctx.fileMap r.nextPos mid acc1 acc2 →
-      RangesAcc rest acc2 acc' →
-      RangesAcc (r :: rest) acc acc'
+      SyntaxAcc fp r.ctx r.nextPos r.stx r.prevPos acc mid acc1 →
+      TriviaAcc fp r.ctx.fileMap r.nextPos mid acc1 acc2 →
+      RangesAccWith fp rest acc2 acc' →
+      RangesAccWith fp (r :: rest) acc acc'
 
-theorem triviaAcc_step {fileMap : FileMap} {stopPos pos : String.Pos.Raw} {acc acc' : Core.CommentAcc}
-    (h : TriviaAcc fileMap stopPos pos acc acc') :
+abbrev RangesAcc := RangesAccWith fpModel
+
+theorem triviaAcc_step {fp : FingerprintFn} {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
+    {acc acc' : Core.CommentAcc} (h : TriviaAcc fp fileMap stopPos pos acc acc') :
     TriviaStep fileMap stopPos pos (stateOfAcc acc) (stateOfAcc acc') := by
   induction h with
   | done hnot => exact .done hnot
@@ -415,9 +366,9 @@ theorem triviaAcc_step {fileMap : FileMap} {stopPos pos : String.Pos.Raw} {acc a
     rw [stateOfAcc_updateAcc hnc] at ih
     exact .block hlt hs hnxt hm haop h1 h2 hbs hb hnc ih
 
-theorem syntaxAcc_step {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw} :
+theorem syntaxAcc_step {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw} :
     ∀ {s pos acc stop acc'},
-      SyntaxAcc ctx nextPos s pos acc stop acc' →
+      SyntaxAcc fp ctx nextPos s pos acc stop acc' →
       SyntaxStep ctx nextPos s pos (stateOfAcc acc) stop (stateOfAcc acc')
   | _, _, _, _, _, .atomOrig h1 h2 h3 ht hts => .atomOrig h1 h2 h3 (triviaAcc_step ht) hts
   | _, _, _, _, _, .identOrig h1 h2 h3 ht hts => .identOrig h1 h2 h3 (triviaAcc_step ht) hts
@@ -430,21 +381,30 @@ theorem syntaxAcc_step {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Ra
   | _, _, _, _, _, .nodeList h1 h2 h3 hl => .nodeList h1 h2 h3 (listAcc_step hl)
   | _, _, _, _, _, .other h1 h2 h3 => .other h1 h2 h3
 where
-  altsAcc_step {ctx : Parser.ParserContextCore} {nextPos pos stop : String.Pos.Raw} :
+  altsAcc_step {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos pos stop : String.Pos.Raw} :
       ∀ {alts acc acc'},
-        AltsAcc ctx nextPos pos stop alts acc acc' →
+        AltsAcc fp ctx nextPos pos stop alts acc acc' →
         AltsStep ctx nextPos pos stop alts (stateOfAcc acc) (stateOfAcc acc')
     | [], _, _, .nil => .nil
     | _ :: _, _, _, .cons h1 h2 => .cons (syntaxAcc_step h1) (altsAcc_step h2)
-  listAcc_step {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw} :
+  listAcc_step {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw} :
       ∀ {args pos acc stop acc'},
-        ListAcc ctx nextPos args pos acc stop acc' →
+        ListAcc fp ctx nextPos args pos acc stop acc' →
         ListStep ctx nextPos args pos (stateOfAcc acc) stop (stateOfAcc acc')
     | [], _, _, _, _, .nil => .nil
     | _ :: _, _, _, _, _, .cons h1 h2 => .cons (syntaxAcc_step h1) (listAcc_step h2)
 
-theorem triviaAcc_total (fileMap : FileMap) (stopPos pos : String.Pos.Raw) (acc : Core.CommentAcc) :
-    (∃ acc', TriviaAcc fileMap stopPos pos acc acc') ∨
+theorem rangesAcc_step {fp : FingerprintFn} {ranges : List Core.CommandRange}
+    {acc acc' : Core.CommentAcc} (h : RangesAccWith fp ranges acc acc') :
+    RangesStep ranges (stateOfAcc acc) (stateOfAcc acc') := by
+  induction h with
+  | nil => exact .nil
+  | cons h1 h2 hsa hta _ ih =>
+    exact .cons h1 h2 (syntaxAcc_step hsa) (triviaAcc_step hta) ih
+
+theorem triviaAcc_total (fp : FingerprintFn) (fileMap : FileMap) (stopPos pos : String.Pos.Raw)
+    (acc : Core.CommentAcc) :
+    (∃ acc', TriviaAcc fp fileMap stopPos pos acc acc') ∨
       TriviaFails fileMap stopPos pos (stateOfAcc acc) := by
   by_cases hlt : pos < stopPos
   · let c := String.Pos.Raw.get fileMap.source pos
@@ -456,7 +416,7 @@ theorem triviaAcc_total (fileMap : FileMap) (stopPos pos : String.Pos.Raw) (acc 
           have hx2 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next fileMap.source pos)
           dsimp only [next]
           omega
-        rcases triviaAcc_total fileMap stopPos next acc with ⟨acc', hta⟩ | htf
+        rcases triviaAcc_total fp fileMap stopPos next acc with ⟨acc', hta⟩ | htf
         · exact .inl ⟨acc', .ws hlt hws hn hta⟩
         · exact .inr (.wsStep hlt hws hn htf)
       · exact .inr (.wsBoundary hlt hws hn)
@@ -481,8 +441,8 @@ theorem triviaAcc_total (fileMap : FileMap) (stopPos pos : String.Pos.Raw) (acc 
               have hx1 := String.Pos.Raw.lt_iff.mp hlt
               have hx2 := String.Pos.Raw.lt_iff.mp hpos_lt_eol
               omega
-            let acc1 := updateAcc acc fileMap "line" pos eol
-            rcases triviaAcc_total fileMap stopPos eol acc1 with ⟨acc', hta⟩ | htf
+            let acc1 := updateAcc fp acc fileMap "line" pos eol
+            rcases triviaAcc_total fp fileMap stopPos eol acc1 with ⟨acc', hta⟩ | htf
             · exact .inl ⟨acc', .line hlt hc1 hnxt hc2 ha heol hconf hta⟩
             · rw [stateOfAcc_updateAcc hconf] at htf
               exact .inr (.lineStep hlt hc1 hnxt hc2 ha heol (String.Pos.Raw.lt_iff.mp hpos_lt_eol) hconf htf)
@@ -511,8 +471,8 @@ theorem triviaAcc_total (fileMap : FileMap) (stopPos pos : String.Pos.Raw) (acc 
                     have hdec : stopPos.byteIdx - endPos.byteIdx < stopPos.byteIdx - pos.byteIdx := by
                       have hx1 := String.Pos.Raw.lt_iff.mp hlt
                       omega
-                    let acc1 := updateAcc acc fileMap "block" pos endPos
-                    rcases triviaAcc_total fileMap stopPos endPos acc1 with ⟨acc', hta⟩ | htf
+                    let acc1 := updateAcc fp acc fileMap "block" pos endPos
+                    rcases triviaAcc_total fp fileMap stopPos endPos acc1 with ⟨acc', hta⟩ | htf
                     · exact .inl ⟨acc', .block hlt hc1 hnxt hc2 hao hnd1 hnd2 hbs hb hconf hta⟩
                     · rw [stateOfAcc_updateAcc hconf] at htf
                       exact .inr (.blockStep hlt hc1 hnxt hc2 hao hnd1 hnd2 hbs hb hconf htf)
@@ -523,15 +483,15 @@ theorem triviaAcc_total (fileMap : FileMap) (stopPos pos : String.Pos.Raw) (acc 
   · exact .inl ⟨acc, .done hlt⟩
 termination_by stopPos.byteIdx - pos.byteIdx
 
-theorem syntaxAcc_total (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw)
+theorem syntaxAcc_total (fp : FingerprintFn) (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw)
     (s : Syntax) (pos : String.Pos.Raw) (acc : Core.CommentAcc) :
-    (∃ stop acc', SyntaxAcc ctx nextPos s pos acc stop acc') ∨
+    (∃ stop acc', SyntaxAcc fp ctx nextPos s pos acc stop acc') ∨
       SyntaxFails ctx nextPos s pos (stateOfAcc acc) := by
   match s with
   | .atom (.original l start t stop) val =>
     by_cases hr : pos ≤ start ∧ start ≤ stop ∧ stop ≤ nextPos
     · rcases hr with ⟨h1, h2, h3⟩
-      rcases triviaAcc_total ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
+      rcases triviaAcc_total fp ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
       · rcases tokenSafe_dichotomy ctx (.atom (.original l start t stop) val) (ctx.extract start stop) (ctx.get stop) with hts | htr
         · exact .inl ⟨stop, acc1, .atomOrig h1 h2 h3 hta hts⟩
         · exact .inr (.atomToken h1 h2 h3 (triviaAcc_step hta) htr)
@@ -540,7 +500,7 @@ theorem syntaxAcc_total (ctx : Parser.ParserContextCore) (nextPos : String.Pos.R
   | .ident (.original l start t stop) rawVal val pre =>
     by_cases hr : pos ≤ start ∧ start ≤ stop ∧ stop ≤ nextPos
     · rcases hr with ⟨h1, h2, h3⟩
-      rcases triviaAcc_total ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
+      rcases triviaAcc_total fp ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
       · rcases tokenSafe_dichotomy ctx (.ident (.original l start t stop) rawVal val pre) (ctx.extract start stop) (ctx.get stop) with hts | htr
         · exact .inl ⟨stop, acc1, .identOrig h1 h2 h3 hta hts⟩
         · exact .inr (.identToken h1 h2 h3 (triviaAcc_step hta) htr)
@@ -558,11 +518,11 @@ theorem syntaxAcc_total (ctx : Parser.ParserContextCore) (nextPos : String.Pos.R
             | original l2 s2 t2 stop =>
               by_cases hr : pos ≤ start ∧ start ≤ stop ∧ stop ≤ nextPos
               · rcases hr with ⟨h1, h2, h3⟩
-                rcases triviaAcc_total ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
+                rcases triviaAcc_total fp ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
                 · let kind := if k == ``Parser.Command.moduleDoc then "moddoc" else "doc"
                   by_cases hconf : SpanConflict (stateOfAcc acc1) kind start.byteIdx stop.byteIdx
                   · exact .inr (.docSpanConflict hdoc hhead htail h1 h2 h3 (triviaAcc_step hta) rfl hconf)
-                  · exact .inl ⟨stop, updateAcc acc1 ctx.fileMap kind start stop,
+                  · exact .inl ⟨stop, updateAcc fp acc1 ctx.fileMap kind start stop,
                       .doc hdoc hhead htail h1 h2 h3 hta rfl hconf⟩
                 · exact .inr (.docTrivia hdoc hhead htail h1 h2 h3 htf)
               · exact .inr (.docRange hdoc hhead htail hr)
@@ -587,19 +547,19 @@ theorem syntaxAcc_total (ctx : Parser.ParserContextCore) (nextPos : String.Pos.R
           | nil => exact .inr .emptyChoice
           | cons first rest =>
             have _hs1 : sizeOf first < sizeOf (Syntax.node info choiceKind ⟨first :: rest⟩) := by simp; omega
-            rcases syntaxAcc_total ctx nextPos first pos acc with ⟨stop, acc1, hfirst⟩ | hf
+            rcases syntaxAcc_total fp ctx nextPos first pos acc with ⟨stop, acc1, hfirst⟩ | hf
             · have _hs2 : sizeOf rest < sizeOf (Syntax.node info choiceKind ⟨first :: rest⟩) := by simp; omega
-              rcases altsAcc_total ctx nextPos pos stop rest acc1 with ⟨acc2, halts⟩ | haf
+              rcases altsAcc_total fp ctx nextPos pos stop rest acc1 with ⟨acc2, halts⟩ | haf
               · exact .inl ⟨stop, acc2, .choice hfirst halts⟩
               · exact .inr (.choiceAlts (syntaxAcc_step hfirst) haf)
             · exact .inr (.choiceFirst hf)
       · cases args with
         | mk argList =>
           have runList (hnot_s : ∀ l start t stop val, (⟨argList⟩ : Array Syntax) ≠ #[.atom (.original l start t stop) val]) :
-              (∃ stop acc', SyntaxAcc ctx nextPos (Syntax.node info k ⟨argList⟩) pos acc stop acc') ∨
+              (∃ stop acc', SyntaxAcc fp ctx nextPos (Syntax.node info k ⟨argList⟩) pos acc stop acc') ∨
                 SyntaxFails ctx nextPos (Syntax.node info k ⟨argList⟩) pos (stateOfAcc acc) := by
             have _hsL : sizeOf argList < sizeOf (Syntax.node info k ⟨argList⟩) := by simp; omega
-            rcases listAcc_total ctx nextPos argList pos acc with ⟨stop, acc', hl⟩ | hlf
+            rcases listAcc_total fp ctx nextPos argList pos acc with ⟨stop, acc', hl⟩ | hlf
             · exact .inl ⟨stop, acc', .nodeList hdocf hch hnot_s hl⟩
             · exact .inr (.nodeList hdocf hch hnot_s (by simpa using hlf))
           cases argList with
@@ -613,7 +573,7 @@ theorem syntaxAcc_total (ctx : Parser.ParserContextCore) (nextPos : String.Pos.R
                 | original l start t stop =>
                   by_cases hr : pos ≤ start ∧ start ≤ stop ∧ stop ≤ nextPos
                   · rcases hr with ⟨h1, h2, h3⟩
-                    rcases triviaAcc_total ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
+                    rcases triviaAcc_total fp ctx.fileMap start pos acc with ⟨acc1, hta⟩ | htf
                     · rcases tokenSafe_dichotomy ctx (.node info k #[.atom (.original l start t stop) aval])
                           (ctx.extract start stop) (ctx.get stop) with hts | htr
                       · exact .inl ⟨stop, acc1, .singletonAtomNode hdocf hch rfl h1 h2 h3 hta hts⟩
@@ -651,46 +611,46 @@ theorem syntaxAcc_total (ctx : Parser.ParserContextCore) (nextPos : String.Pos.R
       (fun _ _ _ h => Syntax.noConfusion h)⟩
 termination_by sizeOf s
 where
-  altsAcc_total (ctx : Parser.ParserContextCore) (nextPos pos stop : String.Pos.Raw)
+  altsAcc_total (fp : FingerprintFn) (ctx : Parser.ParserContextCore) (nextPos pos stop : String.Pos.Raw)
       (alts : List Syntax) (acc : Core.CommentAcc) :
-      (∃ acc', AltsAcc ctx nextPos pos stop alts acc acc') ∨
+      (∃ acc', AltsAcc fp ctx nextPos pos stop alts acc acc') ∨
         AltsFails ctx nextPos pos stop alts (stateOfAcc acc) := by
     match alts with
     | [] => exact .inl ⟨acc, .nil⟩
     | alt :: rest =>
-      rcases syntaxAcc_total ctx nextPos alt pos acc with ⟨altStop, acc1, halt⟩ | hf
+      rcases syntaxAcc_total fp ctx nextPos alt pos acc with ⟨altStop, acc1, halt⟩ | hf
       · by_cases heq : altStop = stop
         · subst heq
-          rcases altsAcc_total ctx nextPos pos altStop rest acc1 with ⟨acc2, hrest⟩ | hf2
+          rcases altsAcc_total fp ctx nextPos pos altStop rest acc1 with ⟨acc2, hrest⟩ | hf2
           · exact .inl ⟨acc2, .cons halt hrest⟩
           · exact .inr (.tail (syntaxAcc_step halt) hf2)
         · exact .inr (.mismatch (syntaxAcc_step halt) heq)
       · exact .inr (.head hf)
   termination_by sizeOf alts
 
-  listAcc_total (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw)
+  listAcc_total (fp : FingerprintFn) (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw)
       (args : List Syntax) (pos : String.Pos.Raw) (acc : Core.CommentAcc) :
-      (∃ stop acc', ListAcc ctx nextPos args pos acc stop acc') ∨
+      (∃ stop acc', ListAcc fp ctx nextPos args pos acc stop acc') ∨
         ListFails ctx nextPos args pos (stateOfAcc acc) := by
     match args with
     | [] => exact .inl ⟨pos, acc, .nil⟩
     | arg :: rest =>
-      rcases syntaxAcc_total ctx nextPos arg pos acc with ⟨mid, acc1, harg⟩ | hf
-      · rcases listAcc_total ctx nextPos rest mid acc1 with ⟨stop, acc2, hrest⟩ | hf2
+      rcases syntaxAcc_total fp ctx nextPos arg pos acc with ⟨mid, acc1, harg⟩ | hf
+      · rcases listAcc_total fp ctx nextPos rest mid acc1 with ⟨stop, acc2, hrest⟩ | hf2
         · exact .inl ⟨stop, acc2, .cons harg hrest⟩
         · exact .inr (.tail (syntaxAcc_step harg) hf2)
       · exact .inr (.head hf)
   termination_by sizeOf args
 
-theorem rangesAcc_total (ranges : List Core.CommandRange) (acc : Core.CommentAcc) :
-    (∃ acc', RangesAcc ranges acc acc') ∨ CollectRefusal ranges acc := by
+theorem rangesAccWith_total (fp : FingerprintFn) (ranges : List Core.CommandRange) (acc : Core.CommentAcc) :
+    (∃ acc', RangesAccWith fp ranges acc acc') ∨ CollectRefusal ranges acc := by
   induction ranges generalizing acc with
   | nil => exact .inl ⟨acc, .nil⟩
   | cons r rest ih =>
     by_cases hb : r.prevPos ≤ r.nextPos ∧ r.nextPos ≤ r.ctx.endPos
     · rcases hb with ⟨h1, h2⟩
-      rcases syntaxAcc_total r.ctx r.nextPos r.stx r.prevPos acc with ⟨mid, acc1, hsa⟩ | hsf
-      · rcases triviaAcc_total r.ctx.fileMap r.nextPos mid acc1 with ⟨acc2, hta⟩ | htf
+      rcases syntaxAcc_total fp r.ctx r.nextPos r.stx r.prevPos acc with ⟨mid, acc1, hsa⟩ | hsf
+      · rcases triviaAcc_total fp r.ctx.fileMap r.nextPos mid acc1 with ⟨acc2, hta⟩ | htf
         · rcases ih acc2 with ⟨acc', hra⟩ | hrf
           · exact .inl ⟨acc', .cons h1 h2 hsa hta hra⟩
           · exact .inr (.restFails h1 h2 (syntaxAcc_step hsa) (triviaAcc_step hta) hrf)
@@ -698,8 +658,12 @@ theorem rangesAcc_total (ranges : List Core.CommandRange) (acc : Core.CommentAcc
       · exact .inr (.syntaxFails h1 h2 hsf)
     · exact .inr (.badBounds hb)
 
-theorem triviaAcc_preserves {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
-    {acc acc' : Core.CommentAcc} (h : TriviaAcc fileMap stopPos pos acc acc') :
+theorem rangesAcc_total (ranges : List Core.CommandRange) (acc : Core.CommentAcc) :
+    (∃ acc', RangesAcc ranges acc acc') ∨ CollectRefusal ranges acc :=
+  rangesAccWith_total fpModel ranges acc
+
+theorem triviaAcc_preserves {fp : FingerprintFn} {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
+    {acc acc' : Core.CommentAcc} (h : TriviaAcc fp fileMap stopPos pos acc acc') :
     ∀ (sb eb : Nat) (c : Core.Comment),
       acc.spans[sb]? = some (eb, c) → acc'.spans[sb]? = some (eb, c) := by
   induction h with
@@ -712,10 +676,10 @@ theorem triviaAcc_preserves {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
 
 mutual
 
-theorem syntaxAcc_preserves {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem syntaxAcc_preserves {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {s : Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
-    (h : SyntaxAcc ctx nextPos s pos acc stop acc') :
+    (h : SyntaxAcc fp ctx nextPos s pos acc stop acc') :
     ∀ (sb eb : Nat) (c : Core.Comment),
       acc.spans[sb]? = some (eb, c) → acc'.spans[sb]? = some (eb, c) := by
   match h with
@@ -730,9 +694,9 @@ theorem syntaxAcc_preserves {ctx : Parser.ParserContextCore} {nextPos : String.P
   | .nodeList _ _ _ hlist => exact listAcc_preserves hlist
   | .other _ _ _ => exact fun _ _ _ hs => hs
 
-theorem altsAcc_preserves {ctx : Parser.ParserContextCore} {nextPos pos stop : String.Pos.Raw}
+theorem altsAcc_preserves {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos pos stop : String.Pos.Raw}
     {alts : List Syntax} {acc acc' : Core.CommentAcc}
-    (h : AltsAcc ctx nextPos pos stop alts acc acc') :
+    (h : AltsAcc fp ctx nextPos pos stop alts acc acc') :
     ∀ (sb eb : Nat) (c : Core.Comment),
       acc.spans[sb]? = some (eb, c) → acc'.spans[sb]? = some (eb, c) := by
   match h with
@@ -740,10 +704,10 @@ theorem altsAcc_preserves {ctx : Parser.ParserContextCore} {nextPos pos stop : S
   | .cons halt hrest =>
     exact fun sb eb c hs => altsAcc_preserves hrest sb eb c (syntaxAcc_preserves halt sb eb c hs)
 
-theorem listAcc_preserves {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem listAcc_preserves {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {args : List Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
-    (h : ListAcc ctx nextPos args pos acc stop acc') :
+    (h : ListAcc fp ctx nextPos args pos acc stop acc') :
     ∀ (sb eb : Nat) (c : Core.Comment),
       acc.spans[sb]? = some (eb, c) → acc'.spans[sb]? = some (eb, c) := by
   match h with
@@ -753,8 +717,8 @@ theorem listAcc_preserves {ctx : Parser.ParserContextCore} {nextPos : String.Pos
 
 end
 
-theorem rangesAcc_preserves {ranges : List Core.CommandRange} {acc acc' : Core.CommentAcc}
-    (h : RangesAcc ranges acc acc') :
+theorem rangesAcc_preserves {fp : FingerprintFn} {ranges : List Core.CommandRange}
+    {acc acc' : Core.CommentAcc} (h : RangesAccWith fp ranges acc acc') :
     ∀ (sb eb : Nat) (c : Core.Comment),
       acc.spans[sb]? = some (eb, c) → acc'.spans[sb]? = some (eb, c) := by
   induction h with
@@ -811,10 +775,10 @@ theorem triviaByteCovered_mono {str : String} {acc1 acc2 : Core.CommentAcc} {lo 
   · exact .inl ⟨sb, eb, c, hpres sb eb c hget, hlt, h1, h2⟩
   · exact .inr hws
 
-theorem updateAcc_has_span {acc : Core.CommentAcc} {fileMap : FileMap} {kind : String}
-    {startPos stopPos : String.Pos.Raw}
+theorem updateAcc_has_span {fp : FingerprintFn} {acc : Core.CommentAcc} {fileMap : FileMap}
+    {kind : String} {startPos stopPos : String.Pos.Raw}
     (hnc : ¬ SpanConflict (stateOfAcc acc) kind startPos.byteIdx stopPos.byteIdx) :
-    ∃ c, (updateAcc acc fileMap kind startPos stopPos).spans[startPos.byteIdx]? =
+    ∃ c, (updateAcc fp acc fileMap kind startPos stopPos).spans[startPos.byteIdx]? =
       some (stopPos.byteIdx, c) := by
   dsimp [updateAcc]
   cases hcur : acc.spans[startPos.byteIdx]? with
@@ -822,7 +786,7 @@ theorem updateAcc_has_span {acc : Core.CommentAcc} {fileMap : FileMap} {kind : S
     refine ⟨{ kind := kind
               startLine := (fileMap.toPosition startPos).line
               endLine := (fileMap.toPosition (String.Pos.Raw.prev fileMap.source stopPos)).line
-              fingerprint := zeroFp }, by simp⟩
+              fingerprint := fp (commentText fileMap startPos.byteIdx stopPos.byteIdx) }, by simp⟩
   | some p =>
     rcases p with ⟨peb, pc⟩
     have hpeb : peb = stopPos.byteIdx := by
@@ -831,8 +795,8 @@ theorem updateAcc_has_span {acc : Core.CommentAcc} {fileMap : FileMap} {kind : S
     subst hpeb
     exact ⟨pc, hcur⟩
 
-theorem triviaAcc_covers {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
-    {acc acc' : Core.CommentAcc} (h : TriviaAcc fileMap stopPos pos acc acc') :
+theorem triviaAcc_covers {fp : FingerprintFn} {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
+    {acc acc' : Core.CommentAcc} (h : TriviaAcc fp fileMap stopPos pos acc acc') :
     ∀ {lo hi : Nat}, lo ≤ pos.byteIdx → stopPos.byteIdx ≤ hi →
       ∀ b, pos.byteIdx ≤ b → b < stopPos.byteIdx → TriviaByteCovered fileMap.source acc' lo hi b := by
   induction h with
@@ -876,10 +840,10 @@ theorem triviaAcc_covers {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
 
 mutual
 
-theorem syntaxAcc_bounds {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem syntaxAcc_bounds {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {s : Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
-    (h : SyntaxAcc ctx nextPos s pos acc stop acc') (hpn : pos ≤ nextPos) :
+    (h : SyntaxAcc fp ctx nextPos s pos acc stop acc') (hpn : pos ≤ nextPos) :
     pos ≤ stop ∧ stop ≤ nextPos := by
   match h with
   | .atomOrig h1 h2 h3 _ _ =>
@@ -894,10 +858,10 @@ theorem syntaxAcc_bounds {ctx : Parser.ParserContextCore} {nextPos : String.Pos.
   | .nodeList _ _ _ hl => exact listAcc_bounds hl hpn
   | .other _ _ _ => exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_refl _), hpn⟩
 
-theorem listAcc_bounds {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem listAcc_bounds {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {args : List Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
-    (h : ListAcc ctx nextPos args pos acc stop acc') (hpn : pos ≤ nextPos) :
+    (h : ListAcc fp ctx nextPos args pos acc stop acc') (hpn : pos ≤ nextPos) :
     pos ≤ stop ∧ stop ≤ nextPos := by
   match h with
   | .nil => exact ⟨String.Pos.Raw.le_iff.mpr (Nat.le_refl _), hpn⟩
@@ -921,10 +885,10 @@ theorem byteAccounted_lift {ctx : Parser.ParserContextCore} {arg node : Syntax}
 
 mutual
 
-theorem syntaxAcc_covers {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem syntaxAcc_covers {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {s : Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
-    (h : SyntaxAcc ctx nextPos s pos acc stop acc') (hpn : pos ≤ nextPos) :
+    (h : SyntaxAcc fp ctx nextPos s pos acc stop acc') (hpn : pos ≤ nextPos) :
     ∀ {lo hi : Nat}, lo ≤ pos.byteIdx → nextPos.byteIdx ≤ hi →
       ∀ b, pos.byteIdx ≤ b → b < stop.byteIdx → ByteAccounted ctx s acc' lo hi b := by
   match h with
@@ -949,7 +913,7 @@ theorem syntaxAcc_covers {ctx : Parser.ParserContextCore} {nextPos : String.Pos.
     · exact .inr ⟨_, _, _, .singletonAtomNode _ _ _ _ _ _ _ _ hdocf hch hatom,
         Nat.le_trans hlo (String.Pos.Raw.le_iff.mp h1), Nat.le_of_not_lt hlt, hb2,
         Nat.le_trans (String.Pos.Raw.le_iff.mp h3) hhi, hts⟩
-  | @SyntaxAcc.doc _ _ info k args l1 start t1 s1 l2 s2 t2 stop pos acc acc1 kind _ _ _ h1 h2 h3 ht _ hnc =>
+  | @SyntaxAcc.doc _ _ _ info k args l1 start t1 s1 l2 s2 t2 stop pos acc acc1 kind _ _ _ h1 h2 h3 ht _ hnc =>
     intro lo hi hlo hhi b hb1 hb2
     have hlt_ss : start.byteIdx < stop.byteIdx :=
       Classical.byContradiction fun h => hnc (.inl (Nat.le_of_not_lt h))
@@ -958,12 +922,12 @@ theorem syntaxAcc_covers {ctx : Parser.ParserContextCore} {nextPos : String.Pos.
       exact .inl (triviaByteCovered_mono htc updateAcc_preserves)
     · obtain ⟨c, hc⟩ := updateAcc_has_span hnc
       exact .inl (.inl ⟨start.byteIdx, stop.byteIdx, c, hc, hlt_ss, Nat.le_of_not_lt hlt, hb2⟩)
-  | @SyntaxAcc.choice _ _ info first alts pos acc stop acc1 acc2 hf halts =>
+  | @SyntaxAcc.choice _ _ _ info first alts pos acc stop acc1 acc2 hf halts =>
     intro lo hi hlo hhi b hb1 hb2
     have hba := syntaxAcc_covers hf hpn hlo hhi b hb1 hb2
     refine byteAccounted_lift (altsAcc_preserves halts) (fun leaf st sp ho => ?_) hba
     exact .child info choiceKind ⟨first :: alts⟩ first leaf st sp (by simp) ho
-  | @SyntaxAcc.nodeList _ _ info k args pos acc stop acc' _ _ _ hl =>
+  | @SyntaxAcc.nodeList _ _ _ info k args pos acc stop acc' _ _ _ hl =>
     intro lo hi hlo hhi b hb1 hb2
     exact listAcc_covers hl (node := Syntax.node info k args)
       (fun arg hmem leaf st sp ho => .child info k args arg leaf st sp hmem ho)
@@ -972,11 +936,11 @@ theorem syntaxAcc_covers {ctx : Parser.ParserContextCore} {nextPos : String.Pos.
     intro _ _ _ _ b hb1 hb2
     omega
 
-theorem listAcc_covers {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem listAcc_covers {fp : FingerprintFn} {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {args : List Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
     {node : Syntax}
-    (h : ListAcc ctx nextPos args pos acc stop acc')
+    (h : ListAcc fp ctx nextPos args pos acc stop acc')
     (hlift : ∀ arg ∈ args, ∀ leaf st sp, OriginalLeafIn arg leaf st sp → OriginalLeafIn node leaf st sp)
     (hpn : pos ≤ nextPos) :
     ∀ {lo hi : Nat}, lo ≤ pos.byteIdx → nextPos.byteIdx ≤ hi →
@@ -985,7 +949,7 @@ theorem listAcc_covers {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Ra
   | .nil =>
     intro _ _ _ _ b hb1 hb2
     omega
-  | @ListAcc.cons _ _ arg rest pos acc mid acc1 stop acc2 harg hrest =>
+  | @ListAcc.cons _ _ _ arg rest pos acc mid acc1 stop acc2 harg hrest =>
     intro lo hi hlo hhi b hb1 hb2
     have hbm := syntaxAcc_bounds harg hpn
     by_cases hlt : b < mid.byteIdx
@@ -997,13 +961,15 @@ theorem listAcc_covers {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Ra
 
 end
 
-theorem triviaAcc_new_spans {ctx : Parser.ParserContextCore} {stx : Syntax}
+theorem triviaAcc_new_spans {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp s))
+    {ctx : Parser.ParserContextCore} {stx : Syntax}
     {stopPos pos : String.Pos.Raw} {acc acc' : Core.CommentAcc}
-    (h : TriviaAcc ctx.fileMap stopPos pos acc acc') :
+    (h : TriviaAcc fp ctx.fileMap stopPos pos acc acc') :
     ∀ {lo hi : Nat}, lo ≤ pos.byteIdx → stopPos.byteIdx ≤ hi → hi ≤ ctx.endPos.byteIdx →
       ∀ (sb eb : Nat) (c : Core.Comment), acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
-          (lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx stx sb eb c) := by
+          (lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx stx sb eb c ∧
+            c.fingerprint = fp (commentText ctx.fileMap sb eb)) := by
   induction h with
   | done _ =>
     intro _ _ _ _ _ sb eb c hs
@@ -1021,11 +987,12 @@ theorem triviaAcc_new_spans {ctx : Parser.ParserContextCore} {stx : Syntax}
       have h3 := String.Pos.Raw.le_iff.mp hbe.1
       omega
     rcases ih (Nat.le_trans hlo (Nat.le_of_lt hpos_lt_eol)) hhi hend sb eb c hs with hold | hnew
-    · rcases updateAcc_new_span sb eb c hold with hacc | ⟨rfl, rfl, hkind, hfp, hsl, hel⟩
+    · rcases updateAcc_new_span hfp sb eb c hold with hacc | ⟨rfl, rfl, hkind, hfpC, hsl, hel, hfeq⟩
       · exact .inl hacc
-      · refine .inr ⟨hlo, Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi, ?_⟩
+      · refine .inr ⟨hlo, Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi, ?_, hfeq⟩
         refine ⟨hpos_lt_eol, Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi) hend,
-          ?_, hfp, hsl, hel, .inl ⟨hkind, hc1, hc2, String.Pos.Raw.le_iff.mp hbe.1⟩⟩
+          ?_, hfpC, hsl, hel, .inl ⟨hkind, hc1, hc2, String.Pos.Raw.le_iff.mp hbe.1,
+            lineEnd_self (String.Pos.Raw.le_iff.mp ha) heol⟩⟩
         rw [hkind]
         simp [validCommentKind]
     · exact .inr hnew
@@ -1039,17 +1006,17 @@ theorem triviaAcc_new_spans {ctx : Parser.ParserContextCore} {stx : Syntax}
       have h4 := String.Pos.Raw.lt_iff.mp hbe.1
       omega
     rcases ih (Nat.le_trans hlo (Nat.le_of_lt hpos_lt_end)) hhi hend sb eb c hs with hold | hnew
-    · rcases updateAcc_new_span sb eb c hold with hacc | ⟨rfl, rfl, hkind, hfp, hsl, hel⟩
+    · rcases updateAcc_new_span hfp sb eb c hold with hacc | ⟨rfl, rfl, hkind, hfpC, hsl, hel, hfeq⟩
       · exact .inl hacc
       · have hp2_lt : (String.Pos.Raw.next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos)).byteIdx < endPos.byteIdx := by
           have h3 := String.Pos.Raw.lt_iff.mp (String.Pos.Raw.lt_next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos)))
           have h4 := String.Pos.Raw.lt_iff.mp hbe.1
           omega
-        refine .inr ⟨hlo, Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi, ?_⟩
+        refine .inr ⟨hlo, Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi, ?_, hfeq⟩
         refine ⟨hpos_lt_end, Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp hbe.2) hhi) hend,
-          ?_, hfp, hsl, hel, .inr (.inl ⟨hkind, hc1, hc2, hp2_lt, hnd1, hnd2,
+          ?_, hfpC, hsl, hel, .inr (.inl ⟨hkind, hc1, hc2, hp2_lt, hnd1, hnd2,
             String.Pos.Raw.le_iff.mp (String.Pos.Raw.le_iff.mpr (Nat.le_of_lt (String.Pos.Raw.lt_iff.mp hbe.1))),
-            blockStep_ends_slash_minus hb⟩)⟩
+            blockStep_self hb, blockStep_ends_slash_minus hb⟩)⟩
         rw [hkind]
         simp [validCommentKind]
     · exact .inr hnew
@@ -1066,28 +1033,30 @@ theorem genuineCommentSpan_lift {ctx : Parser.ParserContextCore} {arg node : Syn
 
 mutual
 
-theorem syntaxAcc_new_spans {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem syntaxAcc_new_spans {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp s))
+    {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {s : Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
-    (h : SyntaxAcc ctx nextPos s pos acc stop acc') (hpn : pos ≤ nextPos) :
+    (h : SyntaxAcc fp ctx nextPos s pos acc stop acc') (hpn : pos ≤ nextPos) :
     ∀ {lo hi : Nat}, lo ≤ pos.byteIdx → nextPos.byteIdx ≤ hi → hi ≤ ctx.endPos.byteIdx →
       ∀ (sb eb : Nat) (c : Core.Comment), acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
-          (lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx s sb eb c) := by
+          (lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx s sb eb c ∧
+            c.fingerprint = fp (commentText ctx.fileMap sb eb)) := by
   match h with
   | .atomOrig _ h2 h3 ht _ =>
     intro lo hi hlo hhi hend sb eb c hs
-    exact triviaAcc_new_spans ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hs
+    exact triviaAcc_new_spans hfp ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hs
   | .identOrig _ h2 h3 ht _ =>
     intro lo hi hlo hhi hend sb eb c hs
-    exact triviaAcc_new_spans ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hs
+    exact triviaAcc_new_spans hfp ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hs
   | .singletonAtomNode _ _ _ _ h2 h3 ht _ =>
     intro lo hi hlo hhi hend sb eb c hs
-    exact triviaAcc_new_spans ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hs
-  | @SyntaxAcc.doc _ _ info k args l1 start t1 s1 l2 s2 t2 stop pos acc acc1 kind hdoc hh htl h1 h2 h3 ht hk hnc =>
+    exact triviaAcc_new_spans hfp ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hs
+  | @SyntaxAcc.doc _ _ _ info k args l1 start t1 s1 l2 s2 t2 stop pos acc acc1 kind hdoc hh htl h1 h2 h3 ht hk hnc =>
     intro lo hi hlo hhi hend sb eb c hs
-    rcases updateAcc_new_span sb eb c hs with hold | ⟨rfl, rfl, hkind, hfp, hsl, hel⟩
-    · exact triviaAcc_new_spans ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hold
+    rcases updateAcc_new_span hfp sb eb c hs with hold | ⟨rfl, rfl, hkind, hfpC, hsl, hel, hfeq⟩
+    · exact triviaAcc_new_spans hfp ht hlo (Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h2) (String.Pos.Raw.le_iff.mp h3)) hhi) hend sb eb c hold
     · have hlt_ss : start.byteIdx < stop.byteIdx :=
         Classical.byContradiction fun h => hnc (.inl (Nat.le_of_not_lt h))
       have hvalid : validCommentKind c.kind := by
@@ -1097,74 +1066,78 @@ theorem syntaxAcc_new_spans {ctx : Parser.ParserContextCore} {nextPos : String.P
         rw [hkind, hk]
         split <;> simp
       refine .inr ⟨Nat.le_trans hlo (String.Pos.Raw.le_iff.mp h1),
-        Nat.le_trans (String.Pos.Raw.le_iff.mp h3) hhi, ?_⟩
+        Nat.le_trans (String.Pos.Raw.le_iff.mp h3) hhi, ?_, hfeq⟩
       refine ⟨hlt_ss, Nat.le_trans (Nat.le_trans (String.Pos.Raw.le_iff.mp h3) hhi) hend,
-        hvalid, hfp, hsl, hel, .inr (.inr ⟨hkd, ?_⟩)⟩
+        hvalid, hfpC, hsl, hel, .inr (.inr ⟨hkd, ?_⟩)⟩
       exact .here hdoc hh htl (by rw [hkind, hk])
-  | @SyntaxAcc.choice _ _ info first alts pos acc stop acc1 acc2 hf halts =>
+  | @SyntaxAcc.choice _ _ _ info first alts pos acc stop acc1 acc2 hf halts =>
     intro lo hi hlo hhi hend sb eb c hs
     have hch : docKind choiceKind = false := by decide
-    rcases altsAcc_new_spans halts hpn hlo hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg⟩
-    · rcases syntaxAcc_new_spans hf hpn hlo hhi hend sb eb c hold with hacc | ⟨h1, h2, hg⟩
+    rcases altsAcc_new_spans hfp halts hpn hlo hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg, hfeq⟩
+    · rcases syntaxAcc_new_spans hfp hf hpn hlo hhi hend sb eb c hold with hacc | ⟨h1, h2, hg, hfeq⟩
       · exact .inl hacc
-      · refine .inr ⟨h1, h2, genuineCommentSpan_lift (fun kind sb eb hd => ?_) hg⟩
+      · refine .inr ⟨h1, h2, genuineCommentSpan_lift (fun kind sb eb hd => ?_) hg, hfeq⟩
         exact .child hch (by simp) hd
-    · refine .inr ⟨h1, h2, genuineCommentSpan_lift (fun kind sb eb hd => ?_) hg⟩
+    · refine .inr ⟨h1, h2, genuineCommentSpan_lift (fun kind sb eb hd => ?_) hg, hfeq⟩
       exact .child hch (by simp [hm]) hd
-  | @SyntaxAcc.nodeList _ _ info k args pos acc stop acc' hdocf _ _ hl =>
+  | @SyntaxAcc.nodeList _ _ _ info k args pos acc stop acc' hdocf _ _ hl =>
     intro lo hi hlo hhi hend sb eb c hs
-    rcases listAcc_new_spans hl hpn hlo hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg⟩
+    rcases listAcc_new_spans hfp hl hpn hlo hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg, hfeq⟩
     · exact .inl hold
-    · refine .inr ⟨h1, h2, genuineCommentSpan_lift (fun kind sb eb hd => ?_) hg⟩
+    · refine .inr ⟨h1, h2, genuineCommentSpan_lift (fun kind sb eb hd => ?_) hg, hfeq⟩
       exact .child hdocf hm hd
   | .other _ _ _ =>
     intro _ _ _ _ _ sb eb c hs
     exact .inl hs
 
-theorem altsAcc_new_spans {ctx : Parser.ParserContextCore} {nextPos pos stop : String.Pos.Raw}
+theorem altsAcc_new_spans {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp s))
+    {ctx : Parser.ParserContextCore} {nextPos pos stop : String.Pos.Raw}
     {alts : List Syntax} {acc acc' : Core.CommentAcc}
-    (h : AltsAcc ctx nextPos pos stop alts acc acc') (hpn : pos ≤ nextPos) :
+    (h : AltsAcc fp ctx nextPos pos stop alts acc acc') (hpn : pos ≤ nextPos) :
     ∀ {lo hi : Nat}, lo ≤ pos.byteIdx → nextPos.byteIdx ≤ hi → hi ≤ ctx.endPos.byteIdx →
       ∀ (sb eb : Nat) (c : Core.Comment), acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
-          ∃ alt ∈ alts, lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx alt sb eb c := by
+          ∃ alt ∈ alts, lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx alt sb eb c ∧
+            c.fingerprint = fp (commentText ctx.fileMap sb eb) := by
   match h with
   | .nil =>
     intro _ _ _ _ _ sb eb c hs
     exact .inl hs
-  | @AltsAcc.cons _ _ _ _ alt rest _ acc1 _ halt hrest =>
+  | @AltsAcc.cons _ _ _ _ _ alt rest _ acc1 _ halt hrest =>
     intro lo hi hlo hhi hend sb eb c hs
-    rcases altsAcc_new_spans hrest hpn hlo hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg⟩
-    · rcases syntaxAcc_new_spans halt hpn hlo hhi hend sb eb c hold with hacc | ⟨h1, h2, hg⟩
+    rcases altsAcc_new_spans hfp hrest hpn hlo hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg, hfeq⟩
+    · rcases syntaxAcc_new_spans hfp halt hpn hlo hhi hend sb eb c hold with hacc | ⟨h1, h2, hg, hfeq⟩
       · exact .inl hacc
-      · exact .inr ⟨alt, by simp, h1, h2, hg⟩
-    · exact .inr ⟨a, by simp [hm], h1, h2, hg⟩
+      · exact .inr ⟨alt, by simp, h1, h2, hg, hfeq⟩
+    · exact .inr ⟨a, by simp [hm], h1, h2, hg, hfeq⟩
 
-theorem listAcc_new_spans {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
+theorem listAcc_new_spans {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp s))
+    {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
     {args : List Syntax} {pos : String.Pos.Raw} {acc : Core.CommentAcc}
     {stop : String.Pos.Raw} {acc' : Core.CommentAcc}
-    (h : ListAcc ctx nextPos args pos acc stop acc') (hpn : pos ≤ nextPos) :
+    (h : ListAcc fp ctx nextPos args pos acc stop acc') (hpn : pos ≤ nextPos) :
     ∀ {lo hi : Nat}, lo ≤ pos.byteIdx → nextPos.byteIdx ≤ hi → hi ≤ ctx.endPos.byteIdx →
       ∀ (sb eb : Nat) (c : Core.Comment), acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
-          ∃ arg ∈ args, lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx arg sb eb c := by
+          ∃ arg ∈ args, lo ≤ sb ∧ eb ≤ hi ∧ GenuineCommentSpan ctx arg sb eb c ∧
+            c.fingerprint = fp (commentText ctx.fileMap sb eb) := by
   match h with
   | .nil =>
     intro _ _ _ _ _ sb eb c hs
     exact .inl hs
-  | @ListAcc.cons _ _ arg rest pos acc mid acc1 stop acc2 harg hrest =>
+  | @ListAcc.cons _ _ _ arg rest pos acc mid acc1 stop acc2 harg hrest =>
     intro lo hi hlo hhi hend sb eb c hs
     have hbm := syntaxAcc_bounds harg hpn
-    rcases listAcc_new_spans hrest hbm.2 (Nat.le_trans hlo (String.Pos.Raw.le_iff.mp hbm.1)) hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg⟩
-    · rcases syntaxAcc_new_spans harg hpn hlo hhi hend sb eb c hold with hacc | ⟨h1, h2, hg⟩
+    rcases listAcc_new_spans hfp hrest hbm.2 (Nat.le_trans hlo (String.Pos.Raw.le_iff.mp hbm.1)) hhi hend sb eb c hs with hold | ⟨a, hm, h1, h2, hg, hfeq⟩
+    · rcases syntaxAcc_new_spans hfp harg hpn hlo hhi hend sb eb c hold with hacc | ⟨h1, h2, hg, hfeq⟩
       · exact .inl hacc
-      · exact .inr ⟨arg, by simp, h1, h2, hg⟩
-    · exact .inr ⟨a, by simp [hm], h1, h2, hg⟩
+      · exact .inr ⟨arg, by simp, h1, h2, hg, hfeq⟩
+    · exact .inr ⟨a, by simp [hm], h1, h2, hg, hfeq⟩
 
 end
 
-theorem rangesAcc_byte_coverage {ranges : List Core.CommandRange} {acc acc' : Core.CommentAcc}
-    (h : RangesAcc ranges acc acc') :
+theorem rangesAcc_byte_coverage {fp : FingerprintFn} {ranges : List Core.CommandRange}
+    {acc acc' : Core.CommentAcc} (h : RangesAccWith fp ranges acc acc') :
     ∀ r ∈ ranges, ∀ b, r.prevPos.byteIdx ≤ b → b < r.nextPos.byteIdx →
       ByteAccounted r.ctx r.stx acc' r.prevPos.byteIdx r.nextPos.byteIdx b := by
   induction h with
@@ -1201,24 +1174,26 @@ theorem contiguousFrom_find {start endPos : String.Pos.Raw} {ranges : List Core.
     · obtain ⟨r', hm, hb1, hb2⟩ := ih hrest b (Nat.le_of_not_lt hlt) h2
       exact ⟨r', by simp [hm], hb1, hb2⟩
 
-theorem rangesAcc_genuine_new_spans {ranges : List Core.CommandRange} {acc acc' : Core.CommentAcc}
-    (h : RangesAcc ranges acc acc') :
+theorem rangesAcc_genuine_new_spans {fp : FingerprintFn} (hfp : ∀ s, IsFingerprint (fp s))
+    {ranges : List Core.CommandRange} {acc acc' : Core.CommentAcc}
+    (h : RangesAccWith fp ranges acc acc') :
     ∀ (sb eb : Nat) (c : Core.Comment), acc'.spans[sb]? = some (eb, c) →
       acc.spans[sb]? = some (eb, c) ∨
         ∃ r ∈ ranges,
-          r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧ GenuineCommentSpan r.ctx r.stx sb eb c := by
+          r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧ GenuineCommentSpan r.ctx r.stx sb eb c ∧
+            c.fingerprint = fp (commentText r.ctx.fileMap sb eb) := by
   induction h with
   | nil => exact fun _ _ _ hs => .inl hs
   | @cons r rest acc mid acc1 acc2 acc' h1 h2 hsa hta hra ih =>
     intro sb eb c hs
-    rcases ih sb eb c hs with hold2 | ⟨r', hm, hs1, hs2, hg⟩
+    rcases ih sb eb c hs with hold2 | ⟨r', hm, hs1, hs2, hg, hfeq⟩
     · have hbm := syntaxAcc_bounds hsa h1
-      rcases triviaAcc_new_spans (stx := r.stx) hta (String.Pos.Raw.le_iff.mp hbm.1) (Nat.le_refl _) (String.Pos.Raw.le_iff.mp h2) sb eb c hold2 with hold1 | ⟨hs1, hs2, hg⟩
-      · rcases syntaxAcc_new_spans hsa h1 (Nat.le_refl _) (Nat.le_refl _) (String.Pos.Raw.le_iff.mp h2) sb eb c hold1 with hold0 | ⟨hs1, hs2, hg⟩
+      rcases triviaAcc_new_spans hfp (stx := r.stx) hta (String.Pos.Raw.le_iff.mp hbm.1) (Nat.le_refl _) (String.Pos.Raw.le_iff.mp h2) sb eb c hold2 with hold1 | ⟨hs1, hs2, hg, hfeq⟩
+      · rcases syntaxAcc_new_spans hfp hsa h1 (Nat.le_refl _) (Nat.le_refl _) (String.Pos.Raw.le_iff.mp h2) sb eb c hold1 with hold0 | ⟨hs1, hs2, hg, hfeq⟩
         · exact .inl hold0
-        · exact .inr ⟨r, by simp, hs1, hs2, hg⟩
-      · exact .inr ⟨r, by simp, hs1, hs2, hg⟩
-    · exact .inr ⟨r', by simp [hm], hs1, hs2, hg⟩
+        · exact .inr ⟨r, by simp, hs1, hs2, hg, hfeq⟩
+      · exact .inr ⟨r, by simp, hs1, hs2, hg, hfeq⟩
+    · exact .inr ⟨r', by simp [hm], hs1, hs2, hg, hfeq⟩
 
 theorem blockStep_and_fails_disjoint {str : String} {stopPos : String.Pos.Raw}
     {n : Nat} {pos endPos : String.Pos.Raw}
@@ -1470,6 +1445,20 @@ theorem listStep_det {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
 
 end
 
+theorem rangesStep_det {ranges : List Core.CommandRange} {state s1 s2 : SpanState}
+    (h1 : RangesStep ranges state s1) (h2 : RangesStep ranges state s2) :
+    s1 = s2 := by
+  induction h1 generalizing s2 with
+  | nil =>
+    cases h2
+    rfl
+  | cons _ _ hs1 ht1 _ ih =>
+    cases h2 with
+    | cons _ _ hs2 ht2 hr2 =>
+      obtain ⟨rfl, rfl⟩ := syntaxStep_det hs1 hs2
+      rw [triviaStep_det ht1 ht2] at ih
+      exact ih hr2
+
 theorem tokenSafe_and_refusal_disjoint {ctx : Parser.ParserContextCore} {tok : Syntax}
     {raw : String} {next : Char}
     (hs : TokenSafe ctx tok raw next) (hr : TokenRefusal ctx tok raw next) : False := by
@@ -1650,8 +1639,9 @@ theorem listStep_and_fails_disjoint {ctx : Parser.ParserContextCore} {nextPos : 
 
 end
 
-theorem rangesAcc_not_collectRefusal {ranges : List Core.CommandRange} {acc acc' : Core.CommentAcc}
-    (h : RangesAcc ranges acc acc') : ¬ CollectRefusal ranges acc := by
+theorem rangesAcc_not_collectRefusal {fp : FingerprintFn} {ranges : List Core.CommandRange}
+    {acc acc' : Core.CommentAcc} (h : RangesAccWith fp ranges acc acc') :
+    ¬ CollectRefusal ranges acc := by
   dsimp [CollectRefusal]
   induction h with
   | nil => intro hf; cases hf
@@ -1684,10 +1674,10 @@ theorem healthy_blockCloses_to_step {str : String} {stopPos : String.Pos.Raw}
   | openNested hn hlt h1 h2 h3 ha _ ih => exact .openNested hn hlt h1 h2 h3 ha ih
   | other hn hlt hc ho _ ih => exact .other hn hlt hc ho ih
 
-theorem healthy_trivia_to_acc {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
+theorem healthy_trivia_to_acc (fp : FingerprintFn) {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
     {state state' : SpanState} (h : Healthy.Trivia fileMap stopPos pos state state') :
     ∀ acc, stateOfAcc acc = state →
-      ∃ acc', TriviaAcc fileMap stopPos pos acc acc' ∧ stateOfAcc acc' = state' := by
+      ∃ acc', TriviaAcc fp fileMap stopPos pos acc acc' ∧ stateOfAcc acc' = state' := by
   induction h with
   | done hnot =>
     intro acc hst
@@ -1700,102 +1690,102 @@ theorem healthy_trivia_to_acc {fileMap : FileMap} {stopPos pos : String.Pos.Raw}
     intro acc hst
     subst hst
     have hnc := spanCompatible_iff_not_conflict.mp hcomp
-    obtain ⟨acc', hta, hst'⟩ := ih (updateAcc acc fileMap "line" _ _) (stateOfAcc_updateAcc hnc)
+    obtain ⟨acc', hta, hst'⟩ := ih (updateAcc fp acc fileMap "line" _ _) (stateOfAcc_updateAcc hnc)
     exact ⟨acc', .line hlt hc1 hnxt hc2 ha (healthy_lineEnd_to_spec heol) hnc hta, hst'⟩
   | block hlt hc1 hnxt hc2 hao hnd1 hnd2 hbs hb hcomp _ ih =>
     intro acc hst
     subst hst
     have hnc := spanCompatible_iff_not_conflict.mp hcomp
-    obtain ⟨acc', hta, hst'⟩ := ih (updateAcc acc fileMap "block" _ _) (stateOfAcc_updateAcc hnc)
+    obtain ⟨acc', hta, hst'⟩ := ih (updateAcc fp acc fileMap "block" _ _) (stateOfAcc_updateAcc hnc)
     exact ⟨acc', .block hlt hc1 hnxt hc2 hao hnd1 hnd2 hbs (healthy_blockCloses_to_step hb) hnc hta, hst'⟩
 
 mutual
 
-theorem healthy_syntaxOk_to_acc {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
-    {s : Syntax} {pos : String.Pos.Raw} {state : SpanState}
+theorem healthy_syntaxOk_to_acc (fp : FingerprintFn) {ctx : Parser.ParserContextCore}
+    {nextPos : String.Pos.Raw} {s : Syntax} {pos : String.Pos.Raw} {state : SpanState}
     {stop : String.Pos.Raw} {state' : SpanState}
     (h : Healthy.SyntaxOk ctx nextPos s pos state stop state') :
     ∀ acc, stateOfAcc acc = state →
-      ∃ acc', SyntaxAcc ctx nextPos s pos acc stop acc' ∧ stateOfAcc acc' = state' := by
+      ∃ acc', SyntaxAcc fp ctx nextPos s pos acc stop acc' ∧ stateOfAcc acc' = state' := by
   match h with
   | .atomOrig h1 h2 h3 ht htok =>
     intro acc hst
-    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc ht acc hst
+    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc fp ht acc hst
     exact ⟨acc1, .atomOrig h1 h2 h3 hta (healthyToken_iff_tokenSafe.mp htok), hst1⟩
   | .identOrig h1 h2 h3 ht htok =>
     intro acc hst
-    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc ht acc hst
+    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc fp ht acc hst
     exact ⟨acc1, .identOrig h1 h2 h3 hta (healthyToken_iff_tokenSafe.mp htok), hst1⟩
   | .doc hdoc hh htl h1 h2 h3 ht hk hcomp =>
     intro acc hst
-    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc ht acc hst
+    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc fp ht acc hst
     subst hst1
     have hnc := spanCompatible_iff_not_conflict.mp hcomp
-    exact ⟨updateAcc acc1 ctx.fileMap _ _ _,
+    exact ⟨updateAcc fp acc1 ctx.fileMap _ _ _,
       .doc hdoc hh htl h1 h2 h3 hta hk hnc, stateOfAcc_updateAcc hnc⟩
   | .choice hf ha =>
     intro acc hst
-    obtain ⟨acc1, hfa, hst1⟩ := healthy_syntaxOk_to_acc hf acc hst
-    obtain ⟨acc2, haa, hst2⟩ := healthy_altsOk_to_acc ha acc1 hst1
+    obtain ⟨acc1, hfa, hst1⟩ := healthy_syntaxOk_to_acc fp hf acc hst
+    obtain ⟨acc2, haa, hst2⟩ := healthy_altsOk_to_acc fp ha acc1 hst1
     exact ⟨acc2, .choice hfa haa, hst2⟩
   | .singletonAtomNode hdocf hch hatom h1 h2 h3 ht htok =>
     intro acc hst
-    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc ht acc hst
+    obtain ⟨acc1, hta, hst1⟩ := healthy_trivia_to_acc fp ht acc hst
     exact ⟨acc1, .singletonAtomNode hdocf hch hatom h1 h2 h3 hta
       (healthyToken_iff_tokenSafe.mp htok), hst1⟩
   | .nodeList hdocf hch hnot_s hl =>
     intro acc hst
-    obtain ⟨acc', hla, hst'⟩ := healthy_listOk_to_acc hl acc hst
+    obtain ⟨acc', hla, hst'⟩ := healthy_listOk_to_acc fp hl acc hst
     exact ⟨acc', .nodeList hdocf hch hnot_s hla, hst'⟩
   | .other hna hni hnn =>
     intro acc hst
     exact ⟨acc, .other hna hni hnn, hst⟩
 
-theorem healthy_altsOk_to_acc {ctx : Parser.ParserContextCore} {nextPos pos stop : String.Pos.Raw}
-    {alts : List Syntax} {state state' : SpanState}
+theorem healthy_altsOk_to_acc (fp : FingerprintFn) {ctx : Parser.ParserContextCore}
+    {nextPos pos stop : String.Pos.Raw} {alts : List Syntax} {state state' : SpanState}
     (h : Healthy.AltsOk ctx nextPos pos stop alts state state') :
     ∀ acc, stateOfAcc acc = state →
-      ∃ acc', AltsAcc ctx nextPos pos stop alts acc acc' ∧ stateOfAcc acc' = state' := by
+      ∃ acc', AltsAcc fp ctx nextPos pos stop alts acc acc' ∧ stateOfAcc acc' = state' := by
   match h with
   | .nil => intro acc hst; exact ⟨acc, .nil, hst⟩
   | .cons ha hr =>
     intro acc hst
-    obtain ⟨acc1, haa, hst1⟩ := healthy_syntaxOk_to_acc ha acc hst
-    obtain ⟨acc2, hra, hst2⟩ := healthy_altsOk_to_acc hr acc1 hst1
+    obtain ⟨acc1, haa, hst1⟩ := healthy_syntaxOk_to_acc fp ha acc hst
+    obtain ⟨acc2, hra, hst2⟩ := healthy_altsOk_to_acc fp hr acc1 hst1
     exact ⟨acc2, .cons haa hra, hst2⟩
 
-theorem healthy_listOk_to_acc {ctx : Parser.ParserContextCore} {nextPos : String.Pos.Raw}
-    {args : List Syntax} {pos : String.Pos.Raw} {state : SpanState}
+theorem healthy_listOk_to_acc (fp : FingerprintFn) {ctx : Parser.ParserContextCore}
+    {nextPos : String.Pos.Raw} {args : List Syntax} {pos : String.Pos.Raw} {state : SpanState}
     {stop : String.Pos.Raw} {state' : SpanState}
     (h : Healthy.ListOk ctx nextPos args pos state stop state') :
     ∀ acc, stateOfAcc acc = state →
-      ∃ acc', ListAcc ctx nextPos args pos acc stop acc' ∧ stateOfAcc acc' = state' := by
+      ∃ acc', ListAcc fp ctx nextPos args pos acc stop acc' ∧ stateOfAcc acc' = state' := by
   match h with
   | .nil => intro acc hst; exact ⟨acc, .nil, hst⟩
   | .cons ha hr =>
     intro acc hst
-    obtain ⟨acc1, haa, hst1⟩ := healthy_syntaxOk_to_acc ha acc hst
-    obtain ⟨acc2, hra, hst2⟩ := healthy_listOk_to_acc hr acc1 hst1
+    obtain ⟨acc1, haa, hst1⟩ := healthy_syntaxOk_to_acc fp ha acc hst
+    obtain ⟨acc2, hra, hst2⟩ := healthy_listOk_to_acc fp hr acc1 hst1
     exact ⟨acc2, .cons haa hra, hst2⟩
 
 end
 
-theorem healthy_to_rangesAcc {ranges : List Core.CommandRange} {state state' : SpanState}
-    (h : Healthy.RangesOk ranges state state') :
-    ∀ acc, stateOfAcc acc = state → ∃ acc', RangesAcc ranges acc acc' := by
+theorem healthy_to_rangesAcc (fp : FingerprintFn) {ranges : List Core.CommandRange}
+    {state state' : SpanState} (h : Healthy.RangesOk ranges state state') :
+    ∀ acc, stateOfAcc acc = state → ∃ acc', RangesAccWith fp ranges acc acc' := by
   induction h with
   | nil => intro acc _; exact ⟨acc, .nil⟩
   | cons h1 h2 hs ht _ ih =>
     intro acc hst
-    obtain ⟨acc1, hsa, hst1⟩ := healthy_syntaxOk_to_acc hs acc hst
-    obtain ⟨acc2, hta, hst2⟩ := healthy_trivia_to_acc ht acc1 hst1
+    obtain ⟨acc1, hsa, hst1⟩ := healthy_syntaxOk_to_acc fp hs acc hst
+    obtain ⟨acc2, hta, hst2⟩ := healthy_trivia_to_acc fp ht acc1 hst1
     obtain ⟨acc', hra⟩ := ih acc2 hst2
     exact ⟨acc', .cons h1 h2 hsa hta hra⟩
 
 theorem collectRefusal_contradicts_healthy {ranges : List Core.CommandRange} {acc : Core.CommentAcc}
     (href : CollectRefusal ranges acc) (hh : Healthy.Collect ranges acc) : False := by
   obtain ⟨_, hro⟩ := hh
-  obtain ⟨_, hra⟩ := healthy_to_rangesAcc hro acc rfl
+  obtain ⟨_, hra⟩ := healthy_to_rangesAcc fpModel hro acc rfl
   exact rangesAcc_not_collectRefusal hra href
 
 noncomputable def emptyAcc : Core.CommentAcc := { spans := {} }
@@ -1829,17 +1819,20 @@ noncomputable def badBoundsRange : Core.CommandRange where
   prevPos := ⟨1⟩
   nextPos := ⟨0⟩
 
-noncomputable def collectRangesModelWith (errMsg : String) : CollectRangesFn :=
+noncomputable def collectRangesModelWith (fp : FingerprintFn) (errMsg : String) : CollectRangesFn :=
   open Classical in
   fun ranges acc =>
-    if h : ∃ acc', RangesAcc ranges acc acc' then .ok (Classical.choose h)
+    if h : ∃ acc', RangesAccWith fp ranges acc acc' then .ok (Classical.choose h)
     else .error errMsg
 
 noncomputable def collectRangesModel : CollectRangesFn :=
-  collectRangesModelWith "collect failed"
+  collectRangesModelWith fpModel "collect failed"
 
-theorem collectRangesModelWith_meets (errMsg : String) :
-    collectRangesRecord.Meets (collectRangesModelWith errMsg) := by
+theorem collectRangesModelWith_meets (fp : FingerprintFn) (hfp : fingerprintRecord.Meets fp)
+    (errMsg : String) :
+    collectRangesRecord.Meets (collectRangesModelWith fp errMsg) := by
+  have hfpValid : ∀ s, IsFingerprint (fp s) := hfp.2 _ List.mem_cons_self
+  have hfpNonConst : ∃ a b, fp a ≠ fp b := hfp.2 _ (List.mem_cons_of_mem _ List.mem_cons_self)
   refine ⟨(fun _ h => nomatch h), fun p hp => ?_⟩
   rcases List.mem_cons.mp hp with rfl | hp
   · intro ranges acc acc' hok sb eb c hs
@@ -1867,12 +1860,31 @@ theorem collectRangesModelWith_meets (errMsg : String) :
       exact rangesAcc_byte_coverage (Classical.choose_spec h) r hr b hb1 hb2
     · contradiction
   rcases List.mem_cons.mp hp with rfl | hp
+  · intro ranges acc acc' hok
+    dsimp [collectRangesModelWith] at hok
+    split at hok
+    · rename_i h
+      cases hok
+      exact rangesAcc_step (Classical.choose_spec h)
+    · contradiction
+  rcases List.mem_cons.mp hp with rfl | hp
   · intro ranges acc acc' hok sb eb c hs
     dsimp [collectRangesModelWith] at hok
     split at hok
     · rename_i h
       cases hok
-      exact rangesAcc_genuine_new_spans (Classical.choose_spec h) sb eb c hs
+      exact (rangesAcc_genuine_new_spans hfpValid (Classical.choose_spec h) sb eb c hs).imp id
+        fun ⟨r, hr, h1, h2, hg, _⟩ => ⟨r, hr, h1, h2, hg⟩
+    · contradiction
+  rcases List.mem_cons.mp hp with rfl | hp
+  · refine ⟨fp, hfpValid, hfpNonConst, ?_⟩
+    intro ranges acc acc' hok sb eb c hs
+    dsimp [collectRangesModelWith] at hok
+    split at hok
+    · rename_i h
+      cases hok
+      exact (rangesAcc_genuine_new_spans hfpValid (Classical.choose_spec h) sb eb c hs).imp id
+        fun ⟨r, hr, h1, h2, _, hfeq⟩ => ⟨r, hr, h1, h2, hfeq⟩
     · contradiction
   rcases List.mem_cons.mp hp with rfl | hp
   · intro ranges acc msg herr
@@ -1880,13 +1892,13 @@ theorem collectRangesModelWith_meets (errMsg : String) :
     split at herr
     · contradiction
     · rename_i hna
-      rcases rangesAcc_total ranges acc with hok | href
+      rcases rangesAccWith_total fp ranges acc with hok | href
       · exact absurd hok hna
       · exact href
   exact nomatch hp
 
 theorem collectRangesModel_meets : collectRangesRecord.Meets collectRangesModel :=
-  collectRangesModelWith_meets "collect failed"
+  collectRangesModelWith_meets fpModel fpModel_meets "collect failed"
 
 theorem collectRanges_o2 : O2 collectRangesRecord := by
   refine (o2_correct _).mpr ⟨⟨collectRangesModel, (fun _ h => nomatch h)⟩, ?_⟩
@@ -1905,9 +1917,11 @@ theorem collectRanges_o2 : O2 collectRangesRecord := by
   rcases List.mem_cons.mp hp with rfl | hp
   · refine ⟨(dashCtx, .missing, 0, 2, c0), ?_⟩
     dsimp [GenuineCommentSpan]
-    refine ⟨by omega, ?_, ?_, zeroFp_valid, rfl, rfl, .inl ⟨rfl, by decide, by decide, by decide⟩⟩
+    refine ⟨by omega, ?_, ?_, zeroFp_valid, rfl, rfl, .inl ⟨rfl, by decide, by decide, by decide, .done (by decide)⟩⟩
     · exact Nat.le_refl 2
     · simp [validCommentKind, c0]
+  rcases List.mem_cons.mp hp with rfl | hp
+  · exact ⟨([], stateOfAcc emptyAcc, stateOfAcc emptyAcc), .nil⟩
   rcases List.mem_cons.mp hp with rfl | hp
   · refine ⟨([badBoundsRange], emptyAcc), ?_⟩
     refine .badBounds ?_
@@ -1934,10 +1948,10 @@ theorem dashCtx_zero_not_accounted :
 
 theorem collectRanges_o3 : O3 collectRangesRecord := by
   refine (o3_correct _).mpr fun c hc => ?_
+  let acc1 : Core.CommentAcc :=
+    { spans := (Std.HashMap.emptyWithCapacity : Std.HashMap Nat (Nat × Core.Comment)).insert 0 (1, sampleComment1) }
   rcases List.mem_cons.mp hc with rfl | hc
   · refine ⟨fun _ _ => .ok emptyAcc, fun h => ?_⟩
-    let acc1 : Core.CommentAcc :=
-      { spans := (Std.HashMap.emptyWithCapacity : Std.HashMap Nat (Nat × Core.Comment)).insert 0 (1, sampleComment1) }
     have hs := h [] acc1 emptyAcc rfl 0 1 sampleComment1 (by simp [acc1])
     simp [emptyAcc] at hs
   rcases List.mem_cons.mp hc with rfl | hc
@@ -1955,10 +1969,19 @@ theorem collectRanges_o3 : O3 collectRangesRecord := by
       (by dsimp [dashRange]; omega) (by dsimp [dashRange]; omega)
     exact dashCtx_zero_not_accounted hba
   rcases List.mem_cons.mp hc with rfl | hc
-  · let acc1 : Core.CommentAcc :=
-      { spans := (Std.HashMap.emptyWithCapacity : Std.HashMap Nat (Nat × Core.Comment)).insert 0 (1, sampleComment1) }
-    refine ⟨fun _ _ => .ok acc1, fun h => ?_⟩
+  · refine ⟨fun _ _ => .ok acc1, fun h => ?_⟩
+    have hrs := h [] emptyAcc acc1 rfl
+    have h0 := congrFun (rangesStep_det .nil hrs) 0
+    simp [emptyAcc, acc1, stateOfAcc] at h0
+  rcases List.mem_cons.mp hc with rfl | hc
+  · refine ⟨fun _ _ => .ok acc1, fun h => ?_⟩
     rcases h [] emptyAcc acc1 rfl 0 1 sampleComment1 (by simp [acc1]) with hs | ⟨r, hr, _⟩
+    · simp [emptyAcc] at hs
+    · cases hr
+  rcases List.mem_cons.mp hc with rfl | hc
+  · refine ⟨fun _ _ => .ok acc1, fun h => ?_⟩
+    rcases h with ⟨_, _, _, hfn⟩
+    rcases hfn [] emptyAcc acc1 rfl 0 1 sampleComment1 (by simp [acc1]) with hs | ⟨r, hr, _⟩
     · simp [emptyAcc] at hs
     · cases hr
   rcases List.mem_cons.mp hc with rfl | hc
@@ -1971,11 +1994,26 @@ theorem collectRanges_o4 : O4 collectRangesRecord := o4_function _ rfl
 
 def CollectRangesFreedom : Freedom CollectRangesFn :=
   .rel fun f g =>
+    (∃ fp : FingerprintFn,
+      (∀ text, IsFingerprint (fp text)) ∧ (∃ a b, fp a ≠ fp b) ∧
+      ∀ ranges acc acc1, f ranges acc = .ok acc1 →
+        ∀ (sb eb : Nat) (c : Core.Comment), acc1.spans[sb]? = some (eb, c) →
+          acc.spans[sb]? = some (eb, c) ∨
+            ∃ r ∈ ranges, r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
+              c.fingerprint = fp (commentText r.ctx.fileMap sb eb)) ∧
+    (∃ fp : FingerprintFn,
+      (∀ text, IsFingerprint (fp text)) ∧ (∃ a b, fp a ≠ fp b) ∧
+      ∀ ranges acc acc2, g ranges acc = .ok acc2 →
+        ∀ (sb eb : Nat) (c : Core.Comment), acc2.spans[sb]? = some (eb, c) →
+          acc.spans[sb]? = some (eb, c) ∨
+            ∃ r ∈ ranges, r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
+              c.fingerprint = fp (commentText r.ctx.fileMap sb eb)) ∧
     ∀ ranges acc,
       (Healthy.Collect ranges acc → (f ranges acc).isOk = true ∧ (g ranges acc).isOk = true) ∧
       (¬ CollectRefusal ranges acc → (f ranges acc).isOk = true ∧ (g ranges acc).isOk = true) ∧
       (∀ acc1, f ranges acc = .ok acc1 →
         (∀ (sb eb : Nat) (c : Core.Comment), acc.spans[sb]? = some (eb, c) → acc1.spans[sb]? = some (eb, c)) ∧
+        RangesStep ranges (stateOfAcc acc) (stateOfAcc acc1) ∧
         (∀ r ∈ ranges, ∀ b, r.prevPos.byteIdx ≤ b → b < r.nextPos.byteIdx →
           ByteAccounted r.ctx r.stx acc1 r.prevPos.byteIdx r.nextPos.byteIdx b) ∧
         (∀ (sb eb : Nat) (c : Core.Comment), acc1.spans[sb]? = some (eb, c) →
@@ -1984,12 +2022,15 @@ def CollectRangesFreedom : Freedom CollectRangesFn :=
               GenuineCommentSpan r.ctx r.stx sb eb c)) ∧
       (∀ acc2, g ranges acc = .ok acc2 →
         (∀ (sb eb : Nat) (c : Core.Comment), acc.spans[sb]? = some (eb, c) → acc2.spans[sb]? = some (eb, c)) ∧
+        RangesStep ranges (stateOfAcc acc) (stateOfAcc acc2) ∧
         (∀ r ∈ ranges, ∀ b, r.prevPos.byteIdx ≤ b → b < r.nextPos.byteIdx →
           ByteAccounted r.ctx r.stx acc2 r.prevPos.byteIdx r.nextPos.byteIdx b) ∧
         (∀ (sb eb : Nat) (c : Core.Comment), acc2.spans[sb]? = some (eb, c) →
           acc.spans[sb]? = some (eb, c) ∨
             ∃ r ∈ ranges, r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
-              GenuineCommentSpan r.ctx r.stx sb eb c))
+              GenuineCommentSpan r.ctx r.stx sb eb c)) ∧
+      (∀ acc1 acc2, f ranges acc = .ok acc1 → g ranges acc = .ok acc2 →
+        stateOfAcc acc1 = stateOfAcc acc2)
 
 theorem collectRanges_healthy_owed :
     ∀ f ranges acc, collectRangesRecord.Meets f →
@@ -1999,41 +2040,59 @@ theorem collectRanges_healthy_owed :
   | ok acc' => exact ⟨acc', rfl⟩
   | error msg =>
     exfalso
-    have href := hf.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))
+    have href := hf.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+      (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))))
       ranges acc msg hfv
     exact collectRefusal_contradicts_healthy href hh
 
 theorem collectRanges_o5 : O5 collectRangesRecord CollectRangesFreedom := by
-  refine ⟨fun f g hf hg ranges acc => ?_, trivial⟩
+  refine ⟨fun f g hf hg => ?_, trivial⟩
+  have fpProp (fn : CollectRangesFn) (hfn : collectRangesRecord.Meets fn) :=
+    hfn.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+      (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)))))
+  refine ⟨fpProp f hf, fpProp g hg, fun ranges acc => ?_⟩
   have isOk_of_no_ref (fn : CollectRangesFn) (hfn : collectRangesRecord.Meets fn)
       (hnr : ¬ CollectRefusal ranges acc) : (fn ranges acc).isOk = true := by
     cases hval : fn ranges acc with
     | ok _ => rfl
     | error msg =>
       exfalso
-      exact hnr (hfn.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)))) ranges acc msg hval)
+      exact hnr (hfn.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+        (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))))
+        ranges acc msg hval)
   have okProps (fn : CollectRangesFn) (hfn : collectRangesRecord.Meets fn) (acc1 : Core.CommentAcc)
       (hok : fn ranges acc = .ok acc1) :
       (∀ (sb eb : Nat) (c : Core.Comment), acc.spans[sb]? = some (eb, c) → acc1.spans[sb]? = some (eb, c)) ∧
+      RangesStep ranges (stateOfAcc acc) (stateOfAcc acc1) ∧
       (∀ r ∈ ranges, ∀ b, r.prevPos.byteIdx ≤ b → b < r.nextPos.byteIdx →
         ByteAccounted r.ctx r.stx acc1 r.prevPos.byteIdx r.nextPos.byteIdx b) ∧
       (∀ (sb eb : Nat) (c : Core.Comment), acc1.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
           ∃ r ∈ ranges, r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
             GenuineCommentSpan r.ctx r.stx sb eb c) := by
-    refine ⟨?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_⟩
     · exact hfn.2 _ List.mem_cons_self ranges acc acc1 hok
+    · exact hfn.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)))
+        ranges acc acc1 hok
     · exact hfn.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)) ranges acc acc1 hok
-    · exact hfn.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))) ranges acc acc1 hok
+    · exact hfn.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+        (List.mem_cons_of_mem _ List.mem_cons_self)))) ranges acc acc1 hok
   refine ⟨fun hh => ⟨?_, ?_⟩, fun hnr => ⟨isOk_of_no_ref f hf hnr, isOk_of_no_ref g hg hnr⟩,
-    fun acc1 hok => okProps f hf acc1 hok, fun acc2 hok => okProps g hg acc2 hok⟩
+    fun acc1 hok => okProps f hf acc1 hok, fun acc2 hok => okProps g hg acc2 hok,
+    fun acc1 acc2 h1 h2 => ?_⟩
   · obtain ⟨_, h1⟩ := collectRanges_healthy_owed f ranges acc hf hh
     rw [h1]; rfl
   · obtain ⟨_, h2⟩ := collectRanges_healthy_owed g ranges acc hg hh
     rw [h2]; rfl
+  · exact rangesStep_det
+      (hf.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)))
+        ranges acc acc1 h1)
+      (hg.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)))
+        ranges acc acc2 h2)
 
 theorem collectRanges_not_o5_eq : ¬ O5 collectRangesRecord .eq := by
-  refine not_o5_eq collectRangesModel_meets (collectRangesModelWith_meets "denied") fun heq => ?_
+  refine not_o5_eq collectRangesModel_meets
+    (collectRangesModelWith_meets fpModel fpModel_meets "denied") fun heq => ?_
   have hdiff := congrFun (congrFun heq [badBoundsRange]) emptyAcc
   have hna : ¬ ∃ acc', RangesAcc [badBoundsRange] emptyAcc acc' := by
     intro ⟨acc', h⟩
@@ -2063,6 +2122,10 @@ theorem collectRanges_perInput_pairOf :
   · refine ⟨List.mem_cons_self, fun f => ?_⟩
     simp [IntentRecord.Dom, collectRangesRecord, Pair.Met, collectRangesPerInputPair]
   · rcases List.mem_cons.mp hc with rfl | hc
+    · simp at hnm
+    rcases List.mem_cons.mp hc with rfl | hc
+    · simp at hnm
+    rcases List.mem_cons.mp hc with rfl | hc
     · simp at hnm
     rcases List.mem_cons.mp hc with rfl | hc
     · simp at hnm
@@ -2104,12 +2167,14 @@ theorem collectRanges_interim_const_fails :
       · cases ho
     | some p =>
       rcases p with ⟨eb, v⟩
-      rcases hm.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self)))
+      rcases hm.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+          (List.mem_cons_of_mem _ List.mem_cons_self))))
           [] emptyAcc cAcc rfl 0 eb v h0 with hbad | ⟨r, hr, _⟩
       · simp [emptyAcc] at hbad
       · cases hr
   | error msg =>
-    have href := hm.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))
+    have href := hm.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+      (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))))
       [] emptyAcc msg rfl
     cases href
 
@@ -2131,7 +2196,8 @@ theorem collect_reason_classified :
     ∀ f ranges acc msg, collectRangesRecord.Meets f → f ranges acc = .error msg →
       CollectRefusal ranges acc ∧ ¬ Healthy.Collect ranges acc := by
   intro f ranges acc msg hf herr
-  have href := hf.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))
+  have href := hf.2 _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+    (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))))))
     ranges acc msg herr
   exact ⟨href, fun hh => collectRefusal_contradicts_healthy href hh⟩
 

@@ -748,91 +748,19 @@ private theorem parsePrefixArray_iff (ctx : String) (j : Json) (out : Array Stri
       subst hraw_eq
       exact ⟨ho, (normalizePrefix_iff ctx rawArr[i] out[i]).mpr hnp⟩
 
-private theorem except_bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) :
+theorem except_bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) :
     (Except.ok a >>= f) = f a := rfl
 
-private theorem except_bind_err {ε α β : Type} (e : ε) (f : α → Except ε β) :
+theorem except_bind_err {ε α β : Type} (e : ε) (f : α → Except ε β) :
     (Except.error e >>= f) = Except.error e := rfl
 
-private theorem except_bind_assoc {α β γ : Type} (a : Except String α)
+theorem except_bind_assoc {α β γ : Type} (a : Except String α)
     (f : α → Except String β) (g : β → Except String γ) :
     (a >>= fun x => f x >>= g) = ((a >>= f) >>= g) := by
   cases a <;> rfl
 
 private theorem except_pure_bind {ε α β : Type} (a : α) (f : α → Except ε β) :
     (pure a >>= f) = f a := rfl
-
-private theorem except_4bind_mk_iff
-    (dir : String)
-    (e1 : Except String String) (e2 e3 e4 : Except String (Array String))
-    (P1 : String → Prop) (P2 P3 P4 : Array String → Prop)
-    (h1 : ∀ x, e1 = .ok x ↔ P1 x)
-    (h2 : ∀ x, e2 = .ok x ↔ P2 x)
-    (h3 : ∀ x, e3 = .ok x ↔ P3 x)
-    (h4 : ∀ x, e4 = .ok x ↔ P4 x)
-    (ws : NoComments.Config.WorkspaceConfig) :
-    (do
-      let srcDir ← e1
-      let lakeArgs ← e2
-      let toolPrefixes ← e3
-      let excludePrefixes ← e4
-      pure (NoComments.Config.WorkspaceConfig.mk
-        dir srcDir lakeArgs toolPrefixes excludePrefixes)) = .ok ws ↔
-      ws.dir = dir ∧ P1 ws.srcDir ∧ P2 ws.lakeArgs ∧ P3 ws.toolPrefixes ∧ P4 ws.excludePrefixes := by
-  cases he1 : e1 with
-  | error e =>
-    rw [except_bind_err]
-    constructor
-    · intro h0; cases h0
-    · rintro ⟨_, hp1, _⟩
-      have hok := (h1 ws.srcDir).mpr hp1
-      rw [he1] at hok; cases hok
-  | ok srcDir =>
-    rw [except_bind_ok]
-    cases he2 : e2 with
-    | error e =>
-      rw [except_bind_err]
-      constructor
-      · intro h0; cases h0
-      · rintro ⟨_, _, hp2, _⟩
-        have hok := (h2 ws.lakeArgs).mpr hp2
-        rw [he2] at hok; cases hok
-    | ok lakeArgs =>
-      rw [except_bind_ok]
-      cases he3 : e3 with
-      | error e =>
-        rw [except_bind_err]
-        constructor
-        · intro h0; cases h0
-        · rintro ⟨_, _, _, hp3, _⟩
-          have hok := (h3 ws.toolPrefixes).mpr hp3
-          rw [he3] at hok; cases hok
-      | ok toolPrefixes =>
-        rw [except_bind_ok]
-        cases he4 : e4 with
-        | error e =>
-          rw [except_bind_err]
-          constructor
-          · intro h0; cases h0
-          · rintro ⟨_, _, _, _, hp4⟩
-            have hok := (h4 ws.excludePrefixes).mpr hp4
-            rw [he4] at hok; cases hok
-        | ok excludePrefixes =>
-          rw [except_bind_ok]
-          simp only [pure, Except.pure, Except.ok.injEq]
-          cases ws
-          constructor
-          · intro h
-            injection h with hd hs hl ht he
-            subst hd hs hl ht he
-            exact ⟨rfl, (h1 _).mp he1, (h2 _).mp he2, (h3 _).mp he3, (h4 _).mp he4⟩
-          · rintro ⟨rfl, hp1, hp2, hp3, hp4⟩
-            have hok1 := (h1 _).mpr hp1; rw [he1] at hok1; injection hok1 with hs
-            have hok2 := (h2 _).mpr hp2; rw [he2] at hok2; injection hok2 with hl
-            have hok3 := (h3 _).mpr hp3; rw [he3] at hok3; injection hok3 with ht
-            have hok4 := (h4 _).mpr hp4; rw [he4] at hok4; injection hok4 with he
-            subst hs hl ht he
-            rfl
 
 private theorem parseWorkspace_iff (idx : Nat) (j : Json) (ws : NoComments.Config.WorkspaceConfig) :
     NoComments.Config.parseWorkspace idx j = .ok ws ↔ ConfigSpec.ValidWorkspaceJson j ws := by

@@ -66,6 +66,9 @@ def collectRangesRecord : IntentRecord CollectRangesFn where
         ∀ ranges acc acc', f ranges acc = .ok acc' →
           ∀ r ∈ ranges, ∀ b, r.prevPos.byteIdx ≤ b → b < r.nextPos.byteIdx →
             ByteAccounted r.ctx r.stx acc' r.prevPos.byteIdx r.nextPos.byteIdx b⟩
+    , ⟨"exact_scanner_spans", fun f =>
+        ∀ ranges acc acc', f ranges acc = .ok acc' →
+          RangesStep ranges (stateOfAcc acc) (stateOfAcc acc')⟩
     , ⟨"genuine_new_spans", fun f =>
         ∀ ranges acc acc', f ranges acc = .ok acc' →
           ∀ (sb eb : Nat) (c : Core.Comment), acc'.spans[sb]? = some (eb, c) →
@@ -73,6 +76,16 @@ def collectRangesRecord : IntentRecord CollectRangesFn where
               ∃ r ∈ ranges,
                 r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
                   GenuineCommentSpan r.ctx r.stx sb eb c⟩
+    , ⟨"source_linked_fingerprints", fun f =>
+        ∃ fp : FingerprintFn,
+          (∀ text, IsFingerprint (fp text)) ∧
+          (∃ a b, fp a ≠ fp b) ∧
+          ∀ ranges acc acc', f ranges acc = .ok acc' →
+            ∀ (sb eb : Nat) (c : Core.Comment), acc'.spans[sb]? = some (eb, c) →
+              acc.spans[sb]? = some (eb, c) ∨
+                ∃ r ∈ ranges,
+                  r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
+                    c.fingerprint = fp (commentText r.ctx.fileMap sb eb)⟩
     , ⟨"refusal_sound", fun f =>
         ∀ ranges acc msg, f ranges acc = .error msg → CollectRefusal ranges acc⟩ ]
   vocab :=
@@ -82,6 +95,9 @@ def collectRangesRecord : IntentRecord CollectRangesFn where
     , ⟨"GenuineCommentSpan",
         Parser.ParserContextCore × Syntax × Nat × Nat × Core.Comment,
         fun p => GenuineCommentSpan p.1 p.2.1 p.2.2.1 p.2.2.2.1 p.2.2.2.2⟩
+    , ⟨"RangesStep",
+        List Core.CommandRange × SpanState × SpanState,
+        fun p => RangesStep p.1 p.2.1 p.2.2⟩
     , ⟨"CollectRefusal",
         List Core.CommandRange × Core.CommentAcc,
         fun p => CollectRefusal p.1 p.2⟩ ]

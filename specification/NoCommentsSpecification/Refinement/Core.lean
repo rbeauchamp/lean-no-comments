@@ -364,7 +364,9 @@ theorem recordSpan_ok_props {fileMap : FileMap} {kind : String}
           (sb = startPos.byteIdx ∧ eb = stopPos.byteIdx ∧ c.kind = kind ∧
             CoreSpec.IsFingerprint c.fingerprint ∧
             c.startLine = (fileMap.toPosition startPos).line ∧
-            c.endLine = (fileMap.toPosition (String.Pos.Raw.prev fileMap.source stopPos)).line)) ∧
+            c.endLine = (fileMap.toPosition (String.Pos.Raw.prev fileMap.source stopPos)).line ∧
+            c.fingerprint = NoComments.Core.fingerprint
+              (CoreSpec.commentText fileMap startPos.byteIdx stopPos.byteIdx))) ∧
       ¬ CoreSpec.SpanConflict (CoreSpec.stateOfAcc acc) kind startPos.byteIdx stopPos.byteIdx ∧
       CoreSpec.stateOfAcc acc' =
         CoreSpec.insertSpan (CoreSpec.stateOfAcc acc) kind startPos.byteIdx stopPos.byteIdx := by
@@ -410,7 +412,7 @@ theorem recordSpan_ok_props {fileMap : FileMap} {kind : String}
             (⟨fileMap.source, startPos, stopPos⟩ : Substring.Raw).toString
           cases startPos
           cases stopPos
-          exact Or.inr ⟨rfl, rfl, rfl, hfp, rfl, rfl⟩
+          exact Or.inr ⟨rfl, rfl, rfl, hfp, rfl, rfl, rfl⟩
         · have hne : (startPos.byteIdx == sb) = false := beq_false_of_ne (fun heq => hsb heq.symm)
           simp only [Std.HashMap.getElem?_insert, hne, Bool.false_eq_true, ↓reduceIte] at hs
           exact Or.inl hs
@@ -622,7 +624,8 @@ theorem scanTriviaGo_ok_props (ctx : Parser.ParserContextCore) (stx : Syntax)
         acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
           (pos.byteIdx ≤ sb ∧ eb ≤ stopPos.byteIdx ∧
-            CoreSpec.GenuineCommentSpan ctx stx sb eb c) := by
+            CoreSpec.GenuineCommentSpan ctx stx sb eb c ∧
+            c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText ctx.fileMap sb eb)) := by
   unfold NoComments.Core.scanTriviaGo at h
   dsimp only at h
   split at h
@@ -668,17 +671,18 @@ theorem scanTriviaGo_ok_props (ctx : Parser.ParserContextCore) (stx : Syntax)
             · rw [hstate1] at htstep
               exact CoreSpec.TriviaStep.line hlt hline.1.1 hline.1.2 hline.2 hafter hlineEnd hnoc htstep
             · intro sb eb c hs
-              rcases hgen sb eb c hs with hacc1 | ⟨h1, h2, hg⟩
-              · rcases hrecNew sb eb c hacc1 with hacc | ⟨rfl, rfl, hk, hfp, hsl, hel⟩
+              rcases hgen sb eb c hs with hacc1 | ⟨h1, h2, hg, hfeq⟩
+              · rcases hrecNew sb eb c hacc1 with hacc | ⟨rfl, rfl, hk, hfp, hsl, hel, hfeq⟩
                 · exact Or.inl hacc
                 · refine Or.inr ⟨Nat.le_refl _, String.Pos.Raw.le_iff.mp heolB.2,
-                    hltSpan, Nat.le_trans (String.Pos.Raw.le_iff.mp heolB.2) (String.Pos.Raw.le_iff.mp hstop),
-                    by simp [CoreSpec.validCommentKind, hk], hfp, hsl, hel, Or.inl ⟨hk, ?_⟩⟩
-                  exact ⟨hline.1.1, hline.2, String.Pos.Raw.le_iff.mp heolB.1⟩
+                    ⟨hltSpan, Nat.le_trans (String.Pos.Raw.le_iff.mp heolB.2) (String.Pos.Raw.le_iff.mp hstop),
+                      by simp [CoreSpec.validCommentKind, hk], hfp, hsl, hel, Or.inl ⟨hk, ?_⟩⟩, hfeq⟩
+                  exact ⟨hline.1.1, hline.2, String.Pos.Raw.le_iff.mp heolB.1,
+                    CoreSpec.lineEnd_self hafter hlineEnd⟩
               · have hlt1 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source pos
                 have hlt2 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos)
                 have hleEol := String.Pos.Raw.le_iff.mp heolB.1
-                exact Or.inr ⟨by omega, h2, hg⟩
+                exact Or.inr ⟨by omega, h2, hg, hfeq⟩
         · cases h
       · rename_i hnotline
         split at h
@@ -721,25 +725,26 @@ theorem scanTriviaGo_ok_props (ctx : Parser.ParserContextCore) (stx : Syntax)
                       exact CoreSpec.TriviaStep.block hlt hblk.1.1 hblk.1.2 hblk.2 hafterOpen
                         hnotdoc.1 hnotdoc.2 hbodyStart hbstep hnoc htstep
                     · intro sb eb c hs
-                      rcases hgen sb eb c hs with hacc1 | ⟨h1, h2, hg⟩
-                      · rcases hrecNew sb eb c hacc1 with hacc | ⟨rfl, rfl, hk, hfp, hsl, hel⟩
+                      rcases hgen sb eb c hs with hacc1 | ⟨h1, h2, hg, hfeq⟩
+                      · rcases hrecNew sb eb c hacc1 with hacc | ⟨rfl, rfl, hk, hfp, hsl, hel, hfeq⟩
                         · exact Or.inl hacc
                         · refine Or.inr ⟨Nat.le_refl _, String.Pos.Raw.le_iff.mp hfbB.2,
-                            hltSpan, Nat.le_trans (String.Pos.Raw.le_iff.mp hfbB.2) (String.Pos.Raw.le_iff.mp hstop),
-                            by simp [CoreSpec.validCommentKind, hk], hfp, hsl, hel, Or.inr (Or.inl ⟨hk, ?_⟩)⟩
+                            ⟨hltSpan, Nat.le_trans (String.Pos.Raw.le_iff.mp hfbB.2) (String.Pos.Raw.le_iff.mp hstop),
+                              by simp [CoreSpec.validCommentKind, hk], hfp, hsl, hel, Or.inr (Or.inl ⟨hk, ?_⟩)⟩, hfeq⟩
                           have hlt3 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source
                             (String.Pos.Raw.next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos))
                           have hltEnd := String.Pos.Raw.lt_iff.mp hfbB.1
+                          have hblkSelf := CoreSpec.blockStep_self hbstep
                           cases pos
                           exact ⟨hblk.1.1, hblk.2, by dsimp only; omega, hnotdoc.1, hnotdoc.2,
-                            by dsimp only; omega, pm, ps, hps, congrArg String.Pos.Raw.byteIdx hend,
+                            by dsimp only; omega, hblkSelf, pm, ps, hps, congrArg String.Pos.Raw.byteIdx hend,
                             hpm, hpsC⟩
                       · have hlt1 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source pos
                         have hlt2 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos)
                         have hlt3 := String.Pos.Raw.byteIdx_lt_byteIdx_next ctx.fileMap.source
                           (String.Pos.Raw.next ctx.fileMap.source (String.Pos.Raw.next ctx.fileMap.source pos))
                         have hltEnd := String.Pos.Raw.lt_iff.mp hfbB.1
-                        exact Or.inr ⟨by omega, h2, hg⟩
+                        exact Or.inr ⟨by omega, h2, hg, hfeq⟩
               · cases h
           · cases h
         · cases h
@@ -916,7 +921,8 @@ theorem checkSlice_ok_props (ctx : Parser.ParserContextCore) (stx : Syntax)
         acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
           (startPos.byteIdx ≤ sb ∧ eb ≤ stopPos.byteIdx ∧
-            CoreSpec.GenuineCommentSpan ctx stx sb eb c) := by
+            CoreSpec.GenuineCommentSpan ctx stx sb eb c ∧
+            c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText ctx.fileMap sb eb)) := by
   simp only [NoComments.Core.checkSlice] at h
   split at h
   · exact scanTriviaGo_ok_props ctx stx stopPos startPos acc acc' hstop h
@@ -959,7 +965,8 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
         acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
           (pos.byteIdx ≤ sb ∧ eb ≤ stop.byteIdx ∧
-            CoreSpec.GenuineCommentSpan ctx s sb eb c) := by
+            CoreSpec.GenuineCommentSpan ctx s sb eb c ∧
+            c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText ctx.fileMap sb eb)) := by
   cases s with
   | missing =>
     simp only [NoComments.Core.walkSyntax] at h
@@ -984,9 +991,9 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
             (Nat.le_trans (String.Pos.Raw.le_iff.mp h1) (String.Pos.Raw.le_iff.mp h2)),
           h3, CoreSpec.SyntaxStep.atomOrig h1 h2 h3 htstep (checkToken_ok_spec hok), ?_⟩
         intro sb eb c hs
-        rcases hgen sb eb c hs with hacc | ⟨hsb, heb, hg⟩
+        rcases hgen sb eb c hs with hacc | ⟨hsb, heb, hg, hfeq⟩
         · exact Or.inl hacc
-        · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg⟩
+        · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg, hfeq⟩
     | synthetic _ _ =>
       simp only [NoComments.Core.walkSyntax] at h
       cases h
@@ -1017,9 +1024,9 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
             (Nat.le_trans (String.Pos.Raw.le_iff.mp h1) (String.Pos.Raw.le_iff.mp h2)),
           h3, CoreSpec.SyntaxStep.identOrig h1 h2 h3 htstep (checkToken_ok_spec hok), ?_⟩
         intro sb eb c hs
-        rcases hgen sb eb c hs with hacc | ⟨hsb, heb, hg⟩
+        rcases hgen sb eb c hs with hacc | ⟨hsb, heb, hg, hfeq⟩
         · exact Or.inl hacc
-        · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg⟩
+        · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg, hfeq⟩
     | synthetic _ _ =>
       simp only [NoComments.Core.walkSyntax] at h
       cases h
@@ -1069,13 +1076,13 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
               · rw [hstate']
                 exact CoreSpec.SyntaxStep.doc hdoc hhead htail h1 h2 h3 htstep rfl hnoc
               · intro sb eb c hs
-                rcases hrecNew sb eb c hs with hacc1 | ⟨rfl, rfl, hk, hfp, hsl, hel⟩
-                · rcases hgen1 sb eb c hacc1 with hacc | ⟨hsb, heb, hg⟩
+                rcases hrecNew sb eb c hs with hacc1 | ⟨rfl, rfl, hk, hfp, hsl, hel, hfeq⟩
+                · rcases hgen1 sb eb c hacc1 with hacc | ⟨hsb, heb, hg, hfeq⟩
                   · exact Or.inl hacc
-                  · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg⟩
+                  · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg, hfeq⟩
                 · refine Or.inr ⟨String.Pos.Raw.le_iff.mp h1, Nat.le_refl _,
-                    hltSpan, Nat.le_trans (String.Pos.Raw.le_iff.mp h3) (String.Pos.Raw.le_iff.mp hnext),
-                    ?_, hfp, hsl, hel, Or.inr (Or.inr ⟨?_, ?_⟩)⟩
+                    ⟨hltSpan, Nat.le_trans (String.Pos.Raw.le_iff.mp h3) (String.Pos.Raw.le_iff.mp hnext),
+                      ?_, hfp, hsl, hel, Or.inr (Or.inr ⟨?_, ?_⟩)⟩, hfeq⟩
                   · rw [hk]
                     exact hvk
                   · rw [hk]
@@ -1110,13 +1117,13 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
                 subst hch
                 refine ⟨hpos1, hstop1, CoreSpec.SyntaxStep.choice hsfirst hsalts, ?_⟩
                 intro sb eb c hs
-                rcases hga sb eb c hs with hacc1 | ⟨alt, hal, hsb, heb, hg⟩
-                · rcases hgf sb eb c hacc1 with hacc | ⟨hsb, heb, hg⟩
+                rcases hga sb eb c hs with hacc1 | ⟨alt, hal, hsb, heb, hg, hfeq⟩
+                · rcases hgf sb eb c hacc1 with hacc | ⟨hsb, heb, hg, hfeq⟩
                   · exact Or.inl hacc
                   · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                      (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF List.mem_cons_self hd) hg⟩
+                      (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF List.mem_cons_self hd) hg, hfeq⟩
                 · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF (List.mem_cons_of_mem _ hal) hd) hg⟩
+                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF (List.mem_cons_of_mem _ hal) hd) hg, hfeq⟩
       · have hchB : (k == choiceKind) = false := beq_false_of_ne hch
         simp only [hdocF, hchB, Bool.false_eq_true, ↓reduceIte] at h
         cases args with
@@ -1141,10 +1148,10 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
               refine ⟨hl1, hl2, CoreSpec.SyntaxStep.nodeList hdocF hch
                 (fun _ _ _ _ _ he => by cases he) hslist, ?_⟩
               intro sb eb c hs
-              rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg⟩
+              rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg, hfeq⟩
               · exact Or.inl hacc
               · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                  (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg⟩
+                  (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg, hfeq⟩
             | nil =>
               cases a1 with
               | atom infoA valA =>
@@ -1166,9 +1173,9 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
                       h3, CoreSpec.SyntaxStep.singletonAtomNode hdocF hch rfl h1 h2 h3 htstep
                         (checkToken_ok_spec hok), ?_⟩
                     intro sb eb c hs
-                    rcases hgen sb eb c hs with hacc | ⟨hsb, heb, hg⟩
+                    rcases hgen sb eb c hs with hacc | ⟨hsb, heb, hg, hfeq⟩
                     · exact Or.inl hacc
-                    · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg⟩
+                    · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp h2), hg, hfeq⟩
                 | synthetic posA endPosA canonicalA =>
                   dsimp only at h
                   rcases walkList_ok_props ctx nextPos [.atom (.synthetic posA endPosA canonicalA) valA]
@@ -1177,10 +1184,10 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
                   refine ⟨hl1, hl2, CoreSpec.SyntaxStep.nodeList hdocF hch
                     (fun _ _ _ _ _ he => by cases he) hslist, ?_⟩
                   intro sb eb c hs
-                  rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg⟩
+                  rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg, hfeq⟩
                   · exact Or.inl hacc
                   · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                      (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg⟩
+                      (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg, hfeq⟩
                 | none =>
                   dsimp only at h
                   rcases walkList_ok_props ctx nextPos [.atom .none valA] pos stop acc acc' hpos hnext h with
@@ -1188,10 +1195,10 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
                   refine ⟨hl1, hl2, CoreSpec.SyntaxStep.nodeList hdocF hch
                     (fun _ _ _ _ _ he => by cases he) hslist, ?_⟩
                   intro sb eb c hs
-                  rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg⟩
+                  rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg, hfeq⟩
                   · exact Or.inl hacc
                   · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                      (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg⟩
+                      (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg, hfeq⟩
               | ident infoI rawI valI preI =>
                 dsimp only at h
                 rcases walkList_ok_props ctx nextPos [.ident infoI rawI valI preI] pos stop acc acc' hpos hnext h with
@@ -1199,10 +1206,10 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
                 refine ⟨hl1, hl2, CoreSpec.SyntaxStep.nodeList hdocF hch
                   (fun _ _ _ _ _ he => by cases he) hslist, ?_⟩
                 intro sb eb c hs
-                rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg⟩
+                rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg, hfeq⟩
                 · exact Or.inl hacc
                 · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg⟩
+                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg, hfeq⟩
               | node infoN kN argsN =>
                 dsimp only at h
                 rcases walkList_ok_props ctx nextPos [.node infoN kN argsN] pos stop acc acc' hpos hnext h with
@@ -1210,10 +1217,10 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
                 refine ⟨hl1, hl2, CoreSpec.SyntaxStep.nodeList hdocF hch
                   (fun _ _ _ _ _ he => by cases he) hslist, ?_⟩
                 intro sb eb c hs
-                rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg⟩
+                rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg, hfeq⟩
                 · exact Or.inl hacc
                 · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg⟩
+                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg, hfeq⟩
               | missing =>
                 dsimp only at h
                 rcases walkList_ok_props ctx nextPos [.missing] pos stop acc acc' hpos hnext h with
@@ -1221,10 +1228,10 @@ theorem walkSyntax_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.P
                 refine ⟨hl1, hl2, CoreSpec.SyntaxStep.nodeList hdocF hch
                   (fun _ _ _ _ _ he => by cases he) hslist, ?_⟩
                 intro sb eb c hs
-                rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg⟩
+                rcases hgl sb eb c hs with hacc | ⟨arg, ha, hsb, heb, hg, hfeq⟩
                 · exact Or.inl hacc
                 · exact Or.inr ⟨hsb, heb, genuineSpan_docNode_mono
-                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg⟩
+                    (fun kind s e hd => CoreSpec.DocNodeIn.child hdocF ha hd) hg, hfeq⟩
 termination_by (sizeOf s, 1)
 
 theorem checkAlts_ok_props (ctx : Parser.ParserContextCore) (nextPos pos stop : String.Pos.Raw)
@@ -1236,7 +1243,8 @@ theorem checkAlts_ok_props (ctx : Parser.ParserContextCore) (nextPos pos stop : 
         acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
           ∃ alt ∈ alts, pos.byteIdx ≤ sb ∧ eb ≤ stop.byteIdx ∧
-            CoreSpec.GenuineCommentSpan ctx alt sb eb c := by
+            CoreSpec.GenuineCommentSpan ctx alt sb eb c ∧
+            c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText ctx.fileMap sb eb) := by
   cases alts with
   | nil =>
     simp only [NoComments.Core.checkAlts] at h
@@ -1258,11 +1266,11 @@ theorem checkAlts_ok_props (ctx : Parser.ParserContextCore) (nextPos pos stop : 
         rcases checkAlts_ok_props ctx nextPos pos altStop rest altAcc acc' hpos hnext h with ⟨hs2, hg2⟩
         refine ⟨CoreSpec.AltsStep.cons hs1 hs2, ?_⟩
         intro sb eb c hs
-        rcases hg2 sb eb c hs with haltAcc | ⟨a, ha, hsb, heb, hg⟩
-        · rcases hg1 sb eb c haltAcc with hacc | ⟨hsb, heb, hg⟩
+        rcases hg2 sb eb c hs with haltAcc | ⟨a, ha, hsb, heb, hg, hfeq⟩
+        · rcases hg1 sb eb c haltAcc with hacc | ⟨hsb, heb, hg, hfeq⟩
           · exact Or.inl hacc
-          · exact Or.inr ⟨alt, List.mem_cons_self, hsb, heb, hg⟩
-        · exact Or.inr ⟨a, List.mem_cons_of_mem _ ha, hsb, heb, hg⟩
+          · exact Or.inr ⟨alt, List.mem_cons_self, hsb, heb, hg, hfeq⟩
+        · exact Or.inr ⟨a, List.mem_cons_of_mem _ ha, hsb, heb, hg, hfeq⟩
       · simp only [heq, Bool.false_eq_true, ↓reduceIte] at h
         cases h
 termination_by (sizeOf alts, 0)
@@ -1277,7 +1285,8 @@ theorem walkList_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.Pos
         acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
           ∃ arg ∈ args, pos.byteIdx ≤ sb ∧ eb ≤ stop.byteIdx ∧
-            CoreSpec.GenuineCommentSpan ctx arg sb eb c := by
+            CoreSpec.GenuineCommentSpan ctx arg sb eb c ∧
+            c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText ctx.fileMap sb eb) := by
   cases args with
   | nil =>
     simp only [NoComments.Core.walkList] at h
@@ -1299,13 +1308,13 @@ theorem walkList_ok_props (ctx : Parser.ParserContextCore) (nextPos : String.Pos
           (Nat.le_trans (String.Pos.Raw.le_iff.mp hpos1) (String.Pos.Raw.le_iff.mp hpos2)),
         hnext2, CoreSpec.ListStep.cons hs1 hs2, ?_⟩
       intro sb eb c hs
-      rcases hg2 sb eb c hs with hacc1 | ⟨a, ha, hsb, heb, hg⟩
-      · rcases hg1 sb eb c hacc1 with hacc | ⟨hsb, heb, hg⟩
+      rcases hg2 sb eb c hs with hacc1 | ⟨a, ha, hsb, heb, hg, hfeq⟩
+      · rcases hg1 sb eb c hacc1 with hacc | ⟨hsb, heb, hg, hfeq⟩
         · exact Or.inl hacc
         · exact Or.inr ⟨arg, List.mem_cons_self, hsb,
-            Nat.le_trans heb (String.Pos.Raw.le_iff.mp hpos2), hg⟩
+            Nat.le_trans heb (String.Pos.Raw.le_iff.mp hpos2), hg, hfeq⟩
       · exact Or.inr ⟨a, List.mem_cons_of_mem _ ha,
-          Nat.le_trans (String.Pos.Raw.le_iff.mp hpos1) hsb, heb, hg⟩
+          Nat.le_trans (String.Pos.Raw.le_iff.mp hpos1) hsb, heb, hg, hfeq⟩
 termination_by (sizeOf args, 0)
 
 theorem walkSyntax_fails (ctx : Parser.ParserContextCore) (nextPos : String.Pos.Raw)
@@ -1586,7 +1595,8 @@ theorem collectSyntax_ok_props (ctx : Parser.ParserContextCore) (prevPos nextPos
         acc'.spans[sb]? = some (eb, c) →
         acc.spans[sb]? = some (eb, c) ∨
           (prevPos.byteIdx ≤ sb ∧ eb ≤ nextPos.byteIdx ∧
-            CoreSpec.GenuineCommentSpan ctx stx sb eb c) := by
+            CoreSpec.GenuineCommentSpan ctx stx sb eb c ∧
+            c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText ctx.fileMap sb eb)) := by
   simp only [NoComments.Core.collectSyntax] at h
   split at h
   · rename_i hok
@@ -1601,11 +1611,11 @@ theorem collectSyntax_ok_props (ctx : Parser.ParserContextCore) (prevPos nextPos
       rcases checkSlice_ok_props ctx stx mid nextPos acc1 acc' hok.2 h with ⟨htriv, hgs⟩
       refine ⟨hok.1, hok.2, ⟨mid, CoreSpec.stateOfAcc acc1, hstx, htriv⟩, ?_⟩
       intro sb eb c hs
-      rcases hgs sb eb c hs with hacc1 | ⟨hsb, heb, hg⟩
-      · rcases hgw sb eb c hacc1 with hacc | ⟨hsb, heb, hg⟩
+      rcases hgs sb eb c hs with hacc1 | ⟨hsb, heb, hg, hfeq⟩
+      · rcases hgw sb eb c hacc1 with hacc | ⟨hsb, heb, hg, hfeq⟩
         · exact Or.inl hacc
-        · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp hnext1), hg⟩
-      · exact Or.inr ⟨Nat.le_trans (String.Pos.Raw.le_iff.mp hpos1) hsb, heb, hg⟩
+        · exact Or.inr ⟨hsb, Nat.le_trans heb (String.Pos.Raw.le_iff.mp hnext1), hg, hfeq⟩
+      · exact Or.inr ⟨Nat.le_trans (String.Pos.Raw.le_iff.mp hpos1) hsb, heb, hg, hfeq⟩
   · cases h
 
 theorem collectSyntax_fails (ctx : Parser.ParserContextCore) (prevPos nextPos : String.Pos.Raw)
@@ -1643,7 +1653,8 @@ theorem collectRanges_genuine_new_spans (ranges : List NoComments.Core.CommandRa
       acc'.spans[sb]? = some (eb, c) →
       acc.spans[sb]? = some (eb, c) ∨
         ∃ r ∈ ranges, r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
-          CoreSpec.GenuineCommentSpan r.ctx r.stx sb eb c := by
+          CoreSpec.GenuineCommentSpan r.ctx r.stx sb eb c ∧
+          c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText r.ctx.fileMap sb eb) := by
   induction ranges generalizing acc with
   | nil =>
     simp only [NoComments.Core.collectRanges] at h
@@ -1658,11 +1669,42 @@ theorem collectRanges_genuine_new_spans (ranges : List NoComments.Core.CommandRa
       rcases collectSyntax_ok_props r.ctx r.prevPos r.nextPos r.stx acc acc1 h1 with
         ⟨_, _, _, hgr⟩
       intro sb eb c hs
-      rcases ih acc1 h sb eb c hs with hacc1 | ⟨r', hr', hsb, heb, hg⟩
-      · rcases hgr sb eb c hacc1 with hacc | ⟨hsb, heb, hg⟩
+      rcases ih acc1 h sb eb c hs with hacc1 | ⟨r', hr', hsb, heb, hg, hfeq⟩
+      · rcases hgr sb eb c hacc1 with hacc | ⟨hsb, heb, hg, hfeq⟩
         · exact Or.inl hacc
-        · exact Or.inr ⟨r, List.mem_cons_self, hsb, heb, hg⟩
-      · exact Or.inr ⟨r', List.mem_cons_of_mem _ hr', hsb, heb, hg⟩
+        · exact Or.inr ⟨r, List.mem_cons_self, hsb, heb, hg, hfeq⟩
+      · exact Or.inr ⟨r', List.mem_cons_of_mem _ hr', hsb, heb, hg, hfeq⟩
+
+theorem collectRanges_new_span_fingerprint (ranges : List NoComments.Core.CommandRange)
+    (acc acc' : NoComments.Core.CommentAcc)
+    (h : NoComments.Core.collectRanges ranges acc = .ok acc') :
+    ∀ (sb eb : Nat) (c : NoComments.Core.Comment),
+      acc'.spans[sb]? = some (eb, c) →
+      acc.spans[sb]? = some (eb, c) ∨
+        ∃ r ∈ ranges, r.prevPos.byteIdx ≤ sb ∧ eb ≤ r.nextPos.byteIdx ∧
+          c.fingerprint = NoComments.Core.fingerprint (CoreSpec.commentText r.ctx.fileMap sb eb) := by
+  intro sb eb c hs
+  exact (collectRanges_genuine_new_spans ranges acc acc' h sb eb c hs).imp id
+    fun ⟨r, hr, h1, h2, _, hfeq⟩ => ⟨r, hr, h1, h2, hfeq⟩
+
+theorem collectRanges_rangesStep (ranges : List NoComments.Core.CommandRange)
+    (acc acc' : NoComments.Core.CommentAcc)
+    (h : NoComments.Core.collectRanges ranges acc = .ok acc') :
+    CoreSpec.RangesStep ranges (CoreSpec.stateOfAcc acc) (CoreSpec.stateOfAcc acc') := by
+  induction ranges generalizing acc with
+  | nil =>
+    simp only [NoComments.Core.collectRanges] at h
+    cases h
+    exact CoreSpec.RangesStep.nil
+  | cons r rest ih =>
+    simp only [NoComments.Core.collectRanges, bind, Except.bind] at h
+    cases h1 : NoComments.Core.collectSyntax r.ctx r.prevPos r.nextPos r.stx acc with
+    | error e => rw [h1] at h; cases h
+    | ok acc1 =>
+      rw [h1] at h
+      rcases collectSyntax_ok_props r.ctx r.prevPos r.nextPos r.stx acc acc1 h1 with
+        ⟨h1a, h1b, ⟨mid, state1, hstx, htriv⟩, _⟩
+      exact CoreSpec.RangesStep.cons h1a h1b hstx htriv (ih acc1 h)
 
 theorem collectRanges_error_spec (ranges : List NoComments.Core.CommandRange)
     (acc : NoComments.Core.CommentAcc) {msg : String}
@@ -1697,7 +1739,14 @@ theorem collectRanges_meets : collectRangesRecord.Meets NoComments.Core.collectR
   rcases List.mem_cons.mp hp with rfl | hp
   · exact collectRanges_range_coverage
   rcases List.mem_cons.mp hp with rfl | hp
-  · exact collectRanges_genuine_new_spans
+  · exact collectRanges_rangesStep
+  rcases List.mem_cons.mp hp with rfl | hp
+  · intro ranges acc acc' hok sb eb c hs
+    exact (collectRanges_genuine_new_spans ranges acc acc' hok sb eb c hs).imp id
+      fun ⟨r, hr, h1, h2, hg, _⟩ => ⟨r, hr, h1, h2, hg⟩
+  rcases List.mem_cons.mp hp with rfl | hp
+  · refine ⟨NoComments.Core.fingerprint, fingerprint_isFingerprint, fingerprint_nonconstant, ?_⟩
+    exact collectRanges_new_span_fingerprint
   rcases List.mem_cons.mp hp with rfl | hp
   · exact fun ranges acc msg herr => collectRanges_error_spec ranges acc herr
   exact nomatch hp

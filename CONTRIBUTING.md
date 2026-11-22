@@ -20,6 +20,7 @@ Run these commands cleanly before opening a pull request:
 lake build --wfail
 lake lint
 lake build no-comments
+(cd specification && lake build --wfail)
 ./.lake/build/bin/no-comments inventory
 ./.lake/build/bin/no-comments check
 libdir="$(lean --print-libdir)"

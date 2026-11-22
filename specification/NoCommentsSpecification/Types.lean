@@ -9,10 +9,6 @@ public import NoComments.RatchetCore
 @[expose] public section
 
 deriving instance LeanIntent.HasCode for NoComments.Core.Comment
-deriving instance LeanIntent.HasCode for NoComments.Config.WorkspaceConfig
-deriving instance LeanIntent.HasCode for NoComments.Config.ExcludeRule
-deriving instance LeanIntent.HasCode for NoComments.Config.RepoConfig
-deriving instance LeanIntent.HasCode for NoComments.Config.ClassifiedFile
 
 namespace NoCommentsSpecification
 

@@ -28,10 +28,21 @@ by rbeauchamp
 as owner
 delegate antigravity
 keys 0
-all records
+records 11
+record NoCommentsSpecification.CoreRecords.fingerprintRecord
+record NoCommentsSpecification.CoreRecords.checkTokenRecord
+record NoCommentsSpecification.CoreRecords.collectRangesRecord
+record NoCommentsSpecification.CoreRecords.missingFromRecord
+record NoCommentsSpecification.ConfigRecords.parseConfigRecord
+record NoCommentsSpecification.ConfigRecords.classifyFileRecord
+record NoCommentsSpecification.ConfigRecords.classifyTrackedRecord
+record NoCommentsSpecification.RatchetRecords.parseRatchetRecord
+record NoCommentsSpecification.RatchetRecords.checkExactSyncRecord
+record NoCommentsSpecification.RatchetRecords.checkMonotonicFileRecord
+record NoCommentsSpecification.RatchetRecords.validateCheckRecord
 may confirm yes
-may decline yes
-may retract yes
+may decline no
+may retract no
 may pass on no
 "###
 
@@ -4642,7 +4653,7 @@ reference https://github.com/rbeauchamp/lean-no-comments/issues/2#issuecomment-7
 by rbeauchamp
 as owner
 record NoCommentsSpecification.CoreRecords.collectRangesRecord
-revision 2449
+revision 2585
 | # The intent record NoCommentsSpecification.CoreRecords.collectRangesRecord
 | 
 | Each statement is printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened. The plain words after it are written by a model and are trusted, not proved.
@@ -4699,16 +4710,38 @@ revision 2449
 | - **Still allows:** ByteAccounted partitions.
 | - **Freedom O5 leaves:** Valid span keys.
 | 
+| ### exact_scanner_spans
+| 
+| ```lean
+| fun (f : NoCommentsSpecification.CollectRangesFn) => ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → NoCommentsSpecification.CoreSpec.RangesStep ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc) (NoCommentsSpecification.CoreSpec.stateOfAcc acc')
+| ```
+| 
+| - **Requires:** Produces exact SpanState equality with deterministic RangesStep traversal (SyntaxStep + TriviaStep) on .ok acc'.
+| - **Rules out:** Dropped, merged, split, or endpoint-shifted comment spans.
+| - **Still allows:** Exact scanner occurrences matching every line, block, doc, and module-doc delimiter and closing rule.
+| - **Freedom O5 leaves:** Unique span start, stop, and kind per input (RangesStep determinism).
+| 
 | ### genuine_new_spans
 | 
 | ```lean
 | fun (f : NoCommentsSpecification.CollectRangesFn) => ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), @Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc') sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c)) → Or (@Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c))) (@Exists.{1} NoComments.Core.CommandRange (fun (r : NoComments.Core.CommandRange) => And (@Membership.mem.{0, 0} NoComments.Core.CommandRange (List.{0} NoComments.Core.CommandRange) (@List.instMembership.{0} NoComments.Core.CommandRange) ranges r) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.prevPos r)) sb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.nextPos r))) (NoCommentsSpecification.CoreSpec.GenuineCommentSpan (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.stx r) sb eb c)))))
 | ```
 | 
-| - **Requires:** Every newly added span comes from a genuine comment within some range.
-| - **Rules out:** Fabricated comment spans not present in parsed ranges/trivia.
-| - **Still allows:** All authentic line, block, doc, module-doc, and plainDocComment spans.
-| - **Freedom O5 leaves:** Non-conflicting span fingerprints.
+| - **Requires:** Every newly added span comes from a genuine single comment within some range satisfying LineEnd/BlockStep closing and doc syntax rules.
+| - **Rules out:** Fabricated or multi-comment merged spans not closed at their own line/block delimiter.
+| - **Still allows:** Authentic single line, nested-balanced block, doc, module-doc, and plainDocComment spans.
+| - **Freedom O5 leaves:** Exact SpanState fixed by RangesStep.
+| 
+| ### source_linked_fingerprints
+| 
+| ```lean
+| fun (f : NoCommentsSpecification.CollectRangesFn) => @Exists.{1} NoCommentsSpecification.FingerprintFn (fun (fp : NoCommentsSpecification.FingerprintFn) => And (∀ (text : String), NoCommentsSpecification.CoreSpec.IsFingerprint (fp text)) (And (@Exists.{1} String (fun (a : String) => @Exists.{1} String (fun (b : String) => @Ne.{1} String (fp a) (fp b)))) (∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), @Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc') sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c)) → Or (@Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c))) (@Exists.{1} NoComments.Core.CommandRange (fun (r : NoComments.Core.CommandRange) => And (@Membership.mem.{0, 0} NoComments.Core.CommandRange (List.{0} NoComments.Core.CommandRange) (@List.instMembership.{0} NoComments.Core.CommandRange) ranges r) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.prevPos r)) sb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.nextPos r))) (@Eq.{1} String (NoComments.Core.Comment.fingerprint c) (fp (NoCommentsSpecification.CoreSpec.commentText (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) sb eb))))))))))
+| ```
+| 
+| - **Requires:** Uses a conforming nonconstant 16-char lowercase hex digest fp so every new span carries fp of its comment source slice.
+| - **Rules out:** Placeholder or constant comment fingerprints ignoring the comment source text under the chosen digest.
+| - **Still allows:** Any valid nonconstant FingerprintFn applied verbatim to each new comment source slice.
+| - **Freedom O5 leaves:** Choice of FingerprintFn modulo source-text equality (O5 CollectRangesFreedom).
 | 
 | ### refusal_sound
 | 
@@ -4740,10 +4773,21 @@ revision 2449
 | fun (p : Prod.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)))) => NoCommentsSpecification.CoreSpec.GenuineCommentSpan (@Prod.fst.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p) (@Prod.fst.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p)) (@Prod.fst.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.snd.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p))) (@Prod.fst.{0, 0} Nat NoComments.Core.Comment (@Prod.snd.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.snd.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p)))) (@Prod.snd.{0, 0} Nat NoComments.Core.Comment (@Prod.snd.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.snd.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p))))
 | ```
 | 
-| - **Requires:** GenuineCommentSpan witnesses an actual syntax/trivia comment in the input.
-| - **Rules out:** Spurious spans.
+| - **Requires:** GenuineCommentSpan witnesses an actual syntax/trivia single-comment span closing under LineEnd/BlockStep or DocNodeIn.
+| - **Rules out:** Spurious or multi-comment merged spans.
 | - **Still allows:** Authentic comment spans.
-| - **Freedom O5 leaves:** Valid fingerprint details.
+| - **Freedom O5 leaves:** Valid digest format.
+| 
+| ### RangesStep, a predicate over `Prod.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState)`
+| 
+| ```lean
+| fun (p : Prod.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState)) => NoCommentsSpecification.CoreSpec.RangesStep (@Prod.fst.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState) p) (@Prod.fst.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState (@Prod.snd.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState) p)) (@Prod.snd.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState (@Prod.snd.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState) p))
+| ```
+| 
+| - **Requires:** RangesStep composes deterministic SyntaxStep and TriviaStep traversals across command ranges.
+| - **Rules out:** Missing, merged, split, or endpoint-shifted comment occurrences.
+| - **Still allows:** Exact scanner SpanState transitions.
+| - **Freedom O5 leaves:** Deterministically determines output SpanState.
 | 
 | ### CollectRefusal, a predicate over `Prod.{0, 0} (List.{0} NoComments.Core.CommandRange) NoComments.Core.CommentAcc`
 | 
@@ -4768,6 +4812,17 @@ revision 2449
 | - **Rules out:** Spurious errors on valid Lean files.
 | - **Still allows:** Any valid byte-covering accumulator.
 | - **Freedom O5 leaves:** Success guaranteed on healthy input.
+| 
+| ### matches exact scanner comment spans, an entailment: every subject that meets the record satisfies it
+| 
+| ```lean
+| fun (f : NoCommentsSpecification.CollectRangesFn) => ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → NoCommentsSpecification.CoreSpec.RangesStep ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc) (NoCommentsSpecification.CoreSpec.stateOfAcc acc')
+| ```
+| 
+| - **Requires:** Every conforming collector produces the exact SpanState of RangesStep.
+| - **Rules out:** Missed, merged, or shifted comment spans on successful collection.
+| - **Still allows:** Any faithful scanner subject to CollectRangesFreedom.
+| - **Freedom O5 leaves:** Exact span endpoints and kinds fixed deterministically.
 | 
 | ### leaves refusal diagnostic wording unconstrained, a possibility: some subject that meets the record satisfies it
 | 
@@ -5350,162 +5405,26 @@ revision 2449
 | ∀ (self : NoComments.Core.CommandRange), Lean.Syntax
 | ```
 | 
-| ### NoCommentsSpecification.CoreSpec.GenuineCommentSpan
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (stx : Lean.Syntax), ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (ctx : Lean.Parser.ParserContextCore) => fun (stx : Lean.Syntax) => fun (sb : Nat) => fun (eb : Nat) => fun (c : NoComments.Core.Comment) => And (@LT.lt.{0} Nat instLTNat sb eb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext ctx)))) (And (NoCommentsSpecification.CoreSpec.validCommentKind (NoComments.Core.Comment.kind c)) (And (NoCommentsSpecification.CoreSpec.IsFingerprint (NoComments.Core.Comment.fingerprint c)) (And (@Eq.{1} Nat (NoComments.Core.Comment.startLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.mk sb)))) (And (@Eq.{1} Nat (NoComments.Core.Comment.endLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.prev (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb))))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "line") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 45))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p2) eb)))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "block") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; have p3 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 47))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (And (@LT.lt.{0} Nat instLTNat (String.Pos.Raw.byteIdx p2) eb) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 45))) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 33))) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p3) eb) (@Exists.{1} String.Pos.Raw (fun (pm : String.Pos.Raw) => @Exists.{1} String.Pos.Raw (fun (ps : String.Pos.Raw) => And (@Eq.{1} String.Pos.Raw ps (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm)) (And (@Eq.{1} Nat eb (String.Pos.Raw.byteIdx (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm) (Char.ofNat (nat_lit 45))) (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps) (Char.ofNat (nat_lit 47))))))))))))))) (And (Or (@Eq.{1} String (NoComments.Core.Comment.kind c) "doc") (@Eq.{1} String (NoComments.Core.Comment.kind c) "moddoc")) (NoCommentsSpecification.CoreSpec.DocNodeIn stx (NoComments.Core.Comment.kind c) sb eb)))))))))
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.validCommentKind
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (kind : String), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (kind : String) => @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "line" (@List.cons.{0} String "block" (@List.cons.{0} String "doc" (@List.cons.{0} String "moddoc" (@List.nil.{0} String))))) kind
-| ```
-| 
-| ### NoComments.Core.Comment.kind
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 1, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), String
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.IsFingerprint
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (s : String), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (s : String) => And (@Eq.{1} Nat (String.length s) (@OfNat.ofNat.{0} Nat (nat_lit 16) (instOfNatNat (nat_lit 16)))) (∀ (c : Char), @Membership.mem.{0, 0} Char (List.{0} Char) (@List.instMembership.{0} Char) (String.toList s) c → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.isHexLowerChar c) Bool.true)
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.isHexLowerChar
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (c : Char), Bool
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (c : Char) => Bool.or (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 48)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 48)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 57))) (Char.instDecidableLe c (Char.ofNat (nat_lit 57))))) (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 97)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 97)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 102))) (Char.instDecidableLe c (Char.ofNat (nat_lit 102)))))
-| ```
-| 
-| ### NoComments.Core.Comment.fingerprint
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 4, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), String
-| ```
-| 
-| ### NoComments.Core.Comment.startLine
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 2, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), Nat
-| ```
-| 
-| ### NoComments.Core.Comment.endLine
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 3, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), Nat
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.DocNodeIn
+| ### NoCommentsSpecification.CoreSpec.RangesStep
 | 
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| Lean.Syntax → String → Nat → Nat → Prop
+| List.{0} NoComments.Core.CommandRange → NoCommentsSpecification.CoreSpec.SpanState → NoCommentsSpecification.CoreSpec.SpanState → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 0 are parameters and the other 4 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 0 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
-| #### NoCommentsSpecification.CoreSpec.DocNodeIn.here
+| #### NoCommentsSpecification.CoreSpec.RangesStep.nil
 | 
 | ```lean
-| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)
+| ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.RangesStep (@List.nil.{0} NoComments.Core.CommandRange) state state
 | ```
 | 
-| #### NoCommentsSpecification.CoreSpec.DocNodeIn.child
+| #### NoCommentsSpecification.CoreSpec.RangesStep.cons
 | 
 | ```lean
-| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {arg : Lean.Syntax}, ∀ {kind : String}, ∀ {sb : Nat}, ∀ {eb : Nat}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Membership.mem.{0, 0} Lean.Syntax (List.{0} Lean.Syntax) (@List.instMembership.{0} Lean.Syntax) (@Array.toList.{0} Lean.Syntax args) arg → NoCommentsSpecification.CoreSpec.DocNodeIn arg kind sb eb → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind sb eb
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.CollectRefusal
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (ranges : List.{0} NoComments.Core.CommandRange) => fun (acc : NoComments.Core.CommentAcc) => NoCommentsSpecification.CoreSpec.CollectRefusalAt ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc)
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.CollectRefusalAt
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| List.{0} NoComments.Core.CommandRange → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 0 are parameters and the other 2 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.badBounds
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r)) (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))))) → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.syntaxFails
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxFails (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.trailingTriviaFails
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.restFails
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state2 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt rest state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state2 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state' : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 state2 → NoCommentsSpecification.CoreSpec.RangesStep rest state2 state' → NoCommentsSpecification.CoreSpec.RangesStep (@List.cons.{0} NoComments.Core.CommandRange r rest) state state'
 | ```
 | 
 | ### NoCommentsSpecification.CoreSpec.SpanState
@@ -5520,168 +5439,6 @@ revision 2449
 | 
 | ```lean
 | Nat → Option.{0} (Prod.{0, 0} Nat String)
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.SyntaxFails
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomToken
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identToken
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docMissingInfo
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → (∀ (l1 : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t1 : Substring.Raw), ∀ (s1 : String.Pos.Raw), ∀ (l2 : Substring.Raw), ∀ (s2 : String.Pos.Raw), ∀ (t2 : Substring.Raw), ∀ (stop : String.Pos.Raw), Not (And (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1))) (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop))))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docSpanConflict
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.SpanConflict state1 kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.emptyChoice
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@List.toArray.{0} Lean.Syntax (@List.nil.{0} Lean.Syntax))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceFirst
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos first pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceAlts
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos first pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop alts state1 → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomToken
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.nodeList
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.AltsFails
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 2 are parameters and the other 4 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.AltsFails.head
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos alt pos state → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.AltsFails.mismatch
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {altStop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state altStop state1 → @Ne.{1} String.Pos.Raw altStop stop → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.AltsFails.tail
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop rest state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.ListFails
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.ListFails.head
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos arg pos state → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.ListFails.tail
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {mid : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos arg pos state mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos rest mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
 | ```
 | 
 | ### NoCommentsSpecification.CoreSpec.SyntaxStep
@@ -5904,6 +5661,368 @@ revision 2449
 | ∀ {str : String}, ∀ {stopPos : String.Pos.Raw}, ∀ {nesting : Nat}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, @GE.ge.{0} Nat instLENat nesting (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) → @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → Not (And (@Eq.{1} Char (String.Pos.Raw.get str pos) (Char.ofNat (nat_lit 45))) (And (@LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next str pos) stopPos) (@Eq.{1} Char (String.Pos.Raw.get str (String.Pos.Raw.next str pos)) (Char.ofNat (nat_lit 47))))) → Not (And (@Eq.{1} Char (String.Pos.Raw.get str pos) (Char.ofNat (nat_lit 47))) (And (@LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next str pos) stopPos) (@Eq.{1} Char (String.Pos.Raw.get str (String.Pos.Raw.next str pos)) (Char.ofNat (nat_lit 45))))) → NoCommentsSpecification.CoreSpec.BlockStep str stopPos nesting (String.Pos.Raw.next str pos) endPos → NoCommentsSpecification.CoreSpec.BlockStep str stopPos nesting pos endPos
 | ```
 | 
+| ### NoCommentsSpecification.CoreSpec.stateOfAcc
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (acc : NoComments.Core.CommentAcc), NoCommentsSpecification.CoreSpec.SpanState
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (acc : NoComments.Core.CommentAcc) => fun (sb : Nat) => @Option.map.{0, 0} (Prod.{0, 0} Nat NoComments.Core.Comment) (Prod.{0, 0} Nat String) (fun (p : Prod.{0, 0} Nat NoComments.Core.Comment) => @Prod.mk.{0, 0} Nat String (@Prod.fst.{0, 0} Nat NoComments.Core.Comment p) (NoComments.Core.Comment.kind (@Prod.snd.{0, 0} Nat NoComments.Core.Comment p))) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb)
+| ```
+| 
+| ### NoComments.Core.Comment.kind
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 1, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), String
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.GenuineCommentSpan
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (stx : Lean.Syntax), ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (ctx : Lean.Parser.ParserContextCore) => fun (stx : Lean.Syntax) => fun (sb : Nat) => fun (eb : Nat) => fun (c : NoComments.Core.Comment) => And (@LT.lt.{0} Nat instLTNat sb eb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext ctx)))) (And (NoCommentsSpecification.CoreSpec.validCommentKind (NoComments.Core.Comment.kind c)) (And (NoCommentsSpecification.CoreSpec.IsFingerprint (NoComments.Core.Comment.fingerprint c)) (And (@Eq.{1} Nat (NoComments.Core.Comment.startLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.mk sb)))) (And (@Eq.{1} Nat (NoComments.Core.Comment.endLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.prev (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb))))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "line") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 45))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p2) eb) (NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb) p2 (String.Pos.Raw.mk eb)))))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "block") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; have p3 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 47))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (And (@LT.lt.{0} Nat instLTNat (String.Pos.Raw.byteIdx p2) eb) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 45))) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 33))) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p3) eb) (And (NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb) (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) p3 (String.Pos.Raw.mk eb)) (@Exists.{1} String.Pos.Raw (fun (pm : String.Pos.Raw) => @Exists.{1} String.Pos.Raw (fun (ps : String.Pos.Raw) => And (@Eq.{1} String.Pos.Raw ps (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm)) (And (@Eq.{1} Nat eb (String.Pos.Raw.byteIdx (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm) (Char.ofNat (nat_lit 45))) (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps) (Char.ofNat (nat_lit 47)))))))))))))))) (And (Or (@Eq.{1} String (NoComments.Core.Comment.kind c) "doc") (@Eq.{1} String (NoComments.Core.Comment.kind c) "moddoc")) (NoCommentsSpecification.CoreSpec.DocNodeIn stx (NoComments.Core.Comment.kind c) sb eb)))))))))
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.validCommentKind
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (kind : String), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (kind : String) => @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "line" (@List.cons.{0} String "block" (@List.cons.{0} String "doc" (@List.cons.{0} String "moddoc" (@List.nil.{0} String))))) kind
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.IsFingerprint
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (s : String), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (s : String) => And (@Eq.{1} Nat (String.length s) (@OfNat.ofNat.{0} Nat (nat_lit 16) (instOfNatNat (nat_lit 16)))) (∀ (c : Char), @Membership.mem.{0, 0} Char (List.{0} Char) (@List.instMembership.{0} Char) (String.toList s) c → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.isHexLowerChar c) Bool.true)
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.isHexLowerChar
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (c : Char), Bool
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (c : Char) => Bool.or (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 48)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 48)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 57))) (Char.instDecidableLe c (Char.ofNat (nat_lit 57))))) (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 97)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 97)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 102))) (Char.instDecidableLe c (Char.ofNat (nat_lit 102)))))
+| ```
+| 
+| ### NoComments.Core.Comment.fingerprint
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 4, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), String
+| ```
+| 
+| ### NoComments.Core.Comment.startLine
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 2, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), Nat
+| ```
+| 
+| ### NoComments.Core.Comment.endLine
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 3, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), Nat
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.DocNodeIn
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| Lean.Syntax → String → Nat → Nat → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 0 are parameters and the other 4 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.DocNodeIn.here
+| 
+| ```lean
+| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.DocNodeIn.child
+| 
+| ```lean
+| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {arg : Lean.Syntax}, ∀ {kind : String}, ∀ {sb : Nat}, ∀ {eb : Nat}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Membership.mem.{0, 0} Lean.Syntax (List.{0} Lean.Syntax) (@List.instMembership.{0} Lean.Syntax) (@Array.toList.{0} Lean.Syntax args) arg → NoCommentsSpecification.CoreSpec.DocNodeIn arg kind sb eb → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind sb eb
+| ```
+| 
+| ### NoCommentsSpecification.FingerprintFn
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| Type
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| String → String
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.commentText
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (fileMap : Lean.FileMap), ∀ (sb : Nat), ∀ (eb : Nat), String
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (fileMap : Lean.FileMap) => fun (sb : Nat) => fun (eb : Nat) => Substring.Raw.toString (Substring.Raw.mk (Lean.FileMap.source fileMap) (String.Pos.Raw.mk sb) (String.Pos.Raw.mk eb))
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.CollectRefusal
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (ranges : List.{0} NoComments.Core.CommandRange) => fun (acc : NoComments.Core.CommentAcc) => NoCommentsSpecification.CoreSpec.CollectRefusalAt ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc)
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.CollectRefusalAt
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| List.{0} NoComments.Core.CommandRange → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 0 are parameters and the other 2 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.badBounds
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r)) (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))))) → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.syntaxFails
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxFails (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.trailingTriviaFails
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.restFails
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state2 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt rest state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.SyntaxFails
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomToken
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identToken
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docMissingInfo
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → (∀ (l1 : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t1 : Substring.Raw), ∀ (s1 : String.Pos.Raw), ∀ (l2 : Substring.Raw), ∀ (s2 : String.Pos.Raw), ∀ (t2 : Substring.Raw), ∀ (stop : String.Pos.Raw), Not (And (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1))) (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop))))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docSpanConflict
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.SpanConflict state1 kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.emptyChoice
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@List.toArray.{0} Lean.Syntax (@List.nil.{0} Lean.Syntax))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceFirst
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos first pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceAlts
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos first pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop alts state1 → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomToken
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.nodeList
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.AltsFails
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 2 are parameters and the other 4 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.AltsFails.head
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos alt pos state → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.AltsFails.mismatch
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {altStop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state altStop state1 → @Ne.{1} String.Pos.Raw altStop stop → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.AltsFails.tail
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop rest state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.ListFails
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.ListFails.head
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos arg pos state → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.ListFails.tail
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {mid : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos arg pos state mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos rest mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
+| ```
+| 
 | ### NoCommentsSpecification.CoreSpec.TriviaFails
 | 
 | An inductive type. It has no universe parameter. Its type:
@@ -6052,20 +6171,6 @@ revision 2449
 | 
 | ```lean
 | ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {token : Lean.Syntax}, ∀ {raw : String}, ∀ {next : Char}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.literalToken (Lean.Parser.ParserModuleContext.env (Lean.Parser.ParserContextCore.toParserModuleContext ctx)) token raw) Bool.false → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.registeredSymbol ctx token) Bool.false → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.crossesBoundary raw next) Bool.true → NoCommentsSpecification.CoreSpec.TokenRefusal ctx token raw next
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.stateOfAcc
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (acc : NoComments.Core.CommentAcc), NoCommentsSpecification.CoreSpec.SpanState
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (acc : NoComments.Core.CommentAcc) => fun (sb : Nat) => @Option.map.{0, 0} (Prod.{0, 0} Nat NoComments.Core.Comment) (Prod.{0, 0} Nat String) (fun (p : Prod.{0, 0} Nat NoComments.Core.Comment) => @Prod.mk.{0, 0} Nat String (@Prod.fst.{0, 0} Nat NoComments.Core.Comment p) (NoComments.Core.Comment.kind (@Prod.snd.{0, 0} Nat NoComments.Core.Comment p))) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb)
 | ```
 | 
 | ### NoCommentsSpecification.Healthy.Collect
@@ -6672,24 +6777,38 @@ revision 2449
 | 
 | ### NoCommentsSpecification.AdequacyCollect.RangesAcc
 | 
-| An inductive type. It has no universe parameter. Its type:
+| A definition. It has no universe parameter. Its type:
 | 
 | ```lean
 | List.{0} NoComments.Core.CommandRange → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 0 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.AdequacyCollect.RangesAcc.nil
+| Its value:
 | 
 | ```lean
-| ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.RangesAcc (@List.nil.{0} NoComments.Core.CommandRange) acc acc
+| NoCommentsSpecification.AdequacyCollect.RangesAccWith NoCommentsSpecification.AdequacyCore.fpModel
 | ```
 | 
-| #### NoCommentsSpecification.AdequacyCollect.RangesAcc.cons
+| ### NoCommentsSpecification.AdequacyCollect.RangesAccWith
+| 
+| An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) acc mid acc1 → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid acc1 acc2 → NoCommentsSpecification.AdequacyCollect.RangesAcc rest acc2 acc' → NoCommentsSpecification.AdequacyCollect.RangesAcc (@List.cons.{0} NoComments.Core.CommandRange r rest) acc acc'
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), List.{0} NoComments.Core.CommandRange → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 1 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.AdequacyCollect.RangesAccWith.nil
+| 
+| ```lean
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.RangesAccWith fp (@List.nil.{0} NoComments.Core.CommandRange) acc acc
+| ```
+| 
+| #### NoCommentsSpecification.AdequacyCollect.RangesAccWith.cons
+| 
+| ```lean
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) acc mid acc1 → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid acc1 acc2 → NoCommentsSpecification.AdequacyCollect.RangesAccWith fp rest acc2 acc' → NoCommentsSpecification.AdequacyCollect.RangesAccWith fp (@List.cons.{0} NoComments.Core.CommandRange r rest) acc acc'
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.SyntaxAcc
@@ -6697,51 +6816,51 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.atomOrig
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.identOrig
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.doc
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc1) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k args) pos acc stop (NoCommentsSpecification.AdequacyCollect.updateAcc acc1 (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) kind start stop)
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc1) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k args) pos acc stop (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc1 (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) kind start stop)
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.choice
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos first pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop alts acc1 acc2 → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos acc stop acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos first pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop alts acc1 acc2 → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos acc stop acc2
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.singletonAtomNode
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.nodeList
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc' : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (x : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t x) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos acc stop acc' → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k args) pos acc stop acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc' : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (x : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t x) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos acc stop acc' → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k args) pos acc stop acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.other
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {s : Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} Lean.Syntax s (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val)) → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (rawVal : Substring.Raw), ∀ (val : Lean.Name), ∀ (pre : List.{0} Lean.Syntax.Preresolved), @Ne.{1} Lean.Syntax s (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre)) → (∀ (info : Lean.SourceInfo), ∀ (k : Lean.SyntaxNodeKind), ∀ (args : Array.{0} Lean.Syntax), @Ne.{1} Lean.Syntax s (Lean.Syntax.node info k args)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos s pos acc pos acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {s : Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} Lean.Syntax s (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val)) → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (rawVal : Substring.Raw), ∀ (val : Lean.Name), ∀ (pre : List.{0} Lean.Syntax.Preresolved), @Ne.{1} Lean.Syntax s (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre)) → (∀ (info : Lean.SourceInfo), ∀ (k : Lean.SyntaxNodeKind), ∀ (args : Array.{0} Lean.Syntax), @Ne.{1} Lean.Syntax s (Lean.Syntax.node info k args)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos s pos acc pos acc
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.AltsAcc
@@ -6749,21 +6868,21 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.AltsAcc.nil
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop (@List.nil.{0} Lean.Syntax) acc acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop (@List.nil.{0} Lean.Syntax) acc acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.AltsAcc.cons
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos alt pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop rest acc1 acc2 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) acc acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos alt pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop rest acc1 acc2 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) acc acc2
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.ListAcc
@@ -6771,21 +6890,21 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.ListAcc.nil
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@List.nil.{0} Lean.Syntax) pos acc pos acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@List.nil.{0} Lean.Syntax) pos acc pos acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.ListAcc.cons
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos arg pos acc mid acc1 → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos rest mid acc1 stop acc2 → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos acc stop acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos arg pos acc mid acc1 → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos rest mid acc1 stop acc2 → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos acc stop acc2
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.TriviaAcc
@@ -6793,33 +6912,33 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (fileMap : Lean.FileMap), ∀ (stopPos : String.Pos.Raw), String.Pos.Raw → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (fileMap : Lean.FileMap), ∀ (stopPos : String.Pos.Raw), String.Pos.Raw → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.done
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, Not (@LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, Not (@LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.ws
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Bool (Char.isWhitespace (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos)) Bool.true → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) acc acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Bool (Char.isWhitespace (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos)) Bool.true → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) acc acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.line
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {eol : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source fileMap) stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) eol → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "line" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx eol)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos eol (NoCommentsSpecification.AdequacyCollect.updateAcc acc fileMap "line" pos eol) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {eol : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source fileMap) stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) eol → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "line" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx eol)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos eol (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc fileMap "line" pos eol) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.block
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 47)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 45)) → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 33)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) stopPos → NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source fileMap) stopPos (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) endPos → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "block" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx endPos)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos endPos (NoCommentsSpecification.AdequacyCollect.updateAcc acc fileMap "block" pos endPos) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 47)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 45)) → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 33)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) stopPos → NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source fileMap) stopPos (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) endPos → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "block" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx endPos)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos endPos (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc fileMap "block" pos endPos) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.updateAcc
@@ -6827,13 +6946,13 @@ revision 2449
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (acc : NoComments.Core.CommentAcc), ∀ (fileMap : Lean.FileMap), ∀ (kind : String), ∀ (startPos : String.Pos.Raw), ∀ (stopPos : String.Pos.Raw), NoComments.Core.CommentAcc
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (acc : NoComments.Core.CommentAcc), ∀ (fileMap : Lean.FileMap), ∀ (kind : String), ∀ (startPos : String.Pos.Raw), ∀ (stopPos : String.Pos.Raw), NoComments.Core.CommentAcc
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (acc : NoComments.Core.CommentAcc) => fun (fileMap : Lean.FileMap) => fun (kind : String) => fun (startPos : String.Pos.Raw) => fun (stopPos : String.Pos.Raw) => NoCommentsSpecification.AdequacyCollect.updateAcc.match_1.{1} (fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => NoComments.Core.CommentAcc) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos)) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => acc) (fun («_» : Unit) => have lastPos : String.Pos.Raw := String.Pos.Raw.prev (Lean.FileMap.source fileMap) stopPos; have comment : NoComments.Core.Comment := NoComments.Core.Comment.mk kind (Lean.Position.line (Lean.FileMap.toPosition fileMap startPos)) (Lean.Position.line (Lean.FileMap.toPosition fileMap lastPos)) NoCommentsSpecification.AdequacyCore.zeroFp; NoComments.Core.CommentAcc.mk (@Std.HashMap.insert.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment (String.Pos.Raw.byteIdx stopPos) comment)))
+| fun (fp : NoCommentsSpecification.FingerprintFn) => fun (acc : NoComments.Core.CommentAcc) => fun (fileMap : Lean.FileMap) => fun (kind : String) => fun (startPos : String.Pos.Raw) => fun (stopPos : String.Pos.Raw) => NoCommentsSpecification.AdequacyCollect.updateAcc.match_1.{1} (fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => NoComments.Core.CommentAcc) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos)) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => acc) (fun («_» : Unit) => have lastPos : String.Pos.Raw := String.Pos.Raw.prev (Lean.FileMap.source fileMap) stopPos; have comment : NoComments.Core.Comment := NoComments.Core.Comment.mk kind (Lean.Position.line (Lean.FileMap.toPosition fileMap startPos)) (Lean.Position.line (Lean.FileMap.toPosition fileMap lastPos)) (fp (NoCommentsSpecification.CoreSpec.commentText fileMap (String.Pos.Raw.byteIdx startPos) (String.Pos.Raw.byteIdx stopPos))); NoComments.Core.CommentAcc.mk (@Std.HashMap.insert.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment (String.Pos.Raw.byteIdx stopPos) comment)))
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.updateAcc.match_1
@@ -6850,6 +6969,20 @@ revision 2449
 | fun (motive : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) → Sort u_1) => fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => fun (h_1 : ∀ (val : Prod.{0, 0} Nat NoComments.Core.Comment), motive (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) val)) => fun (h_2 : ∀ («_» : Unit), motive (@Option.none.{0} (Prod.{0, 0} Nat NoComments.Core.Comment))) => @Option.casesOn.{u_1, 0} (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (x_1 : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => motive x_1) x (h_2 Unit.unit) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => h_1 val)
 | ```
 | 
+| ### NoCommentsSpecification.AdequacyCore.fpModel
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| NoCommentsSpecification.FingerprintFn
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (s : String) => @ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) s "") Bool.true) (instDecidableEqBool (@BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) s "") Bool.true) NoCommentsSpecification.AdequacyCore.zeroFp NoCommentsSpecification.AdequacyCore.oneFp
+| ```
+| 
 | ### NoCommentsSpecification.AdequacyCore.zeroFp
 | 
 | A definition. It has no universe parameter. Its type:
@@ -6862,6 +6995,20 @@ revision 2449
 | 
 | ```lean
 | "0000000000000000"
+| ```
+| 
+| ### NoCommentsSpecification.AdequacyCore.oneFp
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| String
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| "1111111111111111"
 | ```
 | 
 | ### LeanIntent.IntentRecord.Meets
@@ -7110,7 +7257,7 @@ words 1
 by antigravity
 under agent-delegation
 record NoCommentsSpecification.CoreRecords.collectRangesRecord
-revision 2449
+revision 2585
 | # The intent record NoCommentsSpecification.CoreRecords.collectRangesRecord
 | 
 | Each statement is printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened. The plain words after it are written by a model and are trusted, not proved.
@@ -7167,16 +7314,38 @@ revision 2449
 | - **Still allows:** ByteAccounted partitions.
 | - **Freedom O5 leaves:** Valid span keys.
 | 
+| ### exact_scanner_spans
+| 
+| ```lean
+| fun (f : NoCommentsSpecification.CollectRangesFn) => ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → NoCommentsSpecification.CoreSpec.RangesStep ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc) (NoCommentsSpecification.CoreSpec.stateOfAcc acc')
+| ```
+| 
+| - **Requires:** Produces exact SpanState equality with deterministic RangesStep traversal (SyntaxStep + TriviaStep) on .ok acc'.
+| - **Rules out:** Dropped, merged, split, or endpoint-shifted comment spans.
+| - **Still allows:** Exact scanner occurrences matching every line, block, doc, and module-doc delimiter and closing rule.
+| - **Freedom O5 leaves:** Unique span start, stop, and kind per input (RangesStep determinism).
+| 
 | ### genuine_new_spans
 | 
 | ```lean
 | fun (f : NoCommentsSpecification.CollectRangesFn) => ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), @Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc') sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c)) → Or (@Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c))) (@Exists.{1} NoComments.Core.CommandRange (fun (r : NoComments.Core.CommandRange) => And (@Membership.mem.{0, 0} NoComments.Core.CommandRange (List.{0} NoComments.Core.CommandRange) (@List.instMembership.{0} NoComments.Core.CommandRange) ranges r) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.prevPos r)) sb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.nextPos r))) (NoCommentsSpecification.CoreSpec.GenuineCommentSpan (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.stx r) sb eb c)))))
 | ```
 | 
-| - **Requires:** Every newly added span comes from a genuine comment within some range.
-| - **Rules out:** Fabricated comment spans not present in parsed ranges/trivia.
-| - **Still allows:** All authentic line, block, doc, module-doc, and plainDocComment spans.
-| - **Freedom O5 leaves:** Non-conflicting span fingerprints.
+| - **Requires:** Every newly added span comes from a genuine single comment within some range satisfying LineEnd/BlockStep closing and doc syntax rules.
+| - **Rules out:** Fabricated or multi-comment merged spans not closed at their own line/block delimiter.
+| - **Still allows:** Authentic single line, nested-balanced block, doc, module-doc, and plainDocComment spans.
+| - **Freedom O5 leaves:** Exact SpanState fixed by RangesStep.
+| 
+| ### source_linked_fingerprints
+| 
+| ```lean
+| fun (f : NoCommentsSpecification.CollectRangesFn) => @Exists.{1} NoCommentsSpecification.FingerprintFn (fun (fp : NoCommentsSpecification.FingerprintFn) => And (∀ (text : String), NoCommentsSpecification.CoreSpec.IsFingerprint (fp text)) (And (@Exists.{1} String (fun (a : String) => @Exists.{1} String (fun (b : String) => @Ne.{1} String (fp a) (fp b)))) (∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), @Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc') sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c)) → Or (@Eq.{1} (Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb) (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment eb c))) (@Exists.{1} NoComments.Core.CommandRange (fun (r : NoComments.Core.CommandRange) => And (@Membership.mem.{0, 0} NoComments.Core.CommandRange (List.{0} NoComments.Core.CommandRange) (@List.instMembership.{0} NoComments.Core.CommandRange) ranges r) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.prevPos r)) sb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (NoComments.Core.CommandRange.nextPos r))) (@Eq.{1} String (NoComments.Core.Comment.fingerprint c) (fp (NoCommentsSpecification.CoreSpec.commentText (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) sb eb))))))))))
+| ```
+| 
+| - **Requires:** Uses a conforming nonconstant 16-char lowercase hex digest fp so every new span carries fp of its comment source slice.
+| - **Rules out:** Placeholder or constant comment fingerprints ignoring the comment source text under the chosen digest.
+| - **Still allows:** Any valid nonconstant FingerprintFn applied verbatim to each new comment source slice.
+| - **Freedom O5 leaves:** Choice of FingerprintFn modulo source-text equality (O5 CollectRangesFreedom).
 | 
 | ### refusal_sound
 | 
@@ -7208,10 +7377,21 @@ revision 2449
 | fun (p : Prod.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)))) => NoCommentsSpecification.CoreSpec.GenuineCommentSpan (@Prod.fst.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p) (@Prod.fst.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p)) (@Prod.fst.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.snd.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p))) (@Prod.fst.{0, 0} Nat NoComments.Core.Comment (@Prod.snd.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.snd.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p)))) (@Prod.snd.{0, 0} Nat NoComments.Core.Comment (@Prod.snd.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@Prod.snd.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment)) (@Prod.snd.{0, 0} Lean.Parser.ParserContextCore (Prod.{0, 0} Lean.Syntax (Prod.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment))) p))))
 | ```
 | 
-| - **Requires:** GenuineCommentSpan witnesses an actual syntax/trivia comment in the input.
-| - **Rules out:** Spurious spans.
+| - **Requires:** GenuineCommentSpan witnesses an actual syntax/trivia single-comment span closing under LineEnd/BlockStep or DocNodeIn.
+| - **Rules out:** Spurious or multi-comment merged spans.
 | - **Still allows:** Authentic comment spans.
-| - **Freedom O5 leaves:** Valid fingerprint details.
+| - **Freedom O5 leaves:** Valid digest format.
+| 
+| ### RangesStep, a predicate over `Prod.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState)`
+| 
+| ```lean
+| fun (p : Prod.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState)) => NoCommentsSpecification.CoreSpec.RangesStep (@Prod.fst.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState) p) (@Prod.fst.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState (@Prod.snd.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState) p)) (@Prod.snd.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState (@Prod.snd.{0, 0} (List.{0} NoComments.Core.CommandRange) (Prod.{0, 0} NoCommentsSpecification.CoreSpec.SpanState NoCommentsSpecification.CoreSpec.SpanState) p))
+| ```
+| 
+| - **Requires:** RangesStep composes deterministic SyntaxStep and TriviaStep traversals across command ranges.
+| - **Rules out:** Missing, merged, split, or endpoint-shifted comment occurrences.
+| - **Still allows:** Exact scanner SpanState transitions.
+| - **Freedom O5 leaves:** Deterministically determines output SpanState.
 | 
 | ### CollectRefusal, a predicate over `Prod.{0, 0} (List.{0} NoComments.Core.CommandRange) NoComments.Core.CommentAcc`
 | 
@@ -7236,6 +7416,17 @@ revision 2449
 | - **Rules out:** Spurious errors on valid Lean files.
 | - **Still allows:** Any valid byte-covering accumulator.
 | - **Freedom O5 leaves:** Success guaranteed on healthy input.
+| 
+| ### matches exact scanner comment spans, an entailment: every subject that meets the record satisfies it
+| 
+| ```lean
+| fun (f : NoCommentsSpecification.CollectRangesFn) => ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), ∀ (acc' : NoComments.Core.CommentAcc), @Eq.{1} (Except.{0, 0} String NoComments.Core.CommentAcc) (f ranges acc) (@Except.ok.{0, 0} String NoComments.Core.CommentAcc acc') → NoCommentsSpecification.CoreSpec.RangesStep ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc) (NoCommentsSpecification.CoreSpec.stateOfAcc acc')
+| ```
+| 
+| - **Requires:** Every conforming collector produces the exact SpanState of RangesStep.
+| - **Rules out:** Missed, merged, or shifted comment spans on successful collection.
+| - **Still allows:** Any faithful scanner subject to CollectRangesFreedom.
+| - **Freedom O5 leaves:** Exact span endpoints and kinds fixed deterministically.
 | 
 | ### leaves refusal diagnostic wording unconstrained, a possibility: some subject that meets the record satisfies it
 | 
@@ -7818,162 +8009,26 @@ revision 2449
 | ∀ (self : NoComments.Core.CommandRange), Lean.Syntax
 | ```
 | 
-| ### NoCommentsSpecification.CoreSpec.GenuineCommentSpan
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (stx : Lean.Syntax), ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (ctx : Lean.Parser.ParserContextCore) => fun (stx : Lean.Syntax) => fun (sb : Nat) => fun (eb : Nat) => fun (c : NoComments.Core.Comment) => And (@LT.lt.{0} Nat instLTNat sb eb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext ctx)))) (And (NoCommentsSpecification.CoreSpec.validCommentKind (NoComments.Core.Comment.kind c)) (And (NoCommentsSpecification.CoreSpec.IsFingerprint (NoComments.Core.Comment.fingerprint c)) (And (@Eq.{1} Nat (NoComments.Core.Comment.startLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.mk sb)))) (And (@Eq.{1} Nat (NoComments.Core.Comment.endLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.prev (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb))))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "line") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 45))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p2) eb)))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "block") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; have p3 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 47))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (And (@LT.lt.{0} Nat instLTNat (String.Pos.Raw.byteIdx p2) eb) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 45))) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 33))) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p3) eb) (@Exists.{1} String.Pos.Raw (fun (pm : String.Pos.Raw) => @Exists.{1} String.Pos.Raw (fun (ps : String.Pos.Raw) => And (@Eq.{1} String.Pos.Raw ps (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm)) (And (@Eq.{1} Nat eb (String.Pos.Raw.byteIdx (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm) (Char.ofNat (nat_lit 45))) (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps) (Char.ofNat (nat_lit 47))))))))))))))) (And (Or (@Eq.{1} String (NoComments.Core.Comment.kind c) "doc") (@Eq.{1} String (NoComments.Core.Comment.kind c) "moddoc")) (NoCommentsSpecification.CoreSpec.DocNodeIn stx (NoComments.Core.Comment.kind c) sb eb)))))))))
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.validCommentKind
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (kind : String), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (kind : String) => @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "line" (@List.cons.{0} String "block" (@List.cons.{0} String "doc" (@List.cons.{0} String "moddoc" (@List.nil.{0} String))))) kind
-| ```
-| 
-| ### NoComments.Core.Comment.kind
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 1, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), String
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.IsFingerprint
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (s : String), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (s : String) => And (@Eq.{1} Nat (String.length s) (@OfNat.ofNat.{0} Nat (nat_lit 16) (instOfNatNat (nat_lit 16)))) (∀ (c : Char), @Membership.mem.{0, 0} Char (List.{0} Char) (@List.instMembership.{0} Char) (String.toList s) c → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.isHexLowerChar c) Bool.true)
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.isHexLowerChar
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (c : Char), Bool
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (c : Char) => Bool.or (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 48)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 48)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 57))) (Char.instDecidableLe c (Char.ofNat (nat_lit 57))))) (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 97)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 97)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 102))) (Char.instDecidableLe c (Char.ofNat (nat_lit 102)))))
-| ```
-| 
-| ### NoComments.Core.Comment.fingerprint
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 4, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), String
-| ```
-| 
-| ### NoComments.Core.Comment.startLine
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 2, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), Nat
-| ```
-| 
-| ### NoComments.Core.Comment.endLine
-| 
-| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 3, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (self : NoComments.Core.Comment), Nat
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.DocNodeIn
+| ### NoCommentsSpecification.CoreSpec.RangesStep
 | 
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| Lean.Syntax → String → Nat → Nat → Prop
+| List.{0} NoComments.Core.CommandRange → NoCommentsSpecification.CoreSpec.SpanState → NoCommentsSpecification.CoreSpec.SpanState → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 0 are parameters and the other 4 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 0 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
-| #### NoCommentsSpecification.CoreSpec.DocNodeIn.here
+| #### NoCommentsSpecification.CoreSpec.RangesStep.nil
 | 
 | ```lean
-| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)
+| ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.RangesStep (@List.nil.{0} NoComments.Core.CommandRange) state state
 | ```
 | 
-| #### NoCommentsSpecification.CoreSpec.DocNodeIn.child
+| #### NoCommentsSpecification.CoreSpec.RangesStep.cons
 | 
 | ```lean
-| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {arg : Lean.Syntax}, ∀ {kind : String}, ∀ {sb : Nat}, ∀ {eb : Nat}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Membership.mem.{0, 0} Lean.Syntax (List.{0} Lean.Syntax) (@List.instMembership.{0} Lean.Syntax) (@Array.toList.{0} Lean.Syntax args) arg → NoCommentsSpecification.CoreSpec.DocNodeIn arg kind sb eb → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind sb eb
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.CollectRefusal
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), Prop
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (ranges : List.{0} NoComments.Core.CommandRange) => fun (acc : NoComments.Core.CommentAcc) => NoCommentsSpecification.CoreSpec.CollectRefusalAt ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc)
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.CollectRefusalAt
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| List.{0} NoComments.Core.CommandRange → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 0 are parameters and the other 2 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.badBounds
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r)) (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))))) → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.syntaxFails
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxFails (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.trailingTriviaFails
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.restFails
-| 
-| ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state2 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt rest state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state2 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state' : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 state2 → NoCommentsSpecification.CoreSpec.RangesStep rest state2 state' → NoCommentsSpecification.CoreSpec.RangesStep (@List.cons.{0} NoComments.Core.CommandRange r rest) state state'
 | ```
 | 
 | ### NoCommentsSpecification.CoreSpec.SpanState
@@ -7988,168 +8043,6 @@ revision 2449
 | 
 | ```lean
 | Nat → Option.{0} (Prod.{0, 0} Nat String)
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.SyntaxFails
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomToken
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identToken
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docMissingInfo
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → (∀ (l1 : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t1 : Substring.Raw), ∀ (s1 : String.Pos.Raw), ∀ (l2 : Substring.Raw), ∀ (s2 : String.Pos.Raw), ∀ (t2 : Substring.Raw), ∀ (stop : String.Pos.Raw), Not (And (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1))) (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop))))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docSpanConflict
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.SpanConflict state1 kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.emptyChoice
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@List.toArray.{0} Lean.Syntax (@List.nil.{0} Lean.Syntax))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceFirst
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos first pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceAlts
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos first pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop alts state1 → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomRange
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomTrivia
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomToken
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.SyntaxFails.nodeList
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.AltsFails
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 2 are parameters and the other 4 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.AltsFails.head
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos alt pos state → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.AltsFails.mismatch
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {altStop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state altStop state1 → @Ne.{1} String.Pos.Raw altStop stop → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.AltsFails.tail
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop rest state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.ListFails
-| 
-| An inductive type. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
-| ```
-| 
-| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.CoreSpec.ListFails.head
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos arg pos state → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
-| ```
-| 
-| #### NoCommentsSpecification.CoreSpec.ListFails.tail
-| 
-| ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {mid : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos arg pos state mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos rest mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
 | ```
 | 
 | ### NoCommentsSpecification.CoreSpec.SyntaxStep
@@ -8372,6 +8265,368 @@ revision 2449
 | ∀ {str : String}, ∀ {stopPos : String.Pos.Raw}, ∀ {nesting : Nat}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, @GE.ge.{0} Nat instLENat nesting (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) → @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → Not (And (@Eq.{1} Char (String.Pos.Raw.get str pos) (Char.ofNat (nat_lit 45))) (And (@LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next str pos) stopPos) (@Eq.{1} Char (String.Pos.Raw.get str (String.Pos.Raw.next str pos)) (Char.ofNat (nat_lit 47))))) → Not (And (@Eq.{1} Char (String.Pos.Raw.get str pos) (Char.ofNat (nat_lit 47))) (And (@LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next str pos) stopPos) (@Eq.{1} Char (String.Pos.Raw.get str (String.Pos.Raw.next str pos)) (Char.ofNat (nat_lit 45))))) → NoCommentsSpecification.CoreSpec.BlockStep str stopPos nesting (String.Pos.Raw.next str pos) endPos → NoCommentsSpecification.CoreSpec.BlockStep str stopPos nesting pos endPos
 | ```
 | 
+| ### NoCommentsSpecification.CoreSpec.stateOfAcc
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (acc : NoComments.Core.CommentAcc), NoCommentsSpecification.CoreSpec.SpanState
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (acc : NoComments.Core.CommentAcc) => fun (sb : Nat) => @Option.map.{0, 0} (Prod.{0, 0} Nat NoComments.Core.Comment) (Prod.{0, 0} Nat String) (fun (p : Prod.{0, 0} Nat NoComments.Core.Comment) => @Prod.mk.{0, 0} Nat String (@Prod.fst.{0, 0} Nat NoComments.Core.Comment p) (NoComments.Core.Comment.kind (@Prod.snd.{0, 0} Nat NoComments.Core.Comment p))) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb)
+| ```
+| 
+| ### NoComments.Core.Comment.kind
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 1, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), String
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.GenuineCommentSpan
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (stx : Lean.Syntax), ∀ (sb : Nat), ∀ (eb : Nat), ∀ (c : NoComments.Core.Comment), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (ctx : Lean.Parser.ParserContextCore) => fun (stx : Lean.Syntax) => fun (sb : Nat) => fun (eb : Nat) => fun (c : NoComments.Core.Comment) => And (@LT.lt.{0} Nat instLTNat sb eb) (And (@LE.le.{0} Nat instLENat eb (String.Pos.Raw.byteIdx (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext ctx)))) (And (NoCommentsSpecification.CoreSpec.validCommentKind (NoComments.Core.Comment.kind c)) (And (NoCommentsSpecification.CoreSpec.IsFingerprint (NoComments.Core.Comment.fingerprint c)) (And (@Eq.{1} Nat (NoComments.Core.Comment.startLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.mk sb)))) (And (@Eq.{1} Nat (NoComments.Core.Comment.endLine c) (Lean.Position.line (Lean.FileMap.toPosition (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) (String.Pos.Raw.prev (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb))))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "line") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 45))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p2) eb) (NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb) p2 (String.Pos.Raw.mk eb)))))) (Or (And (@Eq.{1} String (NoComments.Core.Comment.kind c) "block") (have p0 : String.Pos.Raw := String.Pos.Raw.mk sb; have p1 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0; have p2 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1; have p3 : String.Pos.Raw := String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2; And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p0) (Char.ofNat (nat_lit 47))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p1) (Char.ofNat (nat_lit 45))) (And (@LT.lt.{0} Nat instLTNat (String.Pos.Raw.byteIdx p2) eb) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 45))) (And (@Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) p2) (Char.ofNat (nat_lit 33))) (And (@LE.le.{0} Nat instLENat (String.Pos.Raw.byteIdx p3) eb) (And (NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) (String.Pos.Raw.mk eb) (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) p3 (String.Pos.Raw.mk eb)) (@Exists.{1} String.Pos.Raw (fun (pm : String.Pos.Raw) => @Exists.{1} String.Pos.Raw (fun (ps : String.Pos.Raw) => And (@Eq.{1} String.Pos.Raw ps (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm)) (And (@Eq.{1} Nat eb (String.Pos.Raw.byteIdx (String.Pos.Raw.next (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps))) (And (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) pm) (Char.ofNat (nat_lit 45))) (@Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx))) ps) (Char.ofNat (nat_lit 47)))))))))))))))) (And (Or (@Eq.{1} String (NoComments.Core.Comment.kind c) "doc") (@Eq.{1} String (NoComments.Core.Comment.kind c) "moddoc")) (NoCommentsSpecification.CoreSpec.DocNodeIn stx (NoComments.Core.Comment.kind c) sb eb)))))))))
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.validCommentKind
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (kind : String), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (kind : String) => @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "line" (@List.cons.{0} String "block" (@List.cons.{0} String "doc" (@List.cons.{0} String "moddoc" (@List.nil.{0} String))))) kind
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.IsFingerprint
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (s : String), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (s : String) => And (@Eq.{1} Nat (String.length s) (@OfNat.ofNat.{0} Nat (nat_lit 16) (instOfNatNat (nat_lit 16)))) (∀ (c : Char), @Membership.mem.{0, 0} Char (List.{0} Char) (@List.instMembership.{0} Char) (String.toList s) c → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.isHexLowerChar c) Bool.true)
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.isHexLowerChar
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (c : Char), Bool
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (c : Char) => Bool.or (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 48)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 48)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 57))) (Char.instDecidableLe c (Char.ofNat (nat_lit 57))))) (Bool.and (@Decidable.decide (@LE.le.{0} Char Char.instLE (Char.ofNat (nat_lit 97)) c) (Char.instDecidableLe (Char.ofNat (nat_lit 97)) c)) (@Decidable.decide (@LE.le.{0} Char Char.instLE c (Char.ofNat (nat_lit 102))) (Char.instDecidableLe c (Char.ofNat (nat_lit 102)))))
+| ```
+| 
+| ### NoComments.Core.Comment.fingerprint
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 4, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), String
+| ```
+| 
+| ### NoComments.Core.Comment.startLine
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 2, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), Nat
+| ```
+| 
+| ### NoComments.Core.Comment.endLine
+| 
+| A function that reads a field of a structure: its value is `fun` over its first 1 arguments and returns field number 3, counted after the parameters in the type of NoComments.Core.Comment's constructor, of its argument number 1, a value of NoComments.Core.Comment. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (self : NoComments.Core.Comment), Nat
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.DocNodeIn
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| Lean.Syntax → String → Nat → Nat → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 0 are parameters and the other 4 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.DocNodeIn.here
+| 
+| ```lean
+| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.DocNodeIn.child
+| 
+| ```lean
+| ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {arg : Lean.Syntax}, ∀ {kind : String}, ∀ {sb : Nat}, ∀ {eb : Nat}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Membership.mem.{0, 0} Lean.Syntax (List.{0} Lean.Syntax) (@List.instMembership.{0} Lean.Syntax) (@Array.toList.{0} Lean.Syntax args) arg → NoCommentsSpecification.CoreSpec.DocNodeIn arg kind sb eb → NoCommentsSpecification.CoreSpec.DocNodeIn (Lean.Syntax.node info k args) kind sb eb
+| ```
+| 
+| ### NoCommentsSpecification.FingerprintFn
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| Type
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| String → String
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.commentText
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (fileMap : Lean.FileMap), ∀ (sb : Nat), ∀ (eb : Nat), String
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (fileMap : Lean.FileMap) => fun (sb : Nat) => fun (eb : Nat) => Substring.Raw.toString (Substring.Raw.mk (Lean.FileMap.source fileMap) (String.Pos.Raw.mk sb) (String.Pos.Raw.mk eb))
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.CollectRefusal
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ranges : List.{0} NoComments.Core.CommandRange), ∀ (acc : NoComments.Core.CommentAcc), Prop
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (ranges : List.{0} NoComments.Core.CommandRange) => fun (acc : NoComments.Core.CommentAcc) => NoCommentsSpecification.CoreSpec.CollectRefusalAt ranges (NoCommentsSpecification.CoreSpec.stateOfAcc acc)
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.CollectRefusalAt
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| List.{0} NoComments.Core.CommandRange → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 0 are parameters and the other 2 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.badBounds
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r)) (@LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))))) → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.syntaxFails
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxFails (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.trailingTriviaFails
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.CollectRefusalAt.restFails
+| 
+| ```lean
+| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {mid : String.Pos.Raw}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state2 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.CoreSpec.SyntaxStep (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) state mid state1 → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid state1 state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt rest state2 → NoCommentsSpecification.CoreSpec.CollectRefusalAt (@List.cons.{0} NoComments.Core.CommandRange r rest) state
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.SyntaxFails
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.atomToken
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.identToken
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docMissingInfo
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → (∀ (l1 : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t1 : Substring.Raw), ∀ (s1 : String.Pos.Raw), ∀ (l2 : Substring.Raw), ∀ (s2 : String.Pos.Raw), ∀ (t2 : Substring.Raw), ∀ (stop : String.Pos.Raw), Not (And (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1))) (@Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop))))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.docSpanConflict
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → NoCommentsSpecification.CoreSpec.SpanConflict state1 kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.emptyChoice
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@List.toArray.{0} Lean.Syntax (@List.nil.{0} Lean.Syntax))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceFirst
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos first pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.choiceAlts
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos first pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop alts state1 → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomRange
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → Not (And (@LE.le.{0} String.Pos.Raw String.instLERaw pos start) (And (@LE.le.{0} String.Pos.Raw String.instLERaw start stop) (@LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos))) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomTrivia
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaFails (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.singletonAtomToken
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.CoreSpec.TriviaStep (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos state state1 → NoCommentsSpecification.CoreSpec.TokenRefusal ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.SyntaxFails.nodeList
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos state → NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos (Lean.Syntax.node info k args) pos state
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.AltsFails
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 2 are parameters and the other 4 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.AltsFails.head
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos alt pos state → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.AltsFails.mismatch
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {altStop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state altStop state1 → @Ne.{1} String.Pos.Raw altStop stop → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.AltsFails.tail
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos alt pos state stop state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop rest state1 → NoCommentsSpecification.CoreSpec.AltsFails ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) state
+| ```
+| 
+| ### NoCommentsSpecification.CoreSpec.ListFails
+| 
+| An inductive type. It has no universe parameter. Its type:
+| 
+| ```lean
+| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoCommentsSpecification.CoreSpec.SpanState → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.CoreSpec.SyntaxFails, NoCommentsSpecification.CoreSpec.AltsFails, NoCommentsSpecification.CoreSpec.ListFails, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.CoreSpec.ListFails.head
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxFails ctx nextPos arg pos state → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
+| ```
+| 
+| #### NoCommentsSpecification.CoreSpec.ListFails.tail
+| 
+| ```lean
+| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {mid : String.Pos.Raw}, ∀ {state : NoCommentsSpecification.CoreSpec.SpanState}, ∀ {state1 : NoCommentsSpecification.CoreSpec.SpanState}, NoCommentsSpecification.CoreSpec.SyntaxStep ctx nextPos arg pos state mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos rest mid state1 → NoCommentsSpecification.CoreSpec.ListFails ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos state
+| ```
+| 
 | ### NoCommentsSpecification.CoreSpec.TriviaFails
 | 
 | An inductive type. It has no universe parameter. Its type:
@@ -8520,20 +8775,6 @@ revision 2449
 | 
 | ```lean
 | ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {token : Lean.Syntax}, ∀ {raw : String}, ∀ {next : Char}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.literalToken (Lean.Parser.ParserModuleContext.env (Lean.Parser.ParserContextCore.toParserModuleContext ctx)) token raw) Bool.false → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.registeredSymbol ctx token) Bool.false → @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.crossesBoundary raw next) Bool.true → NoCommentsSpecification.CoreSpec.TokenRefusal ctx token raw next
-| ```
-| 
-| ### NoCommentsSpecification.CoreSpec.stateOfAcc
-| 
-| A definition. It has no universe parameter. Its type:
-| 
-| ```lean
-| ∀ (acc : NoComments.Core.CommentAcc), NoCommentsSpecification.CoreSpec.SpanState
-| ```
-| 
-| Its value:
-| 
-| ```lean
-| fun (acc : NoComments.Core.CommentAcc) => fun (sb : Nat) => @Option.map.{0, 0} (Prod.{0, 0} Nat NoComments.Core.Comment) (Prod.{0, 0} Nat String) (fun (p : Prod.{0, 0} Nat NoComments.Core.Comment) => @Prod.mk.{0, 0} Nat String (@Prod.fst.{0, 0} Nat NoComments.Core.Comment p) (NoComments.Core.Comment.kind (@Prod.snd.{0, 0} Nat NoComments.Core.Comment p))) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) sb)
 | ```
 | 
 | ### NoCommentsSpecification.Healthy.Collect
@@ -9140,24 +9381,38 @@ revision 2449
 | 
 | ### NoCommentsSpecification.AdequacyCollect.RangesAcc
 | 
-| An inductive type. It has no universe parameter. Its type:
+| A definition. It has no universe parameter. Its type:
 | 
 | ```lean
 | List.{0} NoComments.Core.CommandRange → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 0 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.AdequacyCollect.RangesAcc.nil
+| Its value:
 | 
 | ```lean
-| ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.RangesAcc (@List.nil.{0} NoComments.Core.CommandRange) acc acc
+| NoCommentsSpecification.AdequacyCollect.RangesAccWith NoCommentsSpecification.AdequacyCore.fpModel
 | ```
 | 
-| #### NoCommentsSpecification.AdequacyCollect.RangesAcc.cons
+| ### NoCommentsSpecification.AdequacyCollect.RangesAccWith
+| 
+| An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) acc mid acc1 → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid acc1 acc2 → NoCommentsSpecification.AdequacyCollect.RangesAcc rest acc2 acc' → NoCommentsSpecification.AdequacyCollect.RangesAcc (@List.cons.{0} NoComments.Core.CommandRange r rest) acc acc'
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), List.{0} NoComments.Core.CommandRange → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 1 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.AdequacyCollect.RangesAccWith.nil
+| 
+| ```lean
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.RangesAccWith fp (@List.nil.{0} NoComments.Core.CommandRange) acc acc
+| ```
+| 
+| #### NoCommentsSpecification.AdequacyCollect.RangesAccWith.cons
+| 
+| ```lean
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) acc mid acc1 → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid acc1 acc2 → NoCommentsSpecification.AdequacyCollect.RangesAccWith fp rest acc2 acc' → NoCommentsSpecification.AdequacyCollect.RangesAccWith fp (@List.cons.{0} NoComments.Core.CommandRange r rest) acc acc'
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.SyntaxAcc
@@ -9165,51 +9420,51 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.atomOrig
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.identOrig
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.doc
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc1) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k args) pos acc stop (NoCommentsSpecification.AdequacyCollect.updateAcc acc1 (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) kind start stop)
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc1) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k args) pos acc stop (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc1 (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) kind start stop)
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.choice
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos first pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop alts acc1 acc2 → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos acc stop acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos first pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop alts acc1 acc2 → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos acc stop acc2
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.singletonAtomNode
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.nodeList
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc' : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (x : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t x) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos acc stop acc' → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k args) pos acc stop acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc' : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (x : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t x) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos acc stop acc' → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k args) pos acc stop acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.other
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {s : Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} Lean.Syntax s (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val)) → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (rawVal : Substring.Raw), ∀ (val : Lean.Name), ∀ (pre : List.{0} Lean.Syntax.Preresolved), @Ne.{1} Lean.Syntax s (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre)) → (∀ (info : Lean.SourceInfo), ∀ (k : Lean.SyntaxNodeKind), ∀ (args : Array.{0} Lean.Syntax), @Ne.{1} Lean.Syntax s (Lean.Syntax.node info k args)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos s pos acc pos acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {s : Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} Lean.Syntax s (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val)) → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (rawVal : Substring.Raw), ∀ (val : Lean.Name), ∀ (pre : List.{0} Lean.Syntax.Preresolved), @Ne.{1} Lean.Syntax s (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre)) → (∀ (info : Lean.SourceInfo), ∀ (k : Lean.SyntaxNodeKind), ∀ (args : Array.{0} Lean.Syntax), @Ne.{1} Lean.Syntax s (Lean.Syntax.node info k args)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos s pos acc pos acc
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.AltsAcc
@@ -9217,21 +9472,21 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.AltsAcc.nil
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop (@List.nil.{0} Lean.Syntax) acc acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop (@List.nil.{0} Lean.Syntax) acc acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.AltsAcc.cons
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos alt pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop rest acc1 acc2 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) acc acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos alt pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop rest acc1 acc2 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) acc acc2
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.ListAcc
@@ -9239,21 +9494,21 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.ListAcc.nil
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@List.nil.{0} Lean.Syntax) pos acc pos acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@List.nil.{0} Lean.Syntax) pos acc pos acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.ListAcc.cons
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos arg pos acc mid acc1 → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos rest mid acc1 stop acc2 → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos acc stop acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos arg pos acc mid acc1 → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos rest mid acc1 stop acc2 → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos acc stop acc2
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.TriviaAcc
@@ -9261,33 +9516,33 @@ revision 2449
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (fileMap : Lean.FileMap), ∀ (stopPos : String.Pos.Raw), String.Pos.Raw → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (fileMap : Lean.FileMap), ∀ (stopPos : String.Pos.Raw), String.Pos.Raw → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.done
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, Not (@LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, Not (@LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.ws
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Bool (Char.isWhitespace (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos)) Bool.true → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) acc acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Bool (Char.isWhitespace (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos)) Bool.true → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) acc acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.line
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {eol : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source fileMap) stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) eol → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "line" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx eol)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos eol (NoCommentsSpecification.AdequacyCollect.updateAcc acc fileMap "line" pos eol) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {eol : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source fileMap) stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) eol → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "line" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx eol)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos eol (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc fileMap "line" pos eol) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.block
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 47)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 45)) → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 33)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) stopPos → NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source fileMap) stopPos (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) endPos → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "block" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx endPos)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos endPos (NoCommentsSpecification.AdequacyCollect.updateAcc acc fileMap "block" pos endPos) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 47)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 45)) → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 33)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) stopPos → NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source fileMap) stopPos (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) endPos → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "block" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx endPos)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos endPos (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc fileMap "block" pos endPos) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.updateAcc
@@ -9295,13 +9550,13 @@ revision 2449
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (acc : NoComments.Core.CommentAcc), ∀ (fileMap : Lean.FileMap), ∀ (kind : String), ∀ (startPos : String.Pos.Raw), ∀ (stopPos : String.Pos.Raw), NoComments.Core.CommentAcc
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (acc : NoComments.Core.CommentAcc), ∀ (fileMap : Lean.FileMap), ∀ (kind : String), ∀ (startPos : String.Pos.Raw), ∀ (stopPos : String.Pos.Raw), NoComments.Core.CommentAcc
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (acc : NoComments.Core.CommentAcc) => fun (fileMap : Lean.FileMap) => fun (kind : String) => fun (startPos : String.Pos.Raw) => fun (stopPos : String.Pos.Raw) => NoCommentsSpecification.AdequacyCollect.updateAcc.match_1.{1} (fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => NoComments.Core.CommentAcc) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos)) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => acc) (fun («_» : Unit) => have lastPos : String.Pos.Raw := String.Pos.Raw.prev (Lean.FileMap.source fileMap) stopPos; have comment : NoComments.Core.Comment := NoComments.Core.Comment.mk kind (Lean.Position.line (Lean.FileMap.toPosition fileMap startPos)) (Lean.Position.line (Lean.FileMap.toPosition fileMap lastPos)) NoCommentsSpecification.AdequacyCore.zeroFp; NoComments.Core.CommentAcc.mk (@Std.HashMap.insert.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment (String.Pos.Raw.byteIdx stopPos) comment)))
+| fun (fp : NoCommentsSpecification.FingerprintFn) => fun (acc : NoComments.Core.CommentAcc) => fun (fileMap : Lean.FileMap) => fun (kind : String) => fun (startPos : String.Pos.Raw) => fun (stopPos : String.Pos.Raw) => NoCommentsSpecification.AdequacyCollect.updateAcc.match_1.{1} (fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => NoComments.Core.CommentAcc) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos)) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => acc) (fun («_» : Unit) => have lastPos : String.Pos.Raw := String.Pos.Raw.prev (Lean.FileMap.source fileMap) stopPos; have comment : NoComments.Core.Comment := NoComments.Core.Comment.mk kind (Lean.Position.line (Lean.FileMap.toPosition fileMap startPos)) (Lean.Position.line (Lean.FileMap.toPosition fileMap lastPos)) (fp (NoCommentsSpecification.CoreSpec.commentText fileMap (String.Pos.Raw.byteIdx startPos) (String.Pos.Raw.byteIdx stopPos))); NoComments.Core.CommentAcc.mk (@Std.HashMap.insert.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment (String.Pos.Raw.byteIdx stopPos) comment)))
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.updateAcc.match_1
@@ -9318,6 +9573,20 @@ revision 2449
 | fun (motive : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) → Sort u_1) => fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => fun (h_1 : ∀ (val : Prod.{0, 0} Nat NoComments.Core.Comment), motive (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) val)) => fun (h_2 : ∀ («_» : Unit), motive (@Option.none.{0} (Prod.{0, 0} Nat NoComments.Core.Comment))) => @Option.casesOn.{u_1, 0} (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (x_1 : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => motive x_1) x (h_2 Unit.unit) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => h_1 val)
 | ```
 | 
+| ### NoCommentsSpecification.AdequacyCore.fpModel
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| NoCommentsSpecification.FingerprintFn
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (s : String) => @ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) s "") Bool.true) (instDecidableEqBool (@BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) s "") Bool.true) NoCommentsSpecification.AdequacyCore.zeroFp NoCommentsSpecification.AdequacyCore.oneFp
+| ```
+| 
 | ### NoCommentsSpecification.AdequacyCore.zeroFp
 | 
 | A definition. It has no universe parameter. Its type:
@@ -9330,6 +9599,20 @@ revision 2449
 | 
 | ```lean
 | "0000000000000000"
+| ```
+| 
+| ### NoCommentsSpecification.AdequacyCore.oneFp
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| String
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| "1111111111111111"
 | ```
 | 
 | ### LeanIntent.IntentRecord.Meets
@@ -9562,7 +9845,7 @@ revision 2449
 | 
 consequence leaves refusal diagnostic wording unconstrained
 shown as possibility
-predicate 1088
+predicate 1158
 | # A consequence's predicate
 | 
 | Printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened.
@@ -9639,24 +9922,52 @@ predicate 1088
 | 
 | ### NoCommentsSpecification.AdequacyCollect.RangesAcc
 | 
-| An inductive type. It has no universe parameter. Its type:
+| A definition. It has no universe parameter. Its type:
 | 
 | ```lean
 | List.{0} NoComments.Core.CommandRange → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 0 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
-| 
-| #### NoCommentsSpecification.AdequacyCollect.RangesAcc.nil
+| Its value:
 | 
 | ```lean
-| ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.RangesAcc (@List.nil.{0} NoComments.Core.CommandRange) acc acc
+| NoCommentsSpecification.AdequacyCollect.RangesAccWith NoCommentsSpecification.AdequacyCore.fpModel
 | ```
 | 
-| #### NoCommentsSpecification.AdequacyCollect.RangesAcc.cons
+| ### NoCommentsSpecification.AdequacyCollect.RangesAccWith
+| 
+| An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) acc mid acc1 → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid acc1 acc2 → NoCommentsSpecification.AdequacyCollect.RangesAcc rest acc2 acc' → NoCommentsSpecification.AdequacyCollect.RangesAcc (@List.cons.{0} NoComments.Core.CommandRange r rest) acc acc'
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), List.{0} NoComments.Core.CommandRange → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ```
+| 
+| Of the arguments its type takes, the first 1 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| 
+| #### NoCommentsSpecification.AdequacyCollect.RangesAccWith.nil
+| 
+| ```lean
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.RangesAccWith fp (@List.nil.{0} NoComments.Core.CommandRange) acc acc
+| ```
+| 
+| #### NoCommentsSpecification.AdequacyCollect.RangesAccWith.cons
+| 
+| ```lean
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {r : NoComments.Core.CommandRange}, ∀ {rest : List.{0} NoComments.Core.CommandRange}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.prevPos r) (NoComments.Core.CommandRange.nextPos r) → @LE.le.{0} String.Pos.Raw String.instLERaw (NoComments.Core.CommandRange.nextPos r) (Lean.Parser.InputContext.endPos (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp (NoComments.Core.CommandRange.ctx r) (NoComments.Core.CommandRange.nextPos r) (NoComments.Core.CommandRange.stx r) (NoComments.Core.CommandRange.prevPos r) acc mid acc1 → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext (NoComments.Core.CommandRange.ctx r))) (NoComments.Core.CommandRange.nextPos r) mid acc1 acc2 → NoCommentsSpecification.AdequacyCollect.RangesAccWith fp rest acc2 acc' → NoCommentsSpecification.AdequacyCollect.RangesAccWith fp (@List.cons.{0} NoComments.Core.CommandRange r rest) acc acc'
+| ```
+| 
+| ### NoCommentsSpecification.FingerprintFn
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| Type
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| String → String
 | ```
 | 
 | ### NoComments.Core.CommandRange.prevPos
@@ -9688,51 +9999,51 @@ predicate 1088
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.atomOrig
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {val : String}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.identOrig
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {rawVal : Substring.Raw}, ∀ {val : Lean.Name}, ∀ {pre : List.{0} Lean.Syntax.Preresolved}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.doc
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc1) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k args) pos acc stop (NoCommentsSpecification.AdequacyCollect.updateAcc acc1 (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) kind start stop)
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {l1 : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t1 : Substring.Raw}, ∀ {s1 : String.Pos.Raw}, ∀ {l2 : Substring.Raw}, ∀ {s2 : String.Pos.Raw}, ∀ {t2 : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {kind : String}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.true → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getHeadInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l1 start t1 s1)) → @Eq.{1} (Option.{0} Lean.SourceInfo) (Lean.Syntax.getTailInfo? (Lean.Syntax.node info k args)) (@Option.some.{0} Lean.SourceInfo (Lean.SourceInfo.original l2 s2 t2 stop)) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → @Eq.{1} String kind (@ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) (instDecidableEqBool (@BEq.beq.{0} Lean.SyntaxNodeKind Lean.Name.instBEq k (Lean.Name.mkStr4 "Lean" "Parser" "Command" "moduleDoc")) Bool.true) "moddoc" "doc") → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc1) kind (String.Pos.Raw.byteIdx start) (String.Pos.Raw.byteIdx stop)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k args) pos acc stop (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc1 (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) kind start stop)
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.choice
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos first pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop alts acc1 acc2 → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos acc stop acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {first : Lean.Syntax}, ∀ {alts : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos first pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop alts acc1 acc2 → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info Lean.choiceKind (@Array.mk.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax first alts))) pos acc stop acc2
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.singletonAtomNode
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos acc stop acc1
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {atomInfo : Lean.SourceInfo}, ∀ {val : String}, ∀ {l : Substring.Raw}, ∀ {start : String.Pos.Raw}, ∀ {t : Substring.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → @Eq.{1} Lean.SourceInfo atomInfo (Lean.SourceInfo.original l start t stop) → @LE.le.{0} String.Pos.Raw String.instLERaw pos start → @LE.le.{0} String.Pos.Raw String.instLERaw start stop → @LE.le.{0} String.Pos.Raw String.instLERaw stop nextPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp (Lean.Parser.InputContext.fileMap (Lean.Parser.ParserContextCore.toInputContext ctx)) start pos acc acc1 → NoCommentsSpecification.CoreSpec.TokenSafe ctx (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) (Lean.Parser.InputContext.extract (Lean.Parser.ParserContextCore.toInputContext ctx) start stop) (Lean.Parser.InputContext.get (Lean.Parser.ParserContextCore.toInputContext ctx) stop) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom atomInfo val) (@List.nil.{0} Lean.Syntax)))) pos acc stop acc1
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.nodeList
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc' : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (x : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t x) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos acc stop acc' → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos (Lean.Syntax.node info k args) pos acc stop acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {info : Lean.SourceInfo}, ∀ {k : Lean.SyntaxNodeKind}, ∀ {args : Array.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc' : NoComments.Core.CommentAcc}, @Eq.{1} Bool (NoCommentsSpecification.CoreSpec.docKind k) Bool.false → @Ne.{1} Lean.SyntaxNodeKind k Lean.choiceKind → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (x : String.Pos.Raw), ∀ (val : String), @Ne.{1} (Array.{0} Lean.Syntax) args (@List.toArray.{0} Lean.Syntax (@List.cons.{0} Lean.Syntax (Lean.Syntax.atom (Lean.SourceInfo.original l start t x) val) (@List.nil.{0} Lean.Syntax)))) → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@Array.toList.{0} Lean.Syntax args) pos acc stop acc' → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos (Lean.Syntax.node info k args) pos acc stop acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.SyntaxAcc.other
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {s : Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} Lean.Syntax s (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val)) → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (rawVal : Substring.Raw), ∀ (val : Lean.Name), ∀ (pre : List.{0} Lean.Syntax.Preresolved), @Ne.{1} Lean.Syntax s (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre)) → (∀ (info : Lean.SourceInfo), ∀ (k : Lean.SyntaxNodeKind), ∀ (args : Array.{0} Lean.Syntax), @Ne.{1} Lean.Syntax s (Lean.Syntax.node info k args)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos s pos acc pos acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {s : Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (val : String), @Ne.{1} Lean.Syntax s (Lean.Syntax.atom (Lean.SourceInfo.original l start t stop) val)) → (∀ (l : Substring.Raw), ∀ (start : String.Pos.Raw), ∀ (t : Substring.Raw), ∀ (stop : String.Pos.Raw), ∀ (rawVal : Substring.Raw), ∀ (val : Lean.Name), ∀ (pre : List.{0} Lean.Syntax.Preresolved), @Ne.{1} Lean.Syntax s (Lean.Syntax.ident (Lean.SourceInfo.original l start t stop) rawVal val pre)) → (∀ (info : Lean.SourceInfo), ∀ (k : Lean.SyntaxNodeKind), ∀ (args : Array.{0} Lean.Syntax), @Ne.{1} Lean.Syntax s (Lean.Syntax.node info k args)) → NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos s pos acc pos acc
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.AltsAcc
@@ -9740,21 +10051,21 @@ predicate 1088
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), String.Pos.Raw → String.Pos.Raw → List.{0} Lean.Syntax → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.AltsAcc.nil
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop (@List.nil.{0} Lean.Syntax) acc acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop (@List.nil.{0} Lean.Syntax) acc acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.AltsAcc.cons
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos alt pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop rest acc1 acc2 → NoCommentsSpecification.AdequacyCollect.AltsAcc ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) acc acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {stop : String.Pos.Raw}, ∀ {alt : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos alt pos acc stop acc1 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop rest acc1 acc2 → NoCommentsSpecification.AdequacyCollect.AltsAcc fp ctx nextPos pos stop (@List.cons.{0} Lean.Syntax alt rest) acc acc2
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.ListAcc
@@ -9762,21 +10073,21 @@ predicate 1088
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (ctx : Lean.Parser.ParserContextCore), ∀ (nextPos : String.Pos.Raw), List.{0} Lean.Syntax → String.Pos.Raw → NoComments.Core.CommentAcc → String.Pos.Raw → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 5 indices. It is declared in one block of mutually inductive types, NoCommentsSpecification.AdequacyCollect.SyntaxAcc, NoCommentsSpecification.AdequacyCollect.AltsAcc, NoCommentsSpecification.AdequacyCollect.ListAcc, each printed here. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.ListAcc.nil
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@List.nil.{0} Lean.Syntax) pos acc pos acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@List.nil.{0} Lean.Syntax) pos acc pos acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.ListAcc.cons
 | 
 | ```lean
-| ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc ctx nextPos arg pos acc mid acc1 → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos rest mid acc1 stop acc2 → NoCommentsSpecification.AdequacyCollect.ListAcc ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos acc stop acc2
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {ctx : Lean.Parser.ParserContextCore}, ∀ {nextPos : String.Pos.Raw}, ∀ {arg : Lean.Syntax}, ∀ {rest : List.{0} Lean.Syntax}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {mid : String.Pos.Raw}, ∀ {acc1 : NoComments.Core.CommentAcc}, ∀ {stop : String.Pos.Raw}, ∀ {acc2 : NoComments.Core.CommentAcc}, NoCommentsSpecification.AdequacyCollect.SyntaxAcc fp ctx nextPos arg pos acc mid acc1 → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos rest mid acc1 stop acc2 → NoCommentsSpecification.AdequacyCollect.ListAcc fp ctx nextPos (@List.cons.{0} Lean.Syntax arg rest) pos acc stop acc2
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.TriviaAcc
@@ -9784,33 +10095,33 @@ predicate 1088
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (fileMap : Lean.FileMap), ∀ (stopPos : String.Pos.Raw), String.Pos.Raw → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (fileMap : Lean.FileMap), ∀ (stopPos : String.Pos.Raw), String.Pos.Raw → NoComments.Core.CommentAcc → NoComments.Core.CommentAcc → Prop
 | ```
 | 
-| Of the arguments its type takes, the first 2 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
+| Of the arguments its type takes, the first 3 are parameters and the other 3 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.done
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, Not (@LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, Not (@LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.ws
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Bool (Char.isWhitespace (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos)) Bool.true → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) acc acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Bool (Char.isWhitespace (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos)) Bool.true → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) acc acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.line
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {eol : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source fileMap) stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) eol → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "line" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx eol)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos eol (NoCommentsSpecification.AdequacyCollect.updateAcc acc fileMap "line" pos eol) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {eol : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → NoCommentsSpecification.CoreSpec.LineEnd (Lean.FileMap.source fileMap) stopPos (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) eol → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "line" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx eol)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos eol (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc fileMap "line" pos eol) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | #### NoCommentsSpecification.AdequacyCollect.TriviaAcc.block
 | 
 | ```lean
-| ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 47)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 45)) → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 33)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) stopPos → NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source fileMap) stopPos (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) endPos → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "block" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx endPos)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos endPos (NoCommentsSpecification.AdequacyCollect.updateAcc acc fileMap "block" pos endPos) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fileMap stopPos pos acc acc'
+| ∀ {fp : NoCommentsSpecification.FingerprintFn}, ∀ {fileMap : Lean.FileMap}, ∀ {stopPos : String.Pos.Raw}, ∀ {pos : String.Pos.Raw}, ∀ {endPos : String.Pos.Raw}, ∀ {acc : NoComments.Core.CommentAcc}, ∀ {acc' : NoComments.Core.CommentAcc}, @LT.lt.{0} String.Pos.Raw String.instLTRaw pos stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) pos) (Char.ofNat (nat_lit 47)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos) stopPos → @Eq.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) (Char.ofNat (nat_lit 45)) → @LT.lt.{0} String.Pos.Raw String.instLTRaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos)) stopPos → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 45)) → @Ne.{1} Char (String.Pos.Raw.get (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) (Char.ofNat (nat_lit 33)) → @LE.le.{0} String.Pos.Raw String.instLERaw (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) stopPos → NoCommentsSpecification.CoreSpec.BlockStep (Lean.FileMap.source fileMap) stopPos (@OfNat.ofNat.{0} Nat (nat_lit 1) (instOfNatNat (nat_lit 1))) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) (String.Pos.Raw.next (Lean.FileMap.source fileMap) pos))) endPos → Not (NoCommentsSpecification.CoreSpec.SpanConflict (NoCommentsSpecification.CoreSpec.stateOfAcc acc) "block" (String.Pos.Raw.byteIdx pos) (String.Pos.Raw.byteIdx endPos)) → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos endPos (NoCommentsSpecification.AdequacyCollect.updateAcc fp acc fileMap "block" pos endPos) acc' → NoCommentsSpecification.AdequacyCollect.TriviaAcc fp fileMap stopPos pos acc acc'
 | ```
 | 
 | ### NoCommentsSpecification.CoreSpec.LineEnd
@@ -9904,13 +10215,13 @@ predicate 1088
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (acc : NoComments.Core.CommentAcc), ∀ (fileMap : Lean.FileMap), ∀ (kind : String), ∀ (startPos : String.Pos.Raw), ∀ (stopPos : String.Pos.Raw), NoComments.Core.CommentAcc
+| ∀ (fp : NoCommentsSpecification.FingerprintFn), ∀ (acc : NoComments.Core.CommentAcc), ∀ (fileMap : Lean.FileMap), ∀ (kind : String), ∀ (startPos : String.Pos.Raw), ∀ (stopPos : String.Pos.Raw), NoComments.Core.CommentAcc
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (acc : NoComments.Core.CommentAcc) => fun (fileMap : Lean.FileMap) => fun (kind : String) => fun (startPos : String.Pos.Raw) => fun (stopPos : String.Pos.Raw) => NoCommentsSpecification.AdequacyCollect.updateAcc.match_1.{1} (fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => NoComments.Core.CommentAcc) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos)) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => acc) (fun («_» : Unit) => have lastPos : String.Pos.Raw := String.Pos.Raw.prev (Lean.FileMap.source fileMap) stopPos; have comment : NoComments.Core.Comment := NoComments.Core.Comment.mk kind (Lean.Position.line (Lean.FileMap.toPosition fileMap startPos)) (Lean.Position.line (Lean.FileMap.toPosition fileMap lastPos)) NoCommentsSpecification.AdequacyCore.zeroFp; NoComments.Core.CommentAcc.mk (@Std.HashMap.insert.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment (String.Pos.Raw.byteIdx stopPos) comment)))
+| fun (fp : NoCommentsSpecification.FingerprintFn) => fun (acc : NoComments.Core.CommentAcc) => fun (fileMap : Lean.FileMap) => fun (kind : String) => fun (startPos : String.Pos.Raw) => fun (stopPos : String.Pos.Raw) => NoCommentsSpecification.AdequacyCollect.updateAcc.match_1.{1} (fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => NoComments.Core.CommentAcc) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (m : @Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) => fun (a : Nat) => @Membership.mem.{0, 0} Nat (@Std.HashMap.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (@Std.HashMap.instMembership.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) m a) (@Std.HashMap.instGetElem?Mem.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat) (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos)) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => acc) (fun («_» : Unit) => have lastPos : String.Pos.Raw := String.Pos.Raw.prev (Lean.FileMap.source fileMap) stopPos; have comment : NoComments.Core.Comment := NoComments.Core.Comment.mk kind (Lean.Position.line (Lean.FileMap.toPosition fileMap startPos)) (Lean.Position.line (Lean.FileMap.toPosition fileMap lastPos)) (fp (NoCommentsSpecification.CoreSpec.commentText fileMap (String.Pos.Raw.byteIdx startPos) (String.Pos.Raw.byteIdx stopPos))); NoComments.Core.CommentAcc.mk (@Std.HashMap.insert.{0, 0} Nat (Prod.{0, 0} Nat NoComments.Core.Comment) (@instBEqOfDecidableEq.{0} Nat instDecidableEqNat) instHashableNat (NoComments.Core.CommentAcc.spans acc) (String.Pos.Raw.byteIdx startPos) (@Prod.mk.{0, 0} Nat NoComments.Core.Comment (String.Pos.Raw.byteIdx stopPos) comment)))
 | ```
 | 
 | ### NoCommentsSpecification.AdequacyCollect.updateAcc.match_1
@@ -9927,18 +10238,18 @@ predicate 1088
 | fun (motive : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) → Sort u_1) => fun (x : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => fun (h_1 : ∀ (val : Prod.{0, 0} Nat NoComments.Core.Comment), motive (@Option.some.{0} (Prod.{0, 0} Nat NoComments.Core.Comment) val)) => fun (h_2 : ∀ («_» : Unit), motive (@Option.none.{0} (Prod.{0, 0} Nat NoComments.Core.Comment))) => @Option.casesOn.{u_1, 0} (Prod.{0, 0} Nat NoComments.Core.Comment) (fun (x_1 : Option.{0} (Prod.{0, 0} Nat NoComments.Core.Comment)) => motive x_1) x (h_2 Unit.unit) (fun (val : Prod.{0, 0} Nat NoComments.Core.Comment) => h_1 val)
 | ```
 | 
-| ### NoCommentsSpecification.AdequacyCore.zeroFp
+| ### NoCommentsSpecification.CoreSpec.commentText
 | 
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| String
+| ∀ (fileMap : Lean.FileMap), ∀ (sb : Nat), ∀ (eb : Nat), String
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| "0000000000000000"
+| fun (fileMap : Lean.FileMap) => fun (sb : Nat) => fun (eb : Nat) => Substring.Raw.toString (Substring.Raw.mk (Lean.FileMap.source fileMap) (String.Pos.Raw.mk sb) (String.Pos.Raw.mk eb))
 | ```
 | 
 | ### NoCommentsSpecification.CoreSpec.BlockStep
@@ -10285,6 +10596,48 @@ predicate 1088
 | 
 | ```lean
 | ∀ (self : NoComments.Core.CommandRange), Lean.Syntax
+| ```
+| 
+| ### NoCommentsSpecification.AdequacyCore.fpModel
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| NoCommentsSpecification.FingerprintFn
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| fun (s : String) => @ite.{1} String (@Eq.{1} Bool (@BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) s "") Bool.true) (instDecidableEqBool (@BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) s "") Bool.true) NoCommentsSpecification.AdequacyCore.zeroFp NoCommentsSpecification.AdequacyCore.oneFp
+| ```
+| 
+| ### NoCommentsSpecification.AdequacyCore.zeroFp
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| String
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| "0000000000000000"
+| ```
+| 
+| ### NoCommentsSpecification.AdequacyCore.oneFp
+| 
+| A definition. It has no universe parameter. Its type:
+| 
+| ```lean
+| String
+| ```
+| 
+| Its value:
+| 
+| ```lean
+| "1111111111111111"
 | ```
 | 
 | ### LeanIntent.Answer.KeptBy

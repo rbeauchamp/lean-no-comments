@@ -29,6 +29,4 @@ public section
 
 namespace NoCommentsSpecification
 
-def specVersion : String := "0.2.0"
-
 end NoCommentsSpecification

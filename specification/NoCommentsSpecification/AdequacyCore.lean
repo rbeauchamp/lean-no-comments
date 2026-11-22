@@ -365,11 +365,6 @@ def checkTokenOkClause : Clause CheckTokenFn :=
   ⟨"ok_only_when_token_safe",
     fun f => ∀ ctx tok raw next start, f ctx tok raw next start = .ok () → TokenSafe ctx tok raw next⟩
 
-def checkTokenRefClause : Clause CheckTokenFn :=
-  ⟨"refusal_only_when_unsafe",
-    fun f => ∀ ctx tok raw next start msg,
-      f ctx tok raw next start = .error msg → TokenRefusal ctx tok raw next⟩
-
 theorem tokenSafe_dichotomy (ctx : Parser.ParserContextCore) (tok : Syntax) (raw : String) (next : Char) :
     TokenSafe ctx tok raw next ∨ TokenRefusal ctx tok raw next := by
   by_cases hl : literalToken ctx.env tok raw = true
@@ -1232,22 +1227,24 @@ theorem missingFrom_o5 : O5 missingFromRecord MissingFromFreedom := by
 theorem zeroFp_le_oneFp : zeroFp ≤ oneFp :=
   String.toList_le_toList_iff.mp (by decide)
 
+def missingFromUnsortedModel : MissingFromFn :=
+  fun xs ys => (ys.values.toList.foldl (fun acc y => acc.erase y) xs.values.toList).reverse.toArray
+
+theorem missingFromUnsortedModel_meets : missingFromRecord.Meets missingFromUnsortedModel := by
+  refine ⟨(fun _ h => nomatch h), fun p hp => ?_⟩
+  rcases List.mem_cons.mp hp with rfl | hp
+  · intro xs ys a
+    have h1 := missingFromModel_meets.2 _ List.mem_cons_self xs ys a
+    simpa [missingFromUnsortedModel, missingFromModel, List.count_reverse] using h1
+  exact nomatch hp
+
 theorem missingFrom_not_o5_eq : ¬ O5 missingFromRecord .eq := by
-  let m2 : MissingFromFn := fun xs ys =>
-    (ys.values.toList.foldl (fun acc y => acc.erase y) xs.values.toList).reverse.toArray
-  have hm2 : missingFromRecord.Meets m2 := by
-    refine ⟨(fun _ h => nomatch h), fun p hp => ?_⟩
-    rcases List.mem_cons.mp hp with rfl | hp
-    · intro xs ys a
-      have h1 := missingFromModel_meets.2 _ List.mem_cons_self xs ys a
-      simpa [m2, missingFromModel, List.count_reverse] using h1
-    exact nomatch hp
-  refine not_o5_eq missingFromModel_meets hm2 fun heq => ?_
+  refine not_o5_eq missingFromModel_meets missingFromUnsortedModel_meets fun heq => ?_
   let xs : Core.SortedFingerprints :=
     ⟨#[zeroFp, oneFp], List.pairwise_cons.mpr ⟨by simp [zeroFp_le_oneFp], List.pairwise_singleton _ _⟩⟩
   have hdiff := congrFun (congrFun heq xs) Core.SortedFingerprints.empty
   have h1 : (missingFromModel xs Core.SortedFingerprints.empty).toList = [zeroFp, oneFp] := rfl
-  have h2 : (m2 xs Core.SortedFingerprints.empty).toList = [oneFp, zeroFp] := rfl
+  have h2 : (missingFromUnsortedModel xs Core.SortedFingerprints.empty).toList = [oneFp, zeroFp] := rfl
   have := congrArg Array.toList hdiff
   rw [h1, h2] at this
   simp [zeroFp, oneFp] at this

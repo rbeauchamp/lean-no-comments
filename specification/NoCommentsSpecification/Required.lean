@@ -68,8 +68,9 @@ def collectRangesRequired : Required collectRangesDeliverable where
     ⟨collect_reason_classified⟩, ⟨collectRanges_oPair_whole⟩,
     ⟨collectRanges_perInput_pairOf⟩, ⟨collectRanges_perInput_table_attack⟩,
     ⟨collectRanges_interim_const_fails⟩, ⟨diff_collectRanges_plainDocComment⟩,
-    ⟨collectRanges_healthy_entailment⟩, ⟨collectRanges_allows_custom_error⟩,
-    ⟨collectRanges_meets⟩, ⟨collectRanges_fulfilled⟩
+    ⟨collectRanges_healthy_entailment⟩, ⟨collectRanges_exact_scanner⟩,
+    ⟨collectRanges_allows_custom_error⟩, ⟨collectRanges_rangesStep⟩,
+    ⟨collectRanges_new_span_fingerprint⟩, ⟨collectRanges_meets⟩, ⟨collectRanges_fulfilled⟩
   ]
 
 def sourceOrderRequired : Required sourceOrderDeliverable where

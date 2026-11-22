@@ -21,17 +21,7 @@ open NoComments
 open NoCommentsSpecification
 open NoCommentsSpecification.RatchetSpec
 open NoCommentsSpecification.RatchetRecords
-
-private theorem except_bind_ok {ε α β : Type} (a : α) (f : α → Except ε β) :
-    (Except.ok a >>= f) = f a := rfl
-
-private theorem except_bind_err {ε α β : Type} (e : ε) (f : α → Except ε β) :
-    (Except.error e >>= f) = Except.error e := rfl
-
-private theorem except_bind_assoc {α β γ : Type} (a : Except String α)
-    (f : α → Except String β) (g : β → Except String γ) :
-    (a >>= fun x => f x >>= g) = ((a >>= f) >>= g) := by
-  cases a <;> rfl
+open NoCommentsSpecification.Refinement.Config (except_bind_ok except_bind_err except_bind_assoc)
 
 theorem analyzeComments_meets :
     analyzeCommentsRecord.Meets NoComments.RatchetCore.analyzeComments := by
