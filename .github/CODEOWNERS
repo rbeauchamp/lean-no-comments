@@ -1,8 +1,16 @@
-# Claimed pure core, build/ratchet configuration, and GitHub config
+# Claimed pure core, build/toolchain/ratchet contract, governance, and GitHub workflows
 /lakefile.toml @rbeauchamp
 /lake-manifest.json @rbeauchamp
+/lean-toolchain @rbeauchamp
 /NoComments/Core.lean @rbeauchamp
 /NoComments/Config.lean @rbeauchamp
 /NoComments/RatchetCore.lean @rbeauchamp
+/NoComments/TestListing.lean @rbeauchamp
 /.no-comments.json @rbeauchamp
+/.no-mistakes.yaml @rbeauchamp
 /.github/ @rbeauchamp
+/SECURITY.md @rbeauchamp
+/AGENTS.md @rbeauchamp
+/CONTRIBUTING.md @rbeauchamp
+/CODE_OF_CONDUCT.md @rbeauchamp
+/LICENSE @rbeauchamp
