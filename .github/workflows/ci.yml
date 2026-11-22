@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -16,73 +20,71 @@ jobs:
 
     steps:
       - name: Checkout repository with full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Ensure origin/main ref exists for merge-base check
+        shell: bash
         run: |
           if ! git rev-parse --verify --quiet origin/main^{commit}; then
             git fetch --no-tags origin main:refs/remotes/origin/main
           fi
 
-      - name: Install elan and Lean toolchain
-        shell: bash
-        run: |
-          TOOLCHAIN="$(tr -d '[:space:]' < lean-toolchain)"
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain "$TOOLCHAIN"
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-
-      - name: Build NoComments library and no-comments binary
-        run: lake build
-
-      - name: Verify Core purity and logical axioms
+      - name: Install Lean from lean-toolchain with SHA-256 verification
         shell: bash
         run: |
           set -euo pipefail
-          if grep -nE '\b(partial|sorry|sorryAx|axiom|unsafe|implemented_by|extern)\b' NoComments/Core.lean; then
-            echo "Found forbidden keyword in NoComments/Core.lean"
+          V="$(sed 's/^.*:v//' lean-toolchain | tr -d '[:space:]')"
+          [ "$V" = "4.36.0" ] || { echo "unexpected lean-toolchain version '$V'; update checksums" >&2; exit 1; }
+          OS="$(uname -s)"
+          ARCH="$(uname -m)"
+          if [ "$OS" = "Linux" ] && [ "$ARCH" = "x86_64" ]; then
+            PKG="lean-$V-linux"
+            SHA="92a996be487b48e1c2f2985be6b150490475c94d02f5a5e26665a9dab780902a"
+            SUM_CMD=(sha256sum --check)
+          elif [ "$OS" = "Darwin" ] && [ "$ARCH" = "arm64" ]; then
+            PKG="lean-$V-darwin_aarch64"
+            SHA="35ea8a8eba3d014feb16414610454322f6aad7679f8f0d9f09fb63754bb16e39"
+            SUM_CMD=(shasum -a 256 -c)
+          else
+            echo "unsupported runner $OS/$ARCH" >&2
             exit 1
           fi
-          THMS="$(grep -E '^theorem ' NoComments/Core.lean | sed -E 's/^theorem ([^ ({:]+).*/\1/')"
-          AXIOM_OUT="$(
-            {
-              echo "import NoComments.Core"
-              printf '%s\n' "$THMS" | sed 's/^/#print axioms NoComments.Core./'
-            } | lake env lean --stdin
-          )"
-          printf '%s\n' "$AXIOM_OUT"
-          THM_LIST="$THMS" AXIOM_TEXT="$AXIOM_OUT" python3 - <<'PY'
-          import os, re
-          thms = [t.strip() for t in os.environ["THM_LIST"].splitlines() if t.strip()]
-          lines = [l.strip() for l in os.environ["AXIOM_TEXT"].splitlines() if l.strip()]
-          allowed = {"propext", "Classical.choice", "Quot.sound"}
-          seen = {}
-          for line in lines:
-              m = re.match(r"^'NoComments\.Core\.([^']+)' depends on axioms: \[(.*)\]$", line)
-              if m:
-                  name = m.group(1)
-                  axioms = [a.strip() for a in m.group(2).split(",") if a.strip()]
-                  bad = set(axioms) - allowed
-                  if bad:
-                      raise SystemExit(f"Forbidden axioms for {name}: {sorted(bad)}")
-                  seen[name] = axioms
-                  continue
-              m2 = re.match(r"^'NoComments\.Core\.([^']+)' does not depend on any axioms$", line)
-              if m2:
-                  seen[m2.group(1)] = []
-                  continue
-              raise SystemExit(f"Unexpected #print axioms line: {line}")
-          missing = set(thms) - set(seen)
-          if missing:
-              raise SystemExit(f"Missing axiom check for theorems: {sorted(missing)}")
-          print(f"Verified {len(thms)}/{len(thms)} Core theorems strictly within allowlist {sorted(allowed)}")
-          PY
+          curl -sSfL -o "$RUNNER_TEMP/lean.zip" "https://github.com/leanprover/lean4/releases/download/v$V/$PKG.zip"
+          printf '%s  %s\n' "$SHA" "$RUNNER_TEMP/lean.zip" | "${SUM_CMD[@]}"
+          unzip -q "$RUNNER_TEMP/lean.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$PKG/bin" >> "$GITHUB_PATH"
+
+      - name: Build NoCommentsCore, run Regula lint, and build no-comments
+        shell: bash
+        run: |
+          set -euo pipefail
+          lake build --wfail
+          lake lint
+          lake build no-comments
 
       - name: Verify zero Lean comments via self-check
+        shell: bash
         run: |
+          set -euo pipefail
           ./.lake/build/bin/no-comments --version
           INV_OUT="$(./.lake/build/bin/no-comments inventory)"
           echo "$INV_OUT"
           ./.lake/build/bin/no-comments check
           echo "$INV_OUT" | grep -q "0 comment(s), 0 line(s)"
+
+      - name: Verify zero forbidden test artifacts via TestListing
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIBDIR="$(lean --print-libdir)"
+          LIB="$LIBDIR/libLake_shared.dylib"
+          [ -e "$LIB" ] || LIB="$LIBDIR/libLake_shared.so"
+          [ -e "$LIB" ] || { echo "missing libLake_shared under $LIBDIR" >&2; exit 1; }
+          OUT="$(lake env lean --load-dynlib="$LIB" --run NoComments/TestListing.lean --check)"
+          if [ -n "$OUT" ]; then
+            printf '%s\n' "$OUT"
+            exit 1
+          fi

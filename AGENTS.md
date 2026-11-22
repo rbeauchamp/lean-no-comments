@@ -18,16 +18,13 @@ Run these checks locally before committing or opening a PR:
 
 ```sh
 lake build --wfail
+lake lint
 lake build no-comments
 ./.lake/build/bin/no-comments inventory
 ./.lake/build/bin/no-comments check
-lake env lean --load-dynlib=libLake_shared.dylib --run NoComments/TestListing.lean --check
-```
-
-When a Regula `lintDriver` is configured on `lakefile.toml`, also run:
-
-```sh
-lake lint
+libdir="$(lean --print-libdir)"
+lib="$libdir/libLake_shared.dylib"; [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
+lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean --check
 ```
 
 ## Repository Policy

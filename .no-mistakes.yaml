@@ -2,7 +2,7 @@
 # Effective once merged to main; governs subsequent validation runs on the default branch.
 #
 # Memory bounds: measured on macOS arm64 with /usr/bin/time -l on 2026-11-21:
-# - `lake env lean --load-dynlib=libLake_shared.dylib --run NoComments/TestListing.lean`
+# - `lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean`
 #   peaked at 2.42 GiB resident (2,601,025,536 B in 1.74 s real).
 # - `./.lake/build/bin/no-comments check` peaked at 1.33 GiB resident (1,429,356,544 B in 3.91 s real).
 # `heavy_steps.test.memory` reserves 8GiB for the full build, `lake lint`, self-check, and listing.
@@ -16,7 +16,11 @@ commands:
     lake lint
     lake build no-comments
     ./.lake/build/bin/no-comments check
-    lake env lean --load-dynlib=libLake_shared.dylib --run NoComments/TestListing.lean --check
+    libdir="$(lean --print-libdir)"
+    lib="$libdir/libLake_shared.dylib"
+    [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
+    [ -e "$lib" ] || { echo "missing libLake_shared under $libdir" >&2; exit 1; }
+    lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean --check
 
 heavy_steps:
   test:
@@ -39,7 +43,13 @@ test:
        `lake build --wfail`, or for documentation/policy/CI metadata changes (`no-surface`).
   tests_as_evidence:
     policy: forbid
-    list_command: no-mistakes admit --memory 3GiB --limit "none; measured peak 2.42 GiB resident" -- lake env lean --load-dynlib=libLake_shared.dylib --run NoComments/TestListing.lean
+    list_command: |
+      set -eu
+      libdir="$(lean --print-libdir)"
+      lib="$libdir/libLake_shared.dylib"
+      [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
+      [ -e "$lib" ] || { echo "missing libLake_shared under $libdir" >&2; exit 1; }
+      no-mistakes admit --memory 3GiB --limit "none; measured peak 2.42 GiB resident" -- lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean
 
 pr:
   template: .github/pull_request_template.md

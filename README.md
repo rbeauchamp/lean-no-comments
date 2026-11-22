@@ -10,7 +10,7 @@ Comments in Lean 4 codebases tend to drift into three failure modes: restating w
 
 ## Trusted Computing Base (TCB)
 
-Every check separates a **pure proved core** (`NoComments.Core`, zero `IO`, zero `Lake`, zero `partial`, zero `sorry`) from the **CLI and elaboration harness**:
+Every check separates a **pure proved core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, verified under `regula` `standard-logical`) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`):
 
 ### Formally Verified in `NoComments.Core` (Standard Logical Axioms Only)
 
@@ -101,7 +101,7 @@ no-comments [--version | --help]
      ```bash
      no-comments check --bootstrap --base-ref origin/main
      ```
-   - Ensure GitHub Actions uses `actions/checkout@v4` with `fetch-depth: 0` so `git merge-base HEAD origin/main` succeeds.
+   - Ensure GitHub Actions uses `actions/checkout` with `fetch-depth: 0` so `git merge-base HEAD origin/main` succeeds.
 2. **PR 2+ (Strict Ratchet Enforcement & Drain-Down):**
    - Drop `--bootstrap` in CI so missing ratchets at merge-base always fail closed.
    - Whenever deleting or migrating comments using [`/delete-comment`](skills/delete-comment/SKILL.md), regenerate the ratchet (`no-comments inventory --json > <ratchet>`) and verify `no-comments check` passes before pushing.
@@ -133,7 +133,9 @@ Requires Lean matching `lean-toolchain` (`leanprover/lean4:v4.36.0`):
 ```bash
 git clone https://github.com/rbeauchamp/lean-no-comments.git
 cd lean-no-comments
-lake build
+lake build --wfail
+lake lint
+lake build no-comments
 ./.lake/build/bin/no-comments check
 ```
 

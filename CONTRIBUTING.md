@@ -14,14 +14,17 @@ Report potential soundness defects, uncounted comments, coverage gaps, or ratche
 
 ## Local Verification
 
-Run these commands cleanly before opening a pull request (also run `lake lint` when a Regula `lintDriver` is configured on `lakefile.toml`):
+Run these commands cleanly before opening a pull request:
 
 ```sh
 lake build --wfail
+lake lint
 lake build no-comments
 ./.lake/build/bin/no-comments inventory
 ./.lake/build/bin/no-comments check
-lake env lean --load-dynlib=libLake_shared.dylib --run NoComments/TestListing.lean --check
+libdir="$(lean --print-libdir)"
+lib="$libdir/libLake_shared.dylib"; [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
+lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean --check
 ```
 
 ## Pull Requests & Commits
