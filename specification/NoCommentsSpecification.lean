@@ -15,6 +15,9 @@ public import NoCommentsSpecification.AdequacyConfig
 public import NoCommentsSpecification.AdequacyRatchet
 public import NoCommentsSpecification.BlindSecondModel
 public import NoCommentsSpecification.Comparison
+public import NoCommentsSpecification.Refinement.Core
+public import NoCommentsSpecification.Refinement.Config
+public import NoCommentsSpecification.Refinement.Ratchet
 
 public section
 

@@ -15,7 +15,7 @@ open NoCommentsSpecification
 def ValidRatchetEntryJson (j : Json) (e : RatchetCore.RatchetEntry) : Prop :=
   ∃ obj fileRaw fpsJson,
     j = Json.obj obj ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["file", "comments", "lines", "fingerprints"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["file", "comments", "lines", "fingerprints"]) ∧
     obj.get? "file" = some (Json.str fileRaw) ∧
     ConfigSpec.NormRelFile fileRaw e.file ∧
     obj.get? "comments" = some (.num ⟨e.comments, 0⟩) ∧

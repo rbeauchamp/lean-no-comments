@@ -71,7 +71,7 @@ def ValidPrefixArray (j : Json) (out : Array String) : Prop :=
 def ValidWorkspaceJson (j : Json) (ws : Config.WorkspaceConfig) : Prop :=
   ∃ obj dirRaw,
     j = Json.obj obj ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["dir", "srcDir", "lakeArgs", "toolPrefixes", "excludePrefixes"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["dir", "srcDir", "lakeArgs", "toolPrefixes", "excludePrefixes"]) ∧
     obj.get? "dir" = some (Json.str dirRaw) ∧
     NormRelDir dirRaw ws.dir ∧
     (match obj.get? "srcDir" with
@@ -90,7 +90,7 @@ def ValidWorkspaceJson (j : Json) (ws : Config.WorkspaceConfig) : Prop :=
 def ValidExcludeJson (j : Json) (r : Config.ExcludeRule) : Prop :=
   ∃ obj pfxRaw reasonRaw,
     j = Json.obj obj ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["prefix", "reason"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["prefix", "reason"]) ∧
     obj.get? "prefix" = some (Json.str pfxRaw) ∧
     NormPrefix pfxRaw r.prefix_ ∧
     obj.get? "reason" = some (Json.str reasonRaw) ∧
@@ -100,7 +100,7 @@ def ValidExcludeJson (j : Json) (r : Config.ExcludeRule) : Prop :=
 def ValidConfigJson (text : String) (cfg : Config.RepoConfig) : Prop :=
   ∃ obj wsArr ratchetRaw,
     Json.parse text = .ok (Json.obj obj) ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["workspaces", "exclude", "ratchet"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"]) ∧
     obj.get? "workspaces" = some (Json.arr wsArr) ∧
     wsArr.size > 0 ∧
     cfg.workspaces.size = wsArr.size ∧
@@ -122,7 +122,7 @@ inductive ConfigRefusal (text : String) : Prop where
   | notObject {j} : Json.parse text = .ok j → (∀ obj, j ≠ Json.obj obj) → ConfigRefusal text
   | unknownRootKey {obj k v} :
       Json.parse text = .ok (Json.obj obj) →
-      obj.get? k = some v →
+      (k, v) ∈ obj.toList →
       k ∉ ["workspaces", "exclude", "ratchet"] →
       ConfigRefusal text
   | badWorkspacesField {obj} :

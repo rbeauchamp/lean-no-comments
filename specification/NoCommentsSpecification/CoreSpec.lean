@@ -18,7 +18,7 @@ def IsFingerprint (s : String) : Prop :=
 
 def parseWith {α : Type} (env : Environment) (p : Parser.ParserFn) (input : String)
     (k : Syntax → Option α) : Option α :=
-  let s := p.run (Parser.mkInputContext input "<token>") { env := env, options := ∅ } ∅
+  let s := p.run (Parser.InputContext.mk input "<token>") { env := env, options := ∅ } ∅
     (Parser.mkParserState input)
   if !s.hasError && s.stackSize == 1 then
     k s.stxStack.back

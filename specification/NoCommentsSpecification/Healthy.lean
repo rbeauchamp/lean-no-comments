@@ -12,7 +12,7 @@ open NoComments
 
 def parseWith {α : Type} (env : Environment) (p : Parser.ParserFn) (input : String)
     (k : Syntax → Option α) : Option α :=
-  let s := p.run (Parser.mkInputContext input "<token>") { env := env, options := ∅ } ∅
+  let s := p.run (Parser.InputContext.mk input "<token>") { env := env, options := ∅ } ∅
     (Parser.mkParserState input)
   if !s.hasError && s.stackSize == 1 then
     k s.stxStack.back
@@ -306,7 +306,7 @@ def validPrefixList (j : Json) : Prop :=
 
 def ValidWorkspaceJson (j : Json) (dirOut : String) : Prop :=
   ∃ obj, j = Json.obj obj ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["dir", "srcDir", "lakeArgs", "toolPrefixes", "excludePrefixes"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["dir", "srcDir", "lakeArgs", "toolPrefixes", "excludePrefixes"]) ∧
     (∃ dirRaw, obj.get? "dir" = some (Json.str dirRaw) ∧ ValidRelDir dirRaw dirOut) ∧
     (match obj.get? "srcDir" with
       | some v => ∃ s out, v = Json.str s ∧ ValidRelDir s out
@@ -323,14 +323,14 @@ def ValidWorkspaceJson (j : Json) (dirOut : String) : Prop :=
 
 def ValidExcludeJson (j : Json) : Prop :=
   ∃ obj, j = Json.obj obj ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["prefix", "reason"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["prefix", "reason"]) ∧
     (∃ pfxRaw pfxOut, obj.get? "prefix" = some (Json.str pfxRaw) ∧ ValidPrefix pfxRaw pfxOut) ∧
     (∃ reasonRaw, obj.get? "reason" = some (Json.str reasonRaw) ∧ reasonRaw.trimAscii.toString ≠ "")
 
 def ConfigText (text : String) : Prop :=
   ∃ obj wsArr, ∃ dirs : List String, ∃ ratchetRaw ratchetOut,
     Json.parse text = .ok (Json.obj obj) ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["workspaces", "exclude", "ratchet"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"]) ∧
     obj.get? "workspaces" = some (Json.arr wsArr) ∧
     wsArr.size > 0 ∧
     dirs.length = wsArr.size ∧
@@ -375,7 +375,7 @@ def isFingerprintStr (s : String) : Prop :=
 def ValidRatchetEntryJson (j : Json) (fileOut : String) : Prop :=
   ∃ obj fileRaw comments lines fpsJson, ∃ fpsStrs : List String,
     j = Json.obj obj ∧
-    (∀ k _v, obj.get? k = some _v → k ∈ ["file", "comments", "lines", "fingerprints"]) ∧
+    (∀ kv ∈ obj.toList, kv.1 ∈ ["file", "comments", "lines", "fingerprints"]) ∧
     obj.get? "file" = some (Json.str fileRaw) ∧
     ValidRelFile fileRaw fileOut ∧
     obj.get? "comments" = some (.num ⟨comments, 0⟩) ∧

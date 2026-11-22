@@ -166,7 +166,7 @@ theorem validConfigJson_total (text : String) :
   | ok j =>
     cases j with
     | obj obj =>
-      by_cases hkeys : ∀ k v, obj.get? k = some v → k ∈ ["workspaces", "exclude", "ratchet"]
+      by_cases hkeys : ∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"]
       · by_cases hwsf : ∃ wsArr, obj.get? "workspaces" = some (Json.arr wsArr) ∧ wsArr.size > 0
         · rcases hwsf with ⟨wsArr, hwsEq, hwsPos⟩
           by_cases hwsElts : ∀ (i : Nat) (_ : i < wsArr.size), ∃ ws, ValidWorkspaceJson wsArr[i] ws
@@ -233,13 +233,12 @@ theorem validConfigJson_total (text : String) :
             exact .inr (.invalidWorkspace hi hp hwsEq hnw)
         · refine .inr (.badWorkspacesField hp fun wsArr hget => Classical.byContradiction fun hnz => ?_)
           exact hwsf ⟨wsArr, hget, Nat.pos_of_ne_zero hnz⟩
-      · have hbad : ∃ k v, obj.get? k = some v ∧ k ∉ ["workspaces", "exclude", "ratchet"] := by
-          obtain ⟨k, hnk⟩ := Classical.not_forall.mp hkeys
-          obtain ⟨v, hnv⟩ := Classical.not_forall.mp hnk
-          have ⟨hg, hk⟩ := Classical.not_imp.mp hnv
-          exact ⟨k, v, hg, hk⟩
-        obtain ⟨k, v, hg, hk⟩ := hbad
-        exact .inr (.unknownRootKey hp hg hk)
+      · have hbad : ∃ kv ∈ obj.toList, kv.1 ∉ ["workspaces", "exclude", "ratchet"] := by
+          obtain ⟨⟨k, v⟩, hnk⟩ := Classical.not_forall.mp hkeys
+          have ⟨hm, hk⟩ := Classical.not_imp.mp hnk
+          exact ⟨(k, v), hm, hk⟩
+        obtain ⟨⟨k, v⟩, hmem, hk⟩ := hbad
+        exact .inr (.unknownRootKey hp hmem hk)
     | _ => exact .inr (.notObject hp fun _ h => by cases h)
 
 theorem validConfigJson_and_refusal_disjoint {text : String} {cfg : Config.RepoConfig}
@@ -251,7 +250,7 @@ theorem validConfigJson_and_refusal_disjoint {text : String} {cfg : Config.RepoC
   | notObject hp2 hno => rw [hp] at hp2; cases hp2; exact hno obj rfl
   | unknownRootKey hp2 hget hnin =>
     rw [hp] at hp2; cases hp2
-    exact hnin (hkeys _ _ hget)
+    exact hnin (hkeys _ hget)
   | badWorkspacesField hp2 hbad =>
     rw [hp] at hp2; cases hp2
     have := hbad wsArr hwsEq
