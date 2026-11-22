@@ -248,7 +248,7 @@ theorem analyzeComments_equiv_of_pos (file : String) (comments : Array Core.Comm
     refine ⟨hf, hc, (distinctLines_equiv_of_pos comments hpos a.lines).mpr hlc,
       fun s => by simpa using hsc s⟩
 
-private theorem exactSync_equiv (a : RatchetCore.FileAnalysis)
+theorem exactSync_equiv (a : RatchetCore.FileAnalysis)
     (e : Option RatchetCore.RatchetEntry) :
     RatchetSpec.ExactSyncOk a e ↔ BlindSecondModel.ExactSync a e := by
   cases e with
@@ -259,7 +259,7 @@ private theorem exactSync_equiv (a : RatchetCore.FileAnalysis)
     exact ⟨fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩,
       fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩⟩
 
-private theorem monotonic_equiv (fps : Core.SortedFingerprints) (ls : Nat)
+theorem monotonic_equiv (fps : Core.SortedFingerprints) (ls : Nat)
     (be : Option RatchetCore.RatchetEntry) :
     RatchetSpec.MonotonicOk fps ls be ↔ BlindSecondModel.Monotonic fps ls be := by
   cases be <;> simp [RatchetSpec.MonotonicOk, BlindSecondModel.Monotonic, and_comm]

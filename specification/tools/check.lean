@@ -97,6 +97,10 @@ private def delegatedRecordNames : List String :=
   , "NoCommentsSpecification.RatchetRecords.checkMonotonicFileRecord"
   , "NoCommentsSpecification.RatchetRecords.validateCheckRecord" ]
 
+private def sameRecordSet (expected actual : List String) : Bool :=
+  actual.length == expected.length &&
+    actual.all expected.contains && expected.all actual.contains
+
 private def checkDelegationBoundary (confirmed : Confirmation.Report) : MetaM Unit := do
   let ownerId : LeanIntent.Ident := NoCommentsSpecification.Explanations.ownerId
   let agentId : LeanIntent.Ident := NoCommentsSpecification.Explanations.agentId
@@ -123,8 +127,11 @@ private def checkDelegationBoundary (confirmed : Confirmation.Report) : MetaM Un
     let some stmt := Statement.parse t
       | throwError "unparseable statement in OwnersLog"
     if let .delegation del := stmt.body then
+      let recordsOk := match del.scope.records with
+        | .only rs => sameRecordSet delegatedRecordNames rs
+        | _ => false
       unless del.delegator == ⟨ownerId, none⟩ && del.delegate.name == agentId &&
-          del.scope.records == .only delegatedRecordNames &&
+          recordsOk &&
           del.scope.confirm && !del.scope.decline && !del.scope.retract &&
           !del.mayPassOn do
         throwError "delegation {stmt.id.toString} exceeds confirmed below-owner-level grant"
@@ -341,7 +348,7 @@ private def checkRequiredMembership (built : Array Name)
   unless expectedDelivs.Nodup do
     throwError "duplicate deliverable in expectedRequired"
   let builtDelivs ← Confirmation.Read.declaredIn built ``LeanIntent.Deliverable
-  unless builtDelivs.toList == (expectedDelivs.toArray.qsort Name.lt).toList do
+  unless (builtDelivs.qsort Name.lt).toList == (expectedDelivs.toArray.qsort Name.lt).toList do
     throwError "built deliverables mismatch expectedRequired deliverables"
   for (r, _) in actual do
     unless expectedEntries.contains r do
@@ -365,6 +372,8 @@ private def checkRequiredMembership (built : Array Name)
     unless foundThms.length == expectedThms.length do
       throwError "required theorem count mismatch under {reqName}: expected {expectedThms.length}, got {foundThms.length}"
 
+private def expectedAxiomTargets : Nat := 1279
+
 private def specCheckTargets (env : Environment) : List Name :=
   env.constants.fold (init := []) fun acc n ci =>
     let s := n.toString
@@ -374,14 +383,33 @@ private def specCheckTargets (env : Environment) : List Name :=
       | _ => acc
     else acc
 
-private def checkAxioms : CoreM Nat := do
+private def checkConstantAxioms (n : Name) : CoreM Unit := do
+  let axioms ← collectAxioms n
+  for ax in axioms do
+    unless allowedAxioms.contains ax do
+      throwError "disallowed axiom {ax} used by {n}"
+
+private def checkAxioms (built : Array Name) : CoreM Nat := do
   let env ← getEnv
   let targets := specCheckTargets env
+  unless targets.length == expectedAxiomTargets do
+    throwError "axiom target count mismatch: expected {expectedAxiomTargets}, got {targets.length}"
   for n in targets do
-    let axioms ← collectAxioms n
-    for ax in axioms do
-      unless allowedAxioms.contains ax do
-        throwError "disallowed axiom {ax} used by {n}"
+    checkConstantAxioms n
+  for modName in built do
+    let some modIdx := env.getModuleIdx? modName
+      | throwError "built specification module {modName} is not imported in environment"
+    let some modData := env.header.moduleData[modIdx.toNat]?
+      | throwError "missing moduleData for {modName}"
+    for ci in modData.constants do
+      match ci with
+      | .defnInfo _ | .thmInfo _ =>
+        checkConstantAxioms ci.name
+      | .axiomInfo _ =>
+        throwError "disallowed axiom declaration {ci.name} in {modName}"
+      | .opaqueInfo _ =>
+        throwError "disallowed opaque declaration {ci.name} in {modName}"
+      | _ => pure ()
   pure targets.length
 
 private def hasCodeAuditTarget (ci : ConstantInfo) : Bool :=
@@ -467,7 +495,7 @@ public unsafe def main : IO Unit := do
       throwError "execution count mismatch: expected {recordNames.length}, got {executed.reached.length}"
     unless executed.reached.all (fun (_, exe, _) => exe == `«no-comments») do
       throwError "unexpected executable in execution report: {repr executed.reached}"
-    let axCount ← checkAxioms
+    let axCount ← checkAxioms built
     pure (impl.length, auditTargets.length, axCount, confirmed.counted.length,
       implemented.implementations.length, required.theorems.length, executed.reached.length)
     : Meta.MetaM (Nat × Nat × Nat × Nat × Nat × Nat × Nat))).toIO ctx { env := env }
