@@ -25,7 +25,7 @@ Every theorem in `NoComments/Core.lean` and `specification/NoCommentsSpecificati
 ### Unproved Harness TCB (`NoCommentsCLI` and External Boundaries)
 
 - Unproved `NoCommentsCLI` and binary modules (`NoComments.ConfigIO`, `NoComments.Ratchet`, `NoComments.Runner`, `NoComments.LakeEnv`, `NoComments.Worker`, `NoComments.TestListing`, and `NoComments.Main`): filesystem reads/writes, subprocess execution, CLI flag parsing, multi-worker IPC, and `lakefile.toml` / workspace discovery.
-- Lean `v4.36.0` runtime, dynamic library loader (`Lean.loadDynlib`), opaque `Lean.Json.parse` / `Json.Parser.anyCore`, `Lean.Parser.parseHeader`, `Elab.processHeaderCore`, `Elab.Frontend.processCommand`, and `Parser.runParserCategory` / `Parser.tokenFn` / `Parser.symbolFn`.
+- Lean `v4.36.0` runtime, dynamic library loader (`Lean.loadDynlib`), opaque `Lean.Json.parse` / `Json.Parser.anyCore`, `Lean.Parser.parseHeader`, `Elab.processHeaderCore`, `Elab.Frontend.processCommand`, and `Parser.parseCommand` / `Parser.tokenFn` / `Parser.interpolatedStrFn` / `Parser.symbolFn`.
 - `Lake` workspace/environment evaluation (`lake env`, `Lake.loadWorkspace`, `lake setup-file --no-build`) and toolchain version checks (`lean --version` version + commit hash).
 - Git invocation (`git ls-files --full-name -z -- '*.lean'`, `git merge-base`, `git ls-tree`, `git show`) and operating-system filesystem behavior.
 
