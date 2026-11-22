@@ -1,12 +1,10 @@
-# Claimed pure core, build/toolchain/ratchet contract, governance, and GitHub workflows
+# Pure core and runtime TCB modules, build/toolchain/ratchet contract, governance, and GitHub workflows
 /lakefile.toml @rbeauchamp
 /lake-manifest.json @rbeauchamp
 /lean-toolchain @rbeauchamp
-/NoComments/Core.lean @rbeauchamp
-/NoComments/Config.lean @rbeauchamp
-/NoComments/RatchetCore.lean @rbeauchamp
-/NoComments/TestListing.lean @rbeauchamp
+/NoComments/ @rbeauchamp
 /.no-comments.json @rbeauchamp
+/comment-ratchet.json @rbeauchamp
 /.no-mistakes.yaml @rbeauchamp
 /.github/ @rbeauchamp
 /SECURITY.md @rbeauchamp

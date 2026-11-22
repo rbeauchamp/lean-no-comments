@@ -28,6 +28,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify checkout matches tagged commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [ "${GITHUB_REF_TYPE:-}" != "tag" ] || [ -z "${GITHUB_SHA:-}" ] || [ "$HEAD_SHA" != "${GITHUB_SHA}" ]; then
+            echo "Expected tag checkout at ${GITHUB_SHA:-<unset>}, got ref_type=${GITHUB_REF_TYPE:-<unset>} HEAD=${HEAD_SHA}" >&2
+            exit 1
+          fi
+
       - name: Verify runner architecture matches target
         shell: bash
         run: |
@@ -144,15 +154,33 @@ jobs:
           sha256sum -c no-comments-linux-x86_64.sha256
           sha256sum -c no-comments-darwin-arm64.sha256
 
-      - name: Create or update GitHub Release
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "$TAG" release-assets/* --repo "${GITHUB_REPOSITORY}" --clobber
-          else
-            gh release create "$TAG" release-assets/* --repo "${GITHUB_REPOSITORY}" --title "$TAG" --generate-notes
+          TAG="${GITHUB_REF_NAME:-}"
+          if [ "${GITHUB_REF_TYPE:-}" != "tag" ] || [ -z "$TAG" ] || [ -z "${GITHUB_SHA:-}" ]; then
+            echo "Expected tag push with GITHUB_REF_NAME and GITHUB_SHA set" >&2
+            exit 1
           fi
+          ENCODED_TAG="$(jq -rn --arg tag "$TAG" '$tag | split("/") | map(@uri) | join("/")')"
+          REF_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${ENCODED_TAG}")"
+          REF_NAME="$(printf '%s' "$REF_JSON" | jq -r '.ref')"
+          OBJ_TYPE="$(printf '%s' "$REF_JSON" | jq -r '.object.type')"
+          OBJ_SHA="$(printf '%s' "$REF_JSON" | jq -r '.object.sha')"
+          if [ "$REF_NAME" != "refs/tags/${TAG}" ]; then
+            echo "Expected ref refs/tags/${TAG}, got ${REF_NAME}" >&2
+            exit 1
+          fi
+          while [ "$OBJ_TYPE" = "tag" ]; do
+            TAG_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${OBJ_SHA}")"
+            OBJ_TYPE="$(printf '%s' "$TAG_JSON" | jq -r '.object.type')"
+            OBJ_SHA="$(printf '%s' "$TAG_JSON" | jq -r '.object.sha')"
+          done
+          if [ "$OBJ_TYPE" != "commit" ] || [ "$OBJ_SHA" != "${GITHUB_SHA}" ]; then
+            echo "Remote tag '${TAG}' resolves to ${OBJ_TYPE}:${OBJ_SHA}, expected commit:${GITHUB_SHA}" >&2
+            exit 1
+          fi
+          gh release create "$TAG" release-assets/* --repo "${GITHUB_REPOSITORY}" --title "$TAG" --generate-notes --verify-tag

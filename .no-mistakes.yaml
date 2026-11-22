@@ -35,10 +35,11 @@ test:
     (`NoComments/Core.lean`, `NoComments/Config.lean`, `NoComments/RatchetCore.lean`) plus `lake lint`
     and self-enforcement via `./.lake/build/bin/no-comments check`.
     Decide each claim by what it alters:
-    1. Drive `./.lake/build/bin/no-comments` directly on a temporary Git checkout outside this tree (and remove
-       the temporary checkout afterward) when a change alters CLI flag parsing, git/ratchet resolution, Lake
-       workspace setup, or multi-process worker behavior in `NoCommentsCLI` / `NoComments/Main.lean` that is
-       not proved by theorems in `NoCommentsCore`. Report exit code and observed output cleanly.
+    1. Drive `./.lake/build/bin/no-comments` directly on a temporary Git checkout under an ignored task-owned
+       directory inside the worktree such as `build/` (and remove the temporary checkout afterward) when a
+       change alters CLI flag parsing, git/ratchet resolution, Lake workspace setup, or multi-process worker
+       behavior in `NoCommentsCLI` / `NoComments/Main.lean` that is not proved by theorems in `NoCommentsCore`.
+       Report exit code and observed output cleanly.
     2. Do not invent live test runs for pure proof changes inside `NoCommentsCore` covered by kernel proofs and
        `lake build --wfail`, or for documentation/policy/CI metadata changes (`no-surface`).
   tests_as_evidence:
