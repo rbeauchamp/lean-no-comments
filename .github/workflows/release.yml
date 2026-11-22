@@ -69,6 +69,7 @@ jobs:
           lake build --wfail
           lake lint
           lake build no-comments
+          (cd specification && lake build --wfail)
 
       - name: Run self-check and TestListing verification
         shell: bash

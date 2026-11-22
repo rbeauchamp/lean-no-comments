@@ -18,8 +18,9 @@ Run these checks locally before committing or opening a PR:
 
 ```sh
 lake build --wfail
-lake lint
+env -u REGULA_FULL lake lint
 lake build no-comments
+(cd specification && lake build --wfail && env -u REGULA_FULL lake lint && lake build spec-check --wfail && lake exe spec-check)
 ./.lake/build/bin/no-comments inventory
 ./.lake/build/bin/no-comments check
 libdir="$(lean --print-libdir)"
@@ -29,7 +30,7 @@ lake env lean -DwarningAsError=true --load-dynlib="$lib" --run NoComments/TestLi
 
 ## Repository Policy
 
-- **Zero Lean comments:** `comment-ratchet.json` is `[]` (ratchet floor is `0` comments and `0` comment lines across all tracked `.lean` files). Never introduce `--`, `/- ... -/`, `/-- ... -/`, or `/-! ... -/` comments anywhere in `.lean` files. Verify with `./.lake/build/bin/no-comments inventory` (`0/10 files with comments, 0 comment(s), 0 line(s)`) and `./.lake/build/bin/no-comments check`.
+- **Zero Lean comments:** `comment-ratchet.json` is `[]` (ratchet floor is `0` comments and `0` comment lines across all tracked `.lean` files). Never introduce `--`, `/- ... -/`, `/-- ... -/`, or `/-! ... -/` comments anywhere in `.lean` files. Verify with `./.lake/build/bin/no-comments inventory` (`0/38 files with comments, 0 comment(s), 0 line(s)`) and `./.lake/build/bin/no-comments check`.
 - **Strict purity in `NoCommentsCore`:** Every module in `NoCommentsCore` must start with `module`, use zero `sorry`, custom axioms, `unsafe`, `partial`, `while`/`repeat`, `partial_fixpoint`, `@[implemented_by]`, `@[extern]`, `@[csimp]`, or `!`-panicking operations (`[i]!`, `get!`, `panic!`), and build cleanly with `warningAsError = true`.
-- **Tests forbidden as evidence (`tests_as_evidence: forbid`):** Add zero test files, test targets, unit/scenario suites, or scratch `#check`/`#print` test harnesses. Verification rests strictly on kernel-checked Lean proofs in `NoComments.Core` and clean execution of the built checks above (including `NoComments/TestListing.lean`).
+- **Tests forbidden as evidence (`tests_as_evidence: forbid`):** Add zero test files, test targets, unit/scenario suites, or scratch `#check`/`#print` test harnesses. Verification rests strictly on kernel-checked Lean proofs in `NoComments.Core` and `specification/` (`NoCommentsSpecification`) together with clean execution of the built checks above (including `NoComments/TestListing.lean`).
 - **Public & commit hygiene:** Include zero AI co-author lines in commits or PR descriptions, use Conventional Commits, keep Markdown and GitHub issue/PR paragraphs and list items single-line (no hard line wraps), and never mention private repositories, internal tools, internal coordination details, or local filesystem paths.

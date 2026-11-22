@@ -40,8 +40,18 @@ jobs:
         run: |
           set -euo pipefail
           lake build --wfail
-          lake lint
+          env -u REGULA_FULL lake lint
           lake build no-comments
+
+      - name: Build and verify isolated specification sub-package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd specification
+          lake build --wfail
+          env -u REGULA_FULL lake lint
+          lake build spec-check --wfail
+          lake exe spec-check
 
       - name: Verify zero Lean comments via self-check
         shell: bash

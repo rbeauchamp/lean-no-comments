@@ -1,0 +1,32 @@
+module
+
+public import LeanIntent.Record
+public import NoCommentsSpecification.Types
+public import NoCommentsSpecification.Healthy
+public import NoCommentsSpecification.CoreSpec
+public import NoCommentsSpecification.CoreRecords
+public import NoCommentsSpecification.ConfigSpec
+public import NoCommentsSpecification.ConfigRecords
+public import NoCommentsSpecification.RatchetSpec
+public import NoCommentsSpecification.RatchetRecords
+public import NoCommentsSpecification.AdequacyCore
+public import NoCommentsSpecification.AdequacyCollect
+public import NoCommentsSpecification.AdequacyConfig
+public import NoCommentsSpecification.AdequacyRatchet
+public import NoCommentsSpecification.BlindSecondModel
+public import NoCommentsSpecification.Comparison
+public import NoCommentsSpecification.Refinement.Core
+public import NoCommentsSpecification.Refinement.Config
+public import NoCommentsSpecification.Refinement.Ratchet
+public import NoCommentsSpecification.Explanations
+public import NoCommentsSpecification.Deliverables
+public import NoCommentsSpecification.OwnersLog
+public import NoCommentsSpecification.Implementations
+public import NoCommentsSpecification.Required
+public import NoCommentsSpecification.Execution
+
+public section
+
+namespace NoCommentsSpecification
+
+end NoCommentsSpecification
