@@ -248,46 +248,50 @@ theorem analyzeComments_equiv_of_pos (file : String) (comments : Array Core.Comm
     refine ⟨hf, hc, (distinctLines_equiv_of_pos comments hpos a.lines).mpr hlc,
       fun s => by simpa using hsc s⟩
 
+private theorem exactSync_equiv (a : RatchetCore.FileAnalysis)
+    (e : Option RatchetCore.RatchetEntry) :
+    RatchetSpec.ExactSyncOk a e ↔ BlindSecondModel.ExactSync a e := by
+  cases e with
+  | none => simp [RatchetSpec.ExactSyncOk, BlindSecondModel.ExactSync, Array.isEmpty]
+  | some entry =>
+    simp only [RatchetSpec.ExactSyncOk, BlindSecondModel.ExactSync,
+      BlindSecondModel.SameCounts, CoreSpec.MultisetEq]
+    exact ⟨fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩,
+      fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩⟩
+
+private theorem monotonic_equiv (fps : Core.SortedFingerprints) (ls : Nat)
+    (be : Option RatchetCore.RatchetEntry) :
+    RatchetSpec.MonotonicOk fps ls be ↔ BlindSecondModel.Monotonic fps ls be := by
+  cases be <;> simp [RatchetSpec.MonotonicOk, BlindSecondModel.Monotonic, and_comm]
+
 theorem checkExactSync_meets_iff (f : CheckExactSyncFn) :
     RatchetRecords.checkExactSyncRecord.Meets f ↔
       BlindSecondModel.checkExactSyncRecord.Meets f := by
-  have hsync : ∀ a e, RatchetSpec.ExactSyncOk a e ↔ BlindSecondModel.ExactSync a e := by
-    intro a e
-    cases e with
-    | none => simp [RatchetSpec.ExactSyncOk, BlindSecondModel.ExactSync, Array.isEmpty]
-    | some entry =>
-      simp only [RatchetSpec.ExactSyncOk, BlindSecondModel.ExactSync,
-        BlindSecondModel.SameCounts, CoreSpec.MultisetEq]
-      exact ⟨fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩,
-        fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩⟩
   constructor <;> intro h
   · refine ⟨(fun _ hc => nomatch hc), fun p hp => ?_⟩
     rcases List.mem_cons.mp hp with rfl | hp
     · intro a e
-      exact (h.2 _ List.mem_cons_self a e).trans (hsync a e)
+      exact (h.2 _ List.mem_cons_self a e).trans (exactSync_equiv a e)
     exact nomatch hp
   · refine ⟨(fun _ hc => nomatch hc), fun p hp => ?_⟩
     rcases List.mem_cons.mp hp with rfl | hp
     · intro a e
-      exact (h.2 _ List.mem_cons_self a e).trans (hsync a e).symm
+      exact (h.2 _ List.mem_cons_self a e).trans (exactSync_equiv a e).symm
     exact nomatch hp
 
 theorem checkMonotonicFile_meets_iff (f : CheckMonotonicFn) :
     RatchetRecords.checkMonotonicFileRecord.Meets f ↔
       BlindSecondModel.checkMonotonicFileRecord.Meets f := by
-  have hmono : ∀ fps ls be, RatchetSpec.MonotonicOk fps ls be ↔ BlindSecondModel.Monotonic fps ls be := by
-    intro fps ls be
-    cases be <;> simp [RatchetSpec.MonotonicOk, BlindSecondModel.Monotonic, and_comm]
   constructor <;> intro h
   · refine ⟨(fun _ hc => nomatch hc), fun p hp => ?_⟩
     rcases List.mem_cons.mp hp with rfl | hp
     · intro file fps cs ls base
-      exact (h.2 _ List.mem_cons_self file fps cs ls base).trans (hmono fps ls base)
+      exact (h.2 _ List.mem_cons_self file fps cs ls base).trans (monotonic_equiv fps ls base)
     exact nomatch hp
   · refine ⟨(fun _ hc => nomatch hc), fun p hp => ?_⟩
     rcases List.mem_cons.mp hp with rfl | hp
     · intro file fps cs ls base
-      exact (h.2 _ List.mem_cons_self file fps cs ls base).trans (hmono fps ls base).symm
+      exact (h.2 _ List.mem_cons_self file fps cs ls base).trans (monotonic_equiv fps ls base).symm
     exact nomatch hp
 
 theorem validateCheck_equiv_of_nodup (analyses : Array RatchetCore.FileAnalysis)
@@ -298,18 +302,6 @@ theorem validateCheck_equiv_of_nodup (analyses : Array RatchetCore.FileAnalysis)
     (hnd : (analyses.toList.map (·.file)).Nodup) :
     RatchetSpec.ValidateOk analyses checked excluded current base? target? ↔
       BlindSecondModel.ValidCheck analyses checked excluded current base? target? := by
-  have heqSync : ∀ a e, RatchetSpec.ExactSyncOk a e ↔ BlindSecondModel.ExactSync a e := by
-    intro a e
-    cases e with
-    | none => simp [RatchetSpec.ExactSyncOk, BlindSecondModel.ExactSync, Array.isEmpty]
-    | some entry =>
-      simp only [RatchetSpec.ExactSyncOk, BlindSecondModel.ExactSync,
-        BlindSecondModel.SameCounts, CoreSpec.MultisetEq]
-      exact ⟨fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩,
-        fun ⟨h1, h2, h3⟩ => ⟨h1.symm, h2.symm, h3⟩⟩
-  have heqMono : ∀ fps ls be, RatchetSpec.MonotonicOk fps ls be ↔ BlindSecondModel.Monotonic fps ls be := by
-    intro fps ls be
-    cases be <;> simp [RatchetSpec.MonotonicOk, BlindSecondModel.Monotonic, and_comm]
   dsimp [RatchetSpec.ValidateOk, BlindSecondModel.ValidCheck, BlindSecondModel.AnalysisPasses]
   constructor
   · rintro ⟨h1, h2, h3⟩
@@ -319,9 +311,9 @@ theorem validateCheck_equiv_of_nodup (analyses : Array RatchetCore.FileAnalysis)
       rw [ht] at h3
       intro a ha
       obtain ⟨hs, hm⟩ := h3 a ha
-      refine ⟨(heqSync _ _).mp hs, fun b hb => ?_⟩
+      refine ⟨(exactSync_equiv _ _).mp hs, fun b hb => ?_⟩
       rw [hb] at hm
-      exact (heqMono _ _ _).mp hm
+      exact (monotonic_equiv _ _ _).mp hm
     | some target =>
       rw [ht] at h3
       obtain ⟨live, hfind, hs, hm⟩ := h3
@@ -331,10 +323,10 @@ theorem validateCheck_equiv_of_nodup (analyses : Array RatchetCore.FileAnalysis)
         beq_iff_eq.mp (@Array.find?_some _ (fun (x : RatchetCore.FileAnalysis) => x.file == target) _ _ hfind)
       refine ⟨live, hmem, heq, ?_, fun b hb => ?_⟩
       · rw [heq]
-        exact (heqSync _ _).mp hs
+        exact (exactSync_equiv _ _).mp hs
       · rw [hb] at hm
         rw [heq]
-        exact (heqMono _ _ _).mp hm
+        exact (monotonic_equiv _ _ _).mp hm
   · rintro ⟨h1, h2, h3⟩
     refine ⟨h1, ?_, ?_⟩
     · cases hb : base? with
@@ -345,10 +337,10 @@ theorem validateCheck_equiv_of_nodup (analyses : Array RatchetCore.FileAnalysis)
         rw [ht] at h3
         intro a ha
         obtain ⟨hs, hm⟩ := h3 a ha
-        refine ⟨(heqSync _ _).mpr hs, ?_⟩
+        refine ⟨(exactSync_equiv _ _).mpr hs, ?_⟩
         cases hb : base? with
         | none => trivial
-        | some b => exact (heqMono _ _ _).mpr (hm b hb)
+        | some b => exact (monotonic_equiv _ _ _).mpr (hm b hb)
       | some target =>
         rw [ht] at h3
         obtain ⟨live, hmem, hfile, hs, hm⟩ := h3
@@ -380,13 +372,13 @@ theorem validateCheck_equiv_of_nodup (analyses : Array RatchetCore.FileAnalysis)
           exact hlj.symm.trans hli
         subst hsame
         rw [heq2] at hs
-        refine ⟨live2, hfind2, (heqSync _ _).mpr hs, ?_⟩
+        refine ⟨live2, hfind2, (exactSync_equiv _ _).mpr hs, ?_⟩
         cases hb : base? with
         | none => trivial
         | some b =>
           have hmb := hm b hb
           rw [heq2] at hmb
-          exact (heqMono _ _ _).mpr hmb
+          exact (monotonic_equiv _ _ _).mpr hmb
 
 theorem diff_validateCheck_duplicate_file :
     let bad : RatchetCore.FileAnalysis := { file := "A.lean", comments := #[AdequacyCore.sampleComment1], lines := 1, fingerprints := ⟨#[AdequacyCore.zeroFp], List.pairwise_singleton _ _⟩ }
