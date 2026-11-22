@@ -1,0 +1,14 @@
+# Pure core and runtime TCB modules, build/toolchain/ratchet contract, governance, and GitHub workflows
+/lakefile.toml @rbeauchamp
+/lake-manifest.json @rbeauchamp
+/lean-toolchain @rbeauchamp
+/NoComments/ @rbeauchamp
+/.no-comments.json @rbeauchamp
+/comment-ratchet.json @rbeauchamp
+/.no-mistakes.yaml @rbeauchamp
+/.github/ @rbeauchamp
+/SECURITY.md @rbeauchamp
+/AGENTS.md @rbeauchamp
+/CONTRIBUTING.md @rbeauchamp
+/CODE_OF_CONDUCT.md @rbeauchamp
+/LICENSE @rbeauchamp

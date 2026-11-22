@@ -1,5 +1,12 @@
 name = "lean-no-comments"
-defaultTargets = ["NoComments", "no-comments"]
+defaultTargets = ["NoCommentsCore"]
+lintDriver = "regula/lint"
+lintDriverArgs = ["standard-logical"]
+
+[[require]]
+name = "regula"
+git = "https://github.com/rbeauchamp/regula"
+rev = "v0.15.0"
 
 [leanOptions]
 autoImplicit = false
@@ -7,8 +14,12 @@ relaxedAutoImplicit = false
 warningAsError = true
 
 [[lean_lib]]
-name = "NoComments"
-globs = ["NoComments.+"]
+name = "NoCommentsCore"
+roots = ["NoComments.Core", "NoComments.Config", "NoComments.RatchetCore"]
+
+[[lean_lib]]
+name = "NoCommentsCLI"
+roots = ["NoComments.ConfigIO", "NoComments.Ratchet", "NoComments.Runner", "NoComments.LakeEnv", "NoComments.Worker", "NoComments.TestListing"]
 
 [[lean_exe]]
 name = "no-comments"

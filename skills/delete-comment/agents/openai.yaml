@@ -1,4 +1,4 @@
 interface:
   display_name: "Delete Comment"
-  short_description: "Audit, refactor, relocate decision records, and drain down Lean comments under no-comments."
-  default_prompt: "Use $delete-comment to audit, refactor, relocate decision records to project docs, and drain down Lean comments in this repository."
+  short_description: "Audit and drain Lean code comments under a NO-COMMENTS ratchet"
+  default_prompt: "Use $delete-comment to audit and drain Lean code comments in this repository under its NO-COMMENTS ratchet and verification gate."

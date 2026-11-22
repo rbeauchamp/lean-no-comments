@@ -1,12 +1,14 @@
 import NoComments.Core
 import NoComments.Config
+import NoComments.ConfigIO
 import NoComments.LakeEnv
+import NoComments.RatchetCore
 import NoComments.Ratchet
 import NoComments.Worker
 
 open NoComments
 
-private def toolVersion : String := "0.1.0"
+private def toolVersion : String := "0.2.0"
 
 private inductive CommandMode where
   | inventory (file? : Option String) (asJson : Bool)
@@ -34,7 +36,7 @@ private def requireArgValue (flag val : String) : Except String String := do
     throw s!"invalid value '{val}' for {flag}"
   return val
 
-private partial def parseArgs (args : List String) (st : CliOptions := {}) :
+private def parseArgs (args : List String) (st : CliOptions := {}) :
     Except String CliOptions := do
   match args with
   | [] =>
@@ -44,51 +46,78 @@ private partial def parseArgs (args : List String) (st : CliOptions := {}) :
       throw "missing subcommand (`inventory` or `check`); run with --help"
     else
       return st
+  | "--help" :: rest | "-h" :: rest =>
+    parseArgs rest { st with showHelp := true }
+  | "--version" :: rest | "-V" :: rest =>
+    parseArgs rest { st with showVersion := true }
+  | "--repo" :: dir :: rest =>
+    parseArgs rest { st with repo? := some (← requireArgValue "--repo" dir) }
+  | ["--repo"] =>
+    throw "missing directory after --repo"
+  | "--config" :: path :: rest =>
+    parseArgs rest { st with config? := some (← requireArgValue "--config" path) }
+  | ["--config"] =>
+    throw "missing path after --config"
+  | "--jobs" :: nStr :: rest | "-j" :: nStr :: rest =>
+    let some n := nStr.toNat?
+      | throw s!"invalid integer '{nStr}' for --jobs"
+    if n == 0 then throw "--jobs must be at least 1"
+    parseArgs rest { st with jobs? := some n }
+  | ["--jobs"] =>
+    throw "missing integer after --jobs"
+  | ["-j"] =>
+    throw "missing integer after -j"
+  | "--file" :: f :: rest =>
+    match st.mode? with
+    | some (.inventory none asJson) =>
+      parseArgs rest { st with mode? := some (.inventory (some (← requireArgValue "--file" f)) asJson) }
+    | some (.inventory (some _) _) =>
+      throw s!"duplicate target file '{f}'"
+    | some (.check none baseRef? bootstrap) =>
+      parseArgs rest { st with mode? := some (.check (some (← requireArgValue "--file" f)) baseRef? bootstrap) }
+    | some (.check (some _) _ _) =>
+      throw s!"duplicate target file '{f}'"
+    | none =>
+      throw "--file must follow subcommand (`inventory` or `check`)"
+  | ["--file"] =>
+    match st.mode? with
+    | none => throw "--file must follow subcommand (`inventory` or `check`)"
+    | some _ => throw "missing path after --file"
+  | "--json" :: rest =>
+    match st.mode? with
+    | some (.inventory file? _) =>
+      parseArgs rest { st with mode? := some (.inventory file? true) }
+    | some (.check ..) =>
+      throw "--json is supported only with `inventory`"
+    | none =>
+      throw "--json must follow `inventory`"
+  | "--base-ref" :: ref :: rest =>
+    match st.mode? with
+    | some (.check file? none bootstrap) =>
+      parseArgs rest { st with mode? := some (.check file? (some (← requireArgValue "--base-ref" ref)) bootstrap) }
+    | some (.check _ (some _) _) =>
+      throw "duplicate --base-ref"
+    | _ =>
+      throw "--base-ref is supported only with `check` and requires a ref"
+  | ["--base-ref"] =>
+    throw "--base-ref is supported only with `check` and requires a ref"
+  | "--bootstrap" :: rest =>
+    match st.mode? with
+    | some (.check file? baseRef? _) =>
+      parseArgs rest { st with mode? := some (.check file? baseRef? true) }
+    | _ =>
+      throw "--bootstrap is supported only with `check`"
   | arg :: rest =>
-    if arg == "--help" || arg == "-h" then
-      parseArgs rest { st with showHelp := true }
-    else if arg == "--version" || arg == "-V" then
-      parseArgs rest { st with showVersion := true }
-    else if arg == "--repo" then
-      match rest with
-      | dir :: rest' => parseArgs rest' { st with repo? := some (← requireArgValue "--repo" dir) }
-      | [] => throw "missing directory after --repo"
-    else if arg.startsWith "--repo=" then
+    if arg.startsWith "--repo=" then
       parseArgs rest { st with repo? := some (← requireArgValue "--repo=" (arg.drop 7).toString) }
-    else if arg == "--config" then
-      match rest with
-      | path :: rest' => parseArgs rest' { st with config? := some (← requireArgValue "--config" path) }
-      | [] => throw "missing path after --config"
     else if arg.startsWith "--config=" then
       parseArgs rest { st with config? := some (← requireArgValue "--config=" (arg.drop 9).toString) }
-    else if arg == "--jobs" || arg == "-j" then
-      match rest with
-      | nStr :: rest' =>
-        let some n := nStr.toNat?
-          | throw s!"invalid integer '{nStr}' for --jobs"
-        if n == 0 then throw "--jobs must be at least 1"
-        parseArgs rest' { st with jobs? := some n }
-      | [] => throw s!"missing integer after {arg}"
     else if arg.startsWith "--jobs=" then
       let nStr := (arg.drop 7).toString
       let some n := nStr.toNat?
         | throw s!"invalid integer '{nStr}' for --jobs"
       if n == 0 then throw "--jobs must be at least 1"
       parseArgs rest { st with jobs? := some n }
-    else if arg == "--file" then
-      match rest, st.mode? with
-      | f :: rest', some (.inventory none asJson) =>
-        parseArgs rest' { st with mode? := some (.inventory (some (← requireArgValue "--file" f)) asJson) }
-      | f :: _rest', some (.inventory (some _) _) =>
-        throw s!"duplicate target file '{f}'"
-      | f :: rest', some (.check none baseRef? bootstrap) =>
-        parseArgs rest' { st with mode? := some (.check (some (← requireArgValue "--file" f)) baseRef? bootstrap) }
-      | f :: _rest', some (.check (some _) _ _) =>
-        throw s!"duplicate target file '{f}'"
-      | _ :: _, none =>
-        throw "--file must follow subcommand (`inventory` or `check`)"
-      | [], _ =>
-        throw "missing path after --file"
     else if arg.startsWith "--file=" then
       let f ← requireArgValue "--file=" (arg.drop 7).toString
       match st.mode? with
@@ -102,22 +131,6 @@ private partial def parseArgs (args : List String) (st : CliOptions := {}) :
         throw s!"duplicate target file '{f}'"
       | none =>
         throw "--file must follow subcommand (`inventory` or `check`)"
-    else if arg == "--json" then
-      match st.mode? with
-      | some (.inventory file? _) =>
-        parseArgs rest { st with mode? := some (.inventory file? true) }
-      | some (.check ..) =>
-        throw "--json is supported only with `inventory`"
-      | none =>
-        throw "--json must follow `inventory`"
-    else if arg == "--base-ref" then
-      match rest, st.mode? with
-      | ref :: rest', some (.check file? none bootstrap) =>
-        parseArgs rest' { st with mode? := some (.check file? (some (← requireArgValue "--base-ref" ref)) bootstrap) }
-      | _ :: _, some (.check _ (some _) _) =>
-        throw "duplicate --base-ref"
-      | _, _ =>
-        throw "--base-ref is supported only with `check` and requires a ref"
     else if arg.startsWith "--base-ref=" then
       let ref ← requireArgValue "--base-ref=" (arg.drop 11).toString
       match st.mode? with
@@ -127,12 +140,6 @@ private partial def parseArgs (args : List String) (st : CliOptions := {}) :
         throw "duplicate --base-ref"
       | _ =>
         throw "--base-ref is supported only with `check`"
-    else if arg == "--bootstrap" then
-      match st.mode? with
-      | some (.check file? baseRef? _) =>
-        parseArgs rest { st with mode? := some (.check file? baseRef? true) }
-      | _ =>
-        throw "--bootstrap is supported only with `check`"
     else if arg == "inventory" && st.mode?.isNone then
       parseArgs rest { st with mode? := some (.inventory none false) }
     else if arg == "check" && st.mode?.isNone then
@@ -187,7 +194,7 @@ private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
       allTargets := allTargets ++ prepared
   return (allTargets, checkedFiles, excludedFiles)
 
-private def formatRatchetJson (analyses : Array Ratchet.FileAnalysis) : String :=
+private def formatRatchetJson (analyses : Array RatchetCore.FileAnalysis) : String :=
   let nonEmpty := (analyses.filter (!·.comments.isEmpty)).qsort (fun a b => a.file < b.file)
   if nonEmpty.isEmpty then
     "[]"
@@ -198,7 +205,7 @@ private def formatRatchetJson (analyses : Array Ratchet.FileAnalysis) : String :
       s!"  \{\"file\": {Lean.Json.compress (Lean.Json.str a.file)}, \"comments\": {a.comments.size}, \"lines\": {a.lines}, \"fingerprints\": [\n{fpBlock}\n  ]}"
     "[\n" ++ String.intercalate ",\n" entries.toList ++ "\n]"
 
-private def printHumanInventory (analyses : Array Ratchet.FileAnalysis)
+private def printHumanInventory (analyses : Array RatchetCore.FileAnalysis)
     (checkedCount excludedCount : Nat) (singleFile? : Option String) : IO Unit := do
   let sorted := analyses.qsort (fun a b => a.file < b.file)
   let mut filesWithComments : Nat := 0
@@ -233,14 +240,14 @@ private def runUserCli (rawArgs : List String) : IO Unit := do
     | throw <| IO.userError usageText
   let selfExe ← IO.appPath
   let repoArg := System.FilePath.mk (opts.repo?.getD ".")
-  let repoRoot ← Config.verifyGitRoot repoArg
+  let repoRoot ← ConfigIO.verifyGitRoot repoArg
   let configPath := match opts.config? with
     | some p =>
       let fp := System.FilePath.mk p
       if fp.isAbsolute then fp else repoRoot / fp
     | none => repoRoot / ".no-comments.json"
-  let cfg ← Config.loadConfig configPath
-  let tracked ← Config.listTrackedLeanFiles repoRoot
+  let cfg ← ConfigIO.loadConfig configPath
+  let tracked ← ConfigIO.listTrackedLeanFiles repoRoot
   let classified ← match Config.classifyTrackedFiles cfg tracked with
     | .ok c => pure c
     | .error e => throw <| IO.userError s!"repository coverage check failed: {e}"
@@ -249,7 +256,7 @@ private def runUserCli (rawArgs : List String) : IO Unit := do
   try
     match mode with
     | .inventory file? asJson =>
-      let targetRel? ← file?.mapM (Config.resolveTargetFile repoRoot)
+      let targetRel? ← file?.mapM (ConfigIO.resolveTargetFile repoRoot)
       let (targets, checkedFiles, excludedFiles) ←
         groupAndPrepareTargets selfExe repoRoot cfg classified targetRel? stageDir
       let analyses ← Worker.runWorkerPool selfExe stageDir targets jobs
@@ -258,7 +265,7 @@ private def runUserCli (rawArgs : List String) : IO Unit := do
       else
         printHumanInventory analyses checkedFiles.size excludedFiles.size targetRel?
     | .check file? baseRef? bootstrap =>
-      let targetRel? ← file?.mapM (Config.resolveTargetFile repoRoot)
+      let targetRel? ← file?.mapM (ConfigIO.resolveTargetFile repoRoot)
       let currentRatchet ← Ratchet.loadCurrentRatchet repoRoot cfg.ratchet
       let (baseSha, baseRatchet?) ←
         Ratchet.resolveBaseRatchet repoRoot cfg.ratchet baseRef? bootstrap
@@ -266,7 +273,7 @@ private def runUserCli (rawArgs : List String) : IO Unit := do
       let (targets, checkedFiles, excludedFiles) ←
         groupAndPrepareTargets selfExe repoRoot cfg classified targetRel? stageDir
       let analyses ← Worker.runWorkerPool selfExe stageDir targets jobs
-      match Ratchet.validateCheck analyses checkedFiles excludedFiles currentRatchet baseRatchet? targetRel? with
+      match RatchetCore.validateCheck analyses checkedFiles excludedFiles currentRatchet baseRatchet? targetRel? with
       | .error e => throw <| IO.userError e
       | .ok () =>
         let totalComments := analyses.foldl (fun acc a => acc + a.comments.size) 0
