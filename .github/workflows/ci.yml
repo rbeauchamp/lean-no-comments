@@ -61,4 +61,4 @@ jobs:
           LIB="$LIBDIR/libLake_shared.dylib"
           [ -e "$LIB" ] || LIB="$LIBDIR/libLake_shared.so"
           [ -e "$LIB" ] || { echo "missing libLake_shared under $LIBDIR" >&2; exit 1; }
-          lake env lean --load-dynlib="$LIB" --run NoComments/TestListing.lean --check
+          lake env lean -DwarningAsError=true --load-dynlib="$LIB" --run NoComments/TestListing.lean --check

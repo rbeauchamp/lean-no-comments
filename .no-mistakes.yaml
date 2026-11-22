@@ -20,7 +20,7 @@ commands:
     lib="$libdir/libLake_shared.dylib"
     [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
     [ -e "$lib" ] || { echo "missing libLake_shared under $libdir" >&2; exit 1; }
-    lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean --check
+    lake env lean -DwarningAsError=true --load-dynlib="$lib" --run NoComments/TestListing.lean --check
 
 heavy_steps:
   test:
@@ -51,7 +51,7 @@ test:
       lib="$libdir/libLake_shared.dylib"
       [ -e "$lib" ] || lib="$libdir/libLake_shared.so"
       [ -e "$lib" ] || { echo "missing libLake_shared under $libdir" >&2; exit 1; }
-      no-mistakes admit --memory 3GiB --limit "none; measured peak 2.42 GiB resident" -- lake env lean --load-dynlib="$lib" --run NoComments/TestListing.lean
+      no-mistakes admit --memory 3GiB --limit "none; measured peak 2.42 GiB resident" -- lake env lean -DwarningAsError=true --load-dynlib="$lib" --run NoComments/TestListing.lean
 
 pr:
   template: .github/pull_request_template.md
