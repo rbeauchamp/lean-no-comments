@@ -6,7 +6,7 @@ lintDriverArgs = ["standard-logical"]
 [[require]]
 name = "regula"
 git = "https://github.com/rbeauchamp/regula"
-rev = "v0.15.0"
+rev = "v0.16.0"
 
 [leanOptions]
 autoImplicit = false

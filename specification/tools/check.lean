@@ -111,7 +111,7 @@ private def checkDelegationBoundary (confirmed : Confirmation.Report) : MetaM Un
   for (stmt, ans) in confirmed.counted do
     unless stmt.source.recorded do
       throwError "counted answer {stmt.id.toString} is missing source provenance"
-    if ans.consequence == LeanIntent.Confirmation.restatement.consequence || ans.kind != .possibility then
+    if LeanIntent.Confirmation.isRestatementAnswer ans || ans.kind != .possibility then
       unless ans.author == ⟨ownerId, none⟩ && ans.verdict == .confirmed do
         throwError "owner-level question {ans.consequence} on {ans.record} requires direct owner authority"
     else
