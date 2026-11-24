@@ -134,12 +134,17 @@ private def targetEnvKey (target : LakeEnv.WorkerTargetSetup) : WorkerEnvKey :=
     plugins := filteredPlugins.map fun p => (p.path.toString, p.initFn?)
   }
 
+private structure TargetGroup where
+  envKey : WorkerEnvKey
+  items : Array (Nat × LakeEnv.WorkerTargetSetup)
+  hNonEmpty : 0 < items.size
+
 private structure TargetBatch where
   envKey : WorkerEnvKey
   items : Array (Nat × LakeEnv.WorkerTargetSetup)
+  hNonEmpty : 0 < items.size
   weight : Nat
   sortRelPath : String
-  deriving Inhabited
 
 private def targetBatchKey (envKey : WorkerEnvKey) (target : LakeEnv.WorkerTargetSetup) : String :=
   let effectiveImports? := target.setup.imports? <|> target.header?.map (·.imports)
@@ -180,34 +185,49 @@ private def targetWeight (target : LakeEnv.WorkerTargetSetup) : Nat :=
 private def buildBatches (targets : Array LakeEnv.WorkerTargetSetup) (jobs : Nat) :
     Array TargetBatch := Id.run do
   let mut keyToGroup : Std.HashMap String Nat := {}
-  let mut groups : Array (WorkerEnvKey × Array (Nat × LakeEnv.WorkerTargetSetup)) := #[]
+  let mut groups : Array TargetGroup := #[]
   for h : idx in [:targets.size] do
     let target := targets[idx]
     let envKey := targetEnvKey target
     let k := targetBatchKey envKey target
     if let some gIdx := keyToGroup[k]? then
-      groups := groups.modify gIdx fun (ek, existing) => (ek, existing.push (idx, target))
+      groups := groups.modify gIdx fun g => {
+        g with
+        items := g.items.push (idx, target)
+        hNonEmpty := by
+          rw [Array.size_push]
+          exact Nat.succ_pos _
+      }
     else
       keyToGroup := keyToGroup.insert k groups.size
-      groups := groups.push (envKey, #[(idx, target)])
+      groups := groups.push {
+        envKey
+        items := #[(idx, target)]
+        hNonEmpty := by simp
+      }
   let workerCount := max 1 (min jobs targets.size)
   let maxBatchSize := max 4 ((targets.size + workerCount - 1) / workerCount)
+  have hMaxPos : 0 < maxBatchSize := by
+    change 0 < max 4 _
+    omega
   let mut batches : Array TargetBatch := #[]
-  for (envKey, grp) in groups do
-    if hGrp : 0 < grp.size then
-      let baseWeight := targetWeight grp[0].2
-      let mut start := 0
-      while start < grp.size do
-        let stop := min (start + maxBatchSize) grp.size
-        let slice := grp.extract start stop
-        if hSlice : 0 < slice.size then
-          batches := batches.push {
-            envKey
-            items := slice
-            weight := baseWeight + slice.size
-            sortRelPath := slice[0].2.relPath
-          }
-        start := stop
+  for grp in groups do
+    let baseWeight := targetWeight (grp.items[0]'grp.hNonEmpty).2
+    let mut start := 0
+    while hStart : start < grp.items.size do
+      let stop := min (start + maxBatchSize) grp.items.size
+      let slice := grp.items.extract start stop
+      have hSlice : 0 < slice.size := by
+        simp only [slice, Array.size_extract, stop]
+        omega
+      batches := batches.push {
+        envKey := grp.envKey
+        items := slice
+        hNonEmpty := hSlice
+        weight := baseWeight + slice.size
+        sortRelPath := (slice[0]'hSlice).2.relPath
+      }
+      start := stop
   return batches.qsort fun a b =>
     if a.weight != b.weight then
       a.weight > b.weight
@@ -349,8 +369,6 @@ private def resolveEntryLean? (entryLeanTask? : Option (Task (Except IO.Error Sy
 private def runBatch (selfExe stageDir : System.FilePath)
     (entryLeanTask? : Option (Task (Except IO.Error System.FilePath))) (batch : TargetBatch)
     (poolMutex : Std.Mutex PoolState) : BaseIO Unit := do
-  if batch.items.isEmpty then
-    return
   let abortedBeforeStart ← poolMutex.atomically do
     return (← get).firstError?.isSome
   if abortedBeforeStart then
@@ -423,19 +441,20 @@ def runWorkerPool (selfExe stageDir : System.FilePath) (targets : Array LakeEnv.
     let t ← BaseIO.asTask (prio := .dedicated) (do
       let mut keepGoing := true
       while keepGoing do
-        let picked? ← poolMutex.atomically do
+        let picked? : Option (Fin batches.size) ← poolMutex.atomically do
           let st ← get
-          if st.firstError?.isSome || st.nextBatchIdx >= batches.size then
+          if st.firstError?.isSome then
             return none
-          else
-            let idx := st.nextBatchIdx
-            set { st with nextBatchIdx := idx + 1 }
+          else if h : st.nextBatchIdx < batches.size then
+            let idx : Fin batches.size := ⟨st.nextBatchIdx, h⟩
+            set { st with nextBatchIdx := st.nextBatchIdx + 1 }
             return some idx
+          else
+            return none
         match picked? with
         | none => keepGoing := false
         | some batchIdx =>
-          if h : batchIdx < batches.size then
-            runBatch selfExe stageDir entryLeanTask? batches[batchIdx] poolMutex)
+          runBatch selfExe stageDir entryLeanTask? batches[batchIdx] poolMutex)
     tasks := tasks.push t
   for t in tasks do
     IO.wait t

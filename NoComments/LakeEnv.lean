@@ -178,6 +178,17 @@ private structure ParsedLakeFlags where
   failLv : Lake.LogLevel := .error
   noCache? : Option Bool := none
 
+private def resolveFromInitDir (initWsDir : System.FilePath) (raw : String) : System.FilePath :=
+  let p := System.FilePath.mk raw
+  if p.isAbsolute then p else initWsDir / p
+
+private def parseConfigOpt (kvPair : String) : Lean.Name × String :=
+  let pos := kvPair.find '='
+  if h : pos.IsAtEnd then
+    (kvPair.toName, "")
+  else
+    ((kvPair.extract kvPair.startPos pos).toName, kvPair.extract (pos.next h) kvPair.endPos)
+
 private def parseLakeFlags (initWsDir : System.FilePath) (lakeArgs : Array String) :
     IO ParsedLakeFlags := do
   let mut st : ParsedLakeFlags := { wsDir := initWsDir }
@@ -197,30 +208,24 @@ private def parseLakeFlags (initWsDir : System.FilePath) (lakeArgs : Array Strin
     else if arg == "-d" || arg == "--dir" then
       let nextIdx := i + 1
       if hNext : nextIdx < lakeArgs.size then
-        st := { st with wsDir := st.wsDir / lakeArgs[nextIdx] }
+        st := { st with wsDir := resolveFromInitDir initWsDir lakeArgs[nextIdx] }
         i := nextIdx + 1
       else
         throw <| IO.userError s!"missing value after '{arg}' in lakeArgs"
     else if arg.startsWith "--dir=" then
-      st := { st with wsDir := st.wsDir / (arg.drop 6).toString }
+      st := { st with wsDir := resolveFromInitDir initWsDir (arg.drop 6).toString }
       i := i + 1
     else if arg == "--packages" then
       let nextIdx := i + 1
       if hNext : nextIdx < lakeArgs.size then
-        let rawPkgFile := lakeArgs[nextIdx]
-        let pkgPath :=
-          if (System.FilePath.mk rawPkgFile).isAbsolute then System.FilePath.mk rawPkgFile
-          else st.wsDir / rawPkgFile
+        let pkgPath := resolveFromInitDir initWsDir lakeArgs[nextIdx]
         let entries ← Lake.Manifest.loadEntries pkgPath
         st := { st with packageOverrides := st.packageOverrides ++ entries }
         i := nextIdx + 1
       else
         throw <| IO.userError s!"missing value after '{arg}' in lakeArgs"
     else if arg.startsWith "--packages=" then
-      let rawPkgFile := (arg.drop 11).toString
-      let pkgPath :=
-        if (System.FilePath.mk rawPkgFile).isAbsolute then System.FilePath.mk rawPkgFile
-        else st.wsDir / rawPkgFile
+      let pkgPath := resolveFromInitDir initWsDir (arg.drop 11).toString
       let entries ← Lake.Manifest.loadEntries pkgPath
       st := { st with packageOverrides := st.packageOverrides ++ entries }
       i := i + 1
@@ -248,27 +253,23 @@ private def parseLakeFlags (initWsDir : System.FilePath) (lakeArgs : Array Strin
     else if arg == "--iofail" then
       st := { st with failLv := .info }
       i := i + 1
-    else if arg == "-q" || arg == "--quiet" || arg == "-v" || arg == "--verbose" || arg == "--ansi" || arg == "--no-ansi" then
+    else if arg == "-q" || arg == "--quiet" || arg == "-v" || arg == "--verbose" then
       i := i + 1
     else if arg == "-K" then
       let nextIdx := i + 1
       if hNext : nextIdx < lakeArgs.size then
-        let kv := lakeArgs[nextIdx]
-        match kv.splitOn "=" with
-        | [k, v] =>
-          st := { st with lakeOpts := st.lakeOpts.insert (Lean.Name.mkSimple k) v }
-        | _ =>
-          throw <| IO.userError s!"invalid -K option '{kv}' in lakeArgs"
+        let (k, v) := parseConfigOpt lakeArgs[nextIdx]
+        st := { st with lakeOpts := st.lakeOpts.insert k v }
         i := nextIdx + 1
       else
         throw <| IO.userError "missing key=value after '-K' in lakeArgs"
     else if arg.startsWith "-K" && arg.length > 2 then
-      let kv := (arg.drop 2).toString
-      match kv.splitOn "=" with
-      | [k, v] =>
-        st := { st with lakeOpts := st.lakeOpts.insert (Lean.Name.mkSimple k) v }
-      | _ =>
-        throw <| IO.userError s!"invalid {arg} option in lakeArgs"
+      let kv :=
+        if arg.startsWith "-K=" then (arg.drop 3).toString
+        else if arg.startsWith "-K " then (arg.drop 2).trimAsciiStart.toString
+        else (arg.drop 2).toString
+      let (k, v) := parseConfigOpt kv
+      st := { st with lakeOpts := st.lakeOpts.insert k v }
       i := i + 1
     else
       throw <| IO.userError s!"unsupported Lake CLI argument '{arg}' in lakeArgs"

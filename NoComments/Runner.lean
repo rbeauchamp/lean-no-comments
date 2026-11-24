@@ -97,15 +97,6 @@ private inductive WorkerBinding where
   | unbound
   | bound (key : HeaderCacheKey) (env : Lean.Environment)
 
-private def nullStream : IO.FS.Stream := {
-  flush := pure ()
-  read := fun _ => pure ByteArray.empty
-  write := fun _ => pure ()
-  getLine := pure ""
-  putStr := fun _ => pure ()
-  isTty := pure false
-}
-
 private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputContext)
     (headerPos : String.Pos.Raw) (headerMsgs : Lean.MessageLog)
     (imports : Array Lean.Import) (isModule : Bool) (opts : Lean.Options)
@@ -145,8 +136,7 @@ private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputConte
       return (env, msgs, .unbound)
 
 private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBinding) :
-    IO (Array Core.Comment × WorkerBinding) :=
-  IO.withStdin nullStream <| IO.withStdout nullStream do
+    IO (Array Core.Comment × WorkerBinding) := do
   let content ← IO.FS.readFile (System.FilePath.mk req.absFile)
   let inputCtx := Lean.Parser.mkInputContext content req.relPath
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
@@ -240,6 +230,24 @@ private def toWireComments (comments : Array Core.Comment) : Array WireComment :
     fingerprint := c.fingerprint
   }
 
+private def nullStream : IO.FS.Stream := {
+  flush := pure ()
+  read := fun _ => pure ByteArray.empty
+  write := fun _ => pure ()
+  getLine := pure ""
+  putStr := fun _ => pure ()
+  isTty := pure false
+}
+
+private def mkCaptureStream (bufRef : IO.Ref ByteArray) : IO.FS.Stream := {
+  flush := pure ()
+  read := fun _ => pure ByteArray.empty
+  write := fun bytes => bufRef.modify (· ++ bytes)
+  getLine := pure ""
+  putStr := fun s => bufRef.modify (· ++ s.toUTF8)
+  isTty := pure false
+}
+
 def runWorkerLoopMode : IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
@@ -265,21 +273,41 @@ def runWorkerLoopMode : IO Unit := do
         keepGoing := false
       | .ok lreq =>
         IO.setNumHeartbeats 0
+        let capturedOutRef ← IO.mkRef ByteArray.empty
+        let captureOut := mkCaptureStream capturedOutRef
         let runRes ← (try
-          analyzeTargetWithState lreq.request binding
+          IO.withStdin nullStream <| IO.withStdout captureOut <|
+            analyzeTargetWithState lreq.request binding
         finally
           IO.Process.setCurrentDir initCwd).toBaseIO
         match runRes with
         | .ok (comments, binding') =>
-          binding := binding'
-          let resp : LoopResponse := {
-            reqId := lreq.reqId
-            relPath := lreq.request.relPath
-            ok := true
-            comments := toWireComments comments
-          }
-          stdout.putStrLn (Lean.toJson resp).compress
-          stdout.flush
+          let capturedOut ← capturedOutRef.get
+          if !capturedOut.isEmpty then
+            let preview := match String.fromUTF8? capturedOut with
+              | some s =>
+                let trimmed := s.trimAscii.toString
+                if trimmed.isEmpty then s!"<{capturedOut.size} whitespace byte(s)>" else trimmed
+              | none => s!"<{capturedOut.size} non-UTF-8 byte(s)>"
+            let resp : LoopResponse := {
+              reqId := lreq.reqId
+              relPath := lreq.request.relPath
+              ok := false
+              error? := some s!"unexpected stdout output while analyzing {lreq.request.relPath}: {preview}"
+            }
+            stdout.putStrLn (Lean.toJson resp).compress
+            stdout.flush
+            keepGoing := false
+          else
+            binding := binding'
+            let resp : LoopResponse := {
+              reqId := lreq.reqId
+              relPath := lreq.request.relPath
+              ok := true
+              comments := toWireComments comments
+            }
+            stdout.putStrLn (Lean.toJson resp).compress
+            stdout.flush
         | .error err =>
           let resp : LoopResponse := {
             reqId := lreq.reqId
