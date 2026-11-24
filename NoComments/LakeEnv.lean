@@ -3,6 +3,7 @@ import Lake
 import Lake.CLI.Serve
 import Lake.Load.Config
 import Lake.Load.Manifest
+import Lake.Load.Toml
 import Lake.Load.Workspace
 import NoComments.Config
 import NoComments.Runner
@@ -252,7 +253,7 @@ private def parseRootDirShort : Char → LakeRootOptM Unit
   | 'd' => do
     let some dir ← Lake.takeArg? | failure
     set (some dir)
-  | 'f' | 'o' | 'K' => skipOptArg
+  | 'o' | 'K' => skipOptArg
   | 'q' | 'v' | 'R' | 'H' | 'J' => pure ()
   | _ => failure
 
@@ -260,7 +261,7 @@ private def parseRootDirLong : String → LakeRootOptM Unit
   | "--dir" => do
     let some dir ← Lake.takeArg? | failure
     set (some dir)
-  | "--file" | "--packages" | "--package" | "--service" | "--scope" | "--repo"
+  | "--package" | "--service" | "--scope" | "--repo"
   | "--platform" | "--toolchain" | "--rev" | "--max-revs" | "--log-level"
   | "--fail-level" | "--linters" | "--lint-only" | "--checks" | "--only"
   | "--add-downstream" | "--add-public-downstream" | "--config" | "--from-export"
@@ -283,6 +284,16 @@ private def parseRootDirOption : String → LakeRootOptM Unit :=
     longShort := Lake.shortOptionWithArg parseRootDirShort
   }
 
+private def isAbsentPath (path : System.FilePath) : BaseIO Bool := do
+  match ← path.symlinkMetadata.toBaseIO with
+  | .error (.noFileOrDirectory ..) => return true
+  | _ => return false
+
+private def isUniqueRegularFile (path : System.FilePath) : BaseIO Bool := do
+  match ← path.symlinkMetadata.toBaseIO with
+  | .ok m => return m.type == .file && m.numLinks == 1
+  | .error _ => return false
+
 private def isAbsentOrUniqueFile (path : System.FilePath) : BaseIO Bool := do
   match ← path.symlinkMetadata.toBaseIO with
   | .error (.noFileOrDirectory ..) => return true
@@ -294,6 +305,36 @@ private def isAbsentOrRealDir (path : System.FilePath) : BaseIO Bool := do
   | .error (.noFileOrDirectory ..) => return true
   | .error _ => return false
   | .ok m => return m.type == .dir
+
+private def isIsolatedPackagesDir (path : System.FilePath) : BaseIO Bool := do
+  match ← path.symlinkMetadata.toBaseIO with
+  | .error (.noFileOrDirectory ..) => return true
+  | .error _ => return false
+  | .ok m =>
+    unless m.type == .dir do
+      return false
+    match ← path.readDir.toBaseIO with
+    | .error _ => return false
+    | .ok entries =>
+      for ent in entries do
+        match ← ent.path.symlinkMetadata.toBaseIO with
+        | .ok em =>
+          match em.type with
+          | .dir =>
+            match ← (ent.path / ".git").symlinkMetadata.toBaseIO with
+            | .error (.noFileOrDirectory ..) => pure ()
+            | .error _ => return false
+            | .ok gm =>
+              match gm.type with
+              | .dir => pure ()
+              | .file => unless gm.numLinks == 1 do return false
+              | .symlink | .other => return false
+          | .file =>
+            unless em.numLinks == 1 do
+              return false
+          | .symlink | .other => return false
+        | .error _ => return false
+      return true
 
 private def isIsolatedConfigSubtree (path : System.FilePath) (allowMissing : Bool)
     (requireDir : Bool) : Nat → BaseIO Bool
@@ -315,13 +356,201 @@ private def isIsolatedConfigSubtree (path : System.FilePath) (allowMissing : Boo
           return true
       | .symlink | .other => return false
 
+private def isSafeDepDirName (dirName : String) : Bool :=
+  !dirName.isEmpty &&
+  dirName != "." &&
+  dirName != ".." &&
+  !(System.FilePath.mk dirName).isAbsolute &&
+  !dirName.any fun c => c == '/' || c == '\\' || System.FilePath.pathSeparators.contains c
+
+private def isSafeRelativePath (p : System.FilePath) : Bool :=
+  !p.isAbsolute &&
+  !p.components.any (· == "..")
+
+private def isSafeRelativeSubDir (subDir? : Option System.FilePath) : Bool :=
+  match subDir? with
+  | none => true
+  | some sub => isSafeRelativePath sub
+
+private def isDefaultTomlConfigFile (configFile : System.FilePath) : Bool :=
+  !configFile.isAbsolute &&
+  (configFile.normalize == Lake.defaultConfigFile.normalize ||
+   configFile.normalize == Lake.defaultTomlConfigFile.normalize)
+
+private def isDefaultManifestFile? (manifestFile? : Option System.FilePath) : Bool :=
+  match manifestFile? with
+  | none => true
+  | some p => !p.isAbsolute && p.normalize == Lake.defaultManifestFile.normalize
+
+private def hasDefaultTomlPath (table : Lake.Toml.Table) (key : Lean.Name)
+    (expected : System.FilePath) : Bool :=
+  match table.find? key with
+  | none => true
+  | some (.string _ s) =>
+    let p := System.FilePath.mk s
+    !p.isAbsolute && p.normalize == expected.normalize
+  | some _ => false
+
+private def hasDefaultTomlStoragePaths (table : Lake.Toml.Table) : Bool :=
+  hasDefaultTomlPath table `packagesDir Lake.defaultPackagesDir &&
+  hasDefaultTomlPath table `buildDir Lake.defaultBuildDir &&
+  hasDefaultTomlPath table `manifestFile Lake.defaultManifestFile &&
+  hasDefaultTomlPath table `leanLibDir Lake.defaultLeanLibDir &&
+  hasDefaultTomlPath table `nativeLibDir Lake.defaultNativeLibDir &&
+  hasDefaultTomlPath table `binDir Lake.defaultBinDir &&
+  hasDefaultTomlPath table `irDir Lake.defaultIrDir &&
+  hasDefaultTomlPath table `lakeDir Lake.defaultLakeDir
+
+private def loadTomlTable? (tomlPath : System.FilePath) : BaseIO (Option Lake.Toml.Table) := do
+  match ← (IO.FS.readFile tomlPath).toBaseIO with
+  | .error _ => return none
+  | .ok input =>
+    let ictx := Lean.Parser.mkInputContext input tomlPath.toString
+    match ← (Lake.Toml.loadToml ictx).toBaseIO with
+    | .ok table => return some table
+    | .error _ => return none
+
+private def parseTomlRequires (table : Lake.Toml.Table) : Option (Array Lake.Dependency) :=
+  match table.find? `require with
+  | none => some #[]
+  | some reqVal =>
+    match EStateM.run (Lake.decodeToml (α := Array Lake.Dependency) reqVal) #[] with
+    | .ok deps errs => if errs.isEmpty then some deps else none
+    | .error _ _ => none
+
+private def isIsolatedPathDep (depDir : System.FilePath) : Nat → BaseIO Bool
+  | 0 => return false
+  | depth + 1 => do
+    match ← depDir.symlinkMetadata.toBaseIO with
+    | .ok m =>
+      unless m.type == .dir do
+        return false
+    | .error _ => return false
+    unless ← isAbsentPath (depDir / Lake.defaultLeanConfigFile) do
+      return false
+    let tomlPath := depDir / Lake.defaultTomlConfigFile
+    unless ← isUniqueRegularFile tomlPath do
+      return false
+    let some table ← loadTomlTable? tomlPath
+      | return false
+    let some deps := parseTomlRequires table
+      | return false
+    for dep in deps do
+      unless isSafeDepDirName dep.dirName do
+        return false
+      match dep.src? with
+      | some (.path dir copy) =>
+        if copy then
+          return false
+        let some nextDir ← Lake.resolvePath? (depDir / dir)
+          | return false
+        unless ← isIsolatedPathDep nextDir depth do
+          return false
+      | some (.git _ _ subDir?) =>
+        unless isSafeRelativeSubDir subDir? do
+          return false
+      | none => pure ()
+    let manifestPath := depDir / Lake.defaultManifestFile
+    match ← manifestPath.symlinkMetadata.toBaseIO with
+    | .error (.noFileOrDirectory ..) => return true
+    | .error _ => return false
+    | .ok m =>
+      unless m.type == .file && m.numLinks == 1 do
+        return false
+      match ← (Lake.Manifest.load manifestPath).toBaseIO with
+      | .error _ => return false
+      | .ok manifest =>
+        for entry in manifest.packages do
+          unless isSafeDepDirName entry.dirName do
+            return false
+          match entry.src with
+          | .path dir copy =>
+            if copy then
+              return false
+            unless isDefaultTomlConfigFile entry.configFile &&
+                isDefaultManifestFile? entry.manifestFile? do
+              return false
+            let some nextDir ← Lake.resolvePath? (depDir / dir)
+              | return false
+            unless ← isIsolatedPathDep nextDir depth do
+              return false
+          | .git _ _ _ subDir? =>
+            unless isSafeRelativeSubDir subDir? && isSafeRelativePath entry.configFile do
+              return false
+        return true
+
+private def hasIsolatedManifest (realWsDir : System.FilePath) : BaseIO Bool := do
+  let manifestPath := realWsDir / Lake.defaultManifestFile
+  match ← manifestPath.symlinkMetadata.toBaseIO with
+  | .error (.noFileOrDirectory ..) => return true
+  | .error _ => return false
+  | .ok m =>
+    unless m.type == .file && m.numLinks == 1 do
+      return false
+    match ← (Lake.Manifest.load manifestPath).toBaseIO with
+    | .error _ => return false
+    | .ok manifest =>
+      unless !manifest.lakeDir.isAbsolute &&
+          manifest.lakeDir.normalize == Lake.defaultLakeDir.normalize do
+        return false
+      match manifest.packagesDir? with
+      | none => pure ()
+      | some pkgsDir =>
+        unless !pkgsDir.isAbsolute &&
+            pkgsDir.normalize == Lake.defaultPackagesDir.normalize do
+          return false
+      for entry in manifest.packages do
+        unless isSafeDepDirName entry.dirName do
+          return false
+        match entry.src with
+        | .path dir copy =>
+          if copy then
+            return false
+          unless isDefaultTomlConfigFile entry.configFile &&
+              isDefaultManifestFile? entry.manifestFile? do
+            return false
+          let some depDir ← Lake.resolvePath? (realWsDir / dir)
+            | return false
+          unless ← isIsolatedPathDep depDir 16 do
+            return false
+        | .git _ _ _ subDir? =>
+          unless isSafeRelativeSubDir subDir? && isSafeRelativePath entry.configFile do
+            return false
+      return true
+
 private def hasIsolatedLakeState (realWsDir : System.FilePath) : BaseIO Bool := do
   match ← realWsDir.symlinkMetadata.toBaseIO with
   | .ok m =>
     unless m.type == .dir do
       return false
   | .error _ => return false
-  unless ← isAbsentOrUniqueFile (realWsDir / "lake-manifest.json") do
+  unless ← isAbsentPath (realWsDir / Lake.defaultLeanConfigFile) do
+    return false
+  let tomlPath := realWsDir / Lake.defaultTomlConfigFile
+  unless ← isUniqueRegularFile tomlPath do
+    return false
+  let some table ← loadTomlTable? tomlPath
+    | return false
+  unless hasDefaultTomlStoragePaths table do
+    return false
+  let some deps := parseTomlRequires table
+    | return false
+  for dep in deps do
+    unless isSafeDepDirName dep.dirName do
+      return false
+    match dep.src? with
+    | some (.path dir copy) =>
+      if copy then
+        return false
+      let some depDir ← Lake.resolvePath? (realWsDir / dir)
+        | return false
+      unless ← isIsolatedPathDep depDir 16 do
+        return false
+    | some (.git _ _ subDir?) =>
+      unless isSafeRelativeSubDir subDir? do
+        return false
+    | none => pure ()
+  unless ← hasIsolatedManifest realWsDir do
     return false
   unless ← isAbsentOrUniqueFile (realWsDir / "lean-toolchain") do
     return false
@@ -332,9 +561,11 @@ private def hasIsolatedLakeState (realWsDir : System.FilePath) : BaseIO Bool := 
   | .ok m =>
     unless m.type == .dir do
       return false
+    unless ← isAbsentPath (lakeDir / "package-overrides.json") do
+      return false
     unless ← isIsolatedConfigSubtree (lakeDir / "config") true true 32 do
       return false
-    unless ← isAbsentOrRealDir (lakeDir / "packages") do
+    unless ← isIsolatedPackagesDir (lakeDir / "packages") do
       return false
     unless ← isAbsentOrRealDir (lakeDir / "build") do
       return false
