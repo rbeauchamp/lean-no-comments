@@ -32,7 +32,6 @@ structure LoopResponse where
   ok : Bool
   comments : Array WireComment := #[]
   error? : Option String := none
-  cacheHit : Bool := false
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
 private def formatErrors (msgs : Lean.MessageLog) : IO String := do
@@ -98,21 +97,26 @@ private inductive WorkerBinding where
   | unbound
   | bound (key : HeaderCacheKey) (env : Lean.Environment)
 
-private structure AnalyzeOutcome where
-  comments : Array Core.Comment
-  cacheHit : Bool
+private def nullStream : IO.FS.Stream := {
+  flush := pure ()
+  read := fun _ => pure ByteArray.empty
+  write := fun _ => pure ()
+  getLine := pure ""
+  putStr := fun _ => pure ()
+  isTty := pure false
+}
 
 private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputContext)
     (headerPos : String.Pos.Raw) (headerMsgs : Lean.MessageLog)
     (imports : Array Lean.Import) (isModule : Bool) (opts : Lean.Options)
     (filteredPlugins : Array Lean.Plugin) (cacheKey : HeaderCacheKey)
     (binding : WorkerBinding) :
-    IO (Lean.Environment × Lean.MessageLog × Bool × WorkerBinding) := do
+    IO (Lean.Environment × Lean.MessageLog × WorkerBinding) := do
   match binding with
   | .bound boundKey env =>
     if boundKey != cacheKey then
       throw <| IO.userError s!"worker process is bound to a different import header/environment; refusing to reuse worker for {req.relPath}"
-    return (env, headerMsgs, true, binding)
+    return (env, headerMsgs, binding)
   | .unbound =>
     let sysroot ←
       if req.leanSysroot != "" then pure (System.FilePath.mk req.leanSysroot)
@@ -133,15 +137,16 @@ private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputConte
     try
       let env ← Lean.importModules (leakEnv := true) (loadExts := true) (level := level)
         imports opts 0 filteredPlugins req.setup.importArts
-      return (env, headerMsgs, false, .bound cacheKey env)
+      return (env, headerMsgs, .bound cacheKey env)
     catch e =>
       let env ← Lean.mkEmptyEnvironment
       let pos := inputCtx.fileMap.toPosition headerPos
       let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
-      return (env, msgs, false, .unbound)
+      return (env, msgs, .unbound)
 
 private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBinding) :
-    IO (AnalyzeOutcome × WorkerBinding) := do
+    IO (Array Core.Comment × WorkerBinding) :=
+  IO.withStdin nullStream <| IO.withStdout nullStream do
   let content ← IO.FS.readFile (System.FilePath.mk req.absFile)
   let inputCtx := Lean.Parser.mkInputContext content req.relPath
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
@@ -169,7 +174,7 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
     optionsJson := (Lean.toJson req.setup.options).compress
     importArtsJson := (Lean.toJson req.setup.importArts).compress
   }
-  let (baseEnv, hdrMsgs0, cacheHit, nextBinding) ←
+  let (baseEnv, hdrMsgs0, nextBinding) ←
     loadBaseEnv req inputCtx headerParserState.pos headerMsgs imports isModule opts
       filteredPlugins cacheKey binding
   let env := baseEnv.setMainModule mainModule |>.setModulePackage req.setup.package?
@@ -211,15 +216,11 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
   match Core.collectRanges allRanges.toList {} with
   | .error e => throw <| IO.userError s!"comment audit error in {req.relPath}: {e}"
   | .ok acc =>
-    let outcome : AnalyzeOutcome := {
-      comments := Core.sourceOrder acc
-      cacheHit
-    }
-    return (outcome, nextBinding)
+    return (Core.sourceOrder acc, nextBinding)
 
 def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
-  let (outcome, _) ← analyzeTargetWithState req .unbound
-  return outcome.comments
+  let (comments, _) ← analyzeTargetWithState req .unbound
+  return comments
 
 def runWorkerMode : IO Unit := do
   let stdin ← IO.getStdin
@@ -242,6 +243,7 @@ private def toWireComments (comments : Array Core.Comment) : Array WireComment :
 def runWorkerLoopMode : IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
+  let initCwd ← IO.Process.getCurrentDir
   let mut binding : WorkerBinding := .unbound
   let mut keepGoing := true
   while keepGoing do
@@ -263,15 +265,19 @@ def runWorkerLoopMode : IO Unit := do
           stdout.flush
           keepGoing := false
         | .ok lreq =>
-          match ← (analyzeTargetWithState lreq.request binding).toBaseIO with
-          | .ok (outcome, binding') =>
+          IO.setNumHeartbeats 0
+          let runRes ← (try
+            analyzeTargetWithState lreq.request binding
+          finally
+            IO.Process.setCurrentDir initCwd).toBaseIO
+          match runRes with
+          | .ok (comments, binding') =>
             binding := binding'
             let resp : LoopResponse := {
               reqId := lreq.reqId
               relPath := lreq.request.relPath
               ok := true
-              comments := toWireComments outcome.comments
-              cacheHit := outcome.cacheHit
+              comments := toWireComments comments
             }
             stdout.putStrLn (Lean.toJson resp).compress
             stdout.flush

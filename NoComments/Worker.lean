@@ -179,34 +179,35 @@ private def targetWeight (target : LakeEnv.WorkerTargetSetup) : Nat :=
 
 private def buildBatches (targets : Array LakeEnv.WorkerTargetSetup) (jobs : Nat) :
     Array TargetBatch := Id.run do
-  let mut byKey : Std.HashMap String (WorkerEnvKey × Array (Nat × LakeEnv.WorkerTargetSetup)) := {}
-  let mut keyOrder : Array String := #[]
+  let mut keyToGroup : Std.HashMap String Nat := {}
+  let mut groups : Array (WorkerEnvKey × Array (Nat × LakeEnv.WorkerTargetSetup)) := #[]
   for h : idx in [:targets.size] do
     let target := targets[idx]
     let envKey := targetEnvKey target
     let k := targetBatchKey envKey target
-    if let some (ek, existing) := byKey[k]? then
-      byKey := byKey.insert k (ek, existing.push (idx, target))
+    if let some gIdx := keyToGroup[k]? then
+      groups := groups.modify gIdx fun (ek, existing) => (ek, existing.push (idx, target))
     else
-      keyOrder := keyOrder.push k
-      byKey := byKey.insert k (envKey, #[(idx, target)])
+      keyToGroup := keyToGroup.insert k groups.size
+      groups := groups.push (envKey, #[(idx, target)])
   let workerCount := max 1 (min jobs targets.size)
   let maxBatchSize := max 4 ((targets.size + workerCount - 1) / workerCount)
   let mut batches : Array TargetBatch := #[]
-  for k in keyOrder do
-    let (envKey, grp) := byKey[k]!
-    let baseWeight := targetWeight grp[0]!.2
-    let mut start := 0
-    while start < grp.size do
-      let stop := min (start + maxBatchSize) grp.size
-      let slice := grp.extract start stop
-      batches := batches.push {
-        envKey
-        items := slice
-        weight := baseWeight + slice.size
-        sortRelPath := slice[0]!.2.relPath
-      }
-      start := stop
+  for (envKey, grp) in groups do
+    if hGrp : 0 < grp.size then
+      let baseWeight := targetWeight grp[0].2
+      let mut start := 0
+      while start < grp.size do
+        let stop := min (start + maxBatchSize) grp.size
+        let slice := grp.extract start stop
+        if hSlice : 0 < slice.size then
+          batches := batches.push {
+            envKey
+            items := slice
+            weight := baseWeight + slice.size
+            sortRelPath := slice[0].2.relPath
+          }
+        start := stop
   return batches.qsort fun a b =>
     if a.weight != b.weight then
       a.weight > b.weight

@@ -248,7 +248,7 @@ private def parseLakeFlags (initWsDir : System.FilePath) (lakeArgs : Array Strin
     else if arg == "--iofail" then
       st := { st with failLv := .info }
       i := i + 1
-    else if arg == "-q" || arg == "--quiet" || arg == "-v" || arg == "--verbose" then
+    else if arg == "-q" || arg == "--quiet" || arg == "-v" || arg == "--verbose" || arg == "--ansi" || arg == "--no-ansi" then
       i := i + 1
     else if arg == "-K" then
       let nextIdx := i + 1
@@ -589,7 +589,13 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
     return #[]
   let wsDir := if w.dir == "." then repoRoot else repoRoot / w.dir
   checkWorkspaceToolchain wsDir
-  let (wsEnv, moduleSetups) ← runWorkspaceSetupBatch selfExe wsDir w.srcDir w.lakeArgs files
+  let nonToolReqs := files.filter (!·.isTool)
+  let (wsEnv, moduleSetups) ←
+    if nonToolReqs.isEmpty then
+      let env ← queryWorkspaceEnv selfExe wsDir w.srcDir w.lakeArgs
+      pure (env, ({} : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader)))
+    else
+      runWorkspaceSetupBatch selfExe wsDir w.srcDir w.lakeArgs nonToolReqs
   let mut targets := Array.emptyWithCapacity files.size
   for f in files do
     let absFile := (wsDir / f.wsRelPath).toString

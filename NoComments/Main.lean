@@ -182,7 +182,7 @@ private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
       if includeIt then
         if targetFile? == some rel then
           foundTarget := true
-        perWs := perWs.set! wsIdx (perWs[wsIdx]!.push { relPath := rel, wsRelPath := wsRel, isTool })
+        perWs := perWs.modify wsIdx (·.push { relPath := rel, wsRelPath := wsRel, isTool })
   if let some t := targetFile? then
     unless foundTarget do
       throw <| IO.userError s!"target file '{t}' is not a tracked Lean file in {repoRoot}"
