@@ -1,9 +1,11 @@
 import Lean
 import Lake
+import Lake.CLI.Serve
 import Lake.Load.Config
 import Lake.Load.Manifest
 import Lake.Load.Workspace
 import NoComments.Config
+import NoComments.Runner
 
 namespace NoComments.LakeEnv
 
@@ -36,7 +38,28 @@ structure SetupFileResult where
   relPath : String
   setup? : Option Lean.ModuleSetup
   header? : Option Lean.ModuleHeader := none
-  deriving Lean.ToJson, Lean.FromJson
+
+instance : Lean.ToJson SetupFileResult where
+  toJson r :=
+    let base : List (String × Lean.Json) := [("relPath", Lean.toJson r.relPath)]
+    let withSetup := match r.setup? with
+      | some s => ("setup", Runner.moduleSetupToJson s) :: base
+      | none => base
+    let withHeader := match r.header? with
+      | some h => ("header", Runner.moduleHeaderToJson h) :: withSetup
+      | none => withSetup
+    Lean.Json.mkObj withHeader
+
+instance : Lean.FromJson SetupFileResult where
+  fromJson? j := do
+    let relPath ← j.getObjValAs? String "relPath"
+    let setup? ← match ← Runner.getOptionalField j "setup" with
+      | none => pure none
+      | some v => some <$> Runner.moduleSetupFromJson? v
+    let header? ← match ← Runner.getOptionalField j "header" with
+      | none => pure none
+      | some v => some <$> Runner.moduleHeaderFromJson? v
+    return { relPath, setup?, header? }
 
 structure WorkspaceSetupResponse where
   leanPath : String
@@ -58,7 +81,44 @@ structure WorkerTargetSetup where
   sharedLibPath : String
   setup : Lean.ModuleSetup
   header? : Option Lean.ModuleHeader := none
-  deriving Inhabited, Lean.ToJson, Lean.FromJson
+  deriving Inhabited
+
+instance : Lean.ToJson WorkerTargetSetup where
+  toJson t :=
+    let base : List (String × Lean.Json) := [
+      ("relPath", Lean.toJson t.relPath),
+      ("wsDir", Lean.toJson t.wsDir),
+      ("absFile", Lean.toJson t.absFile),
+      ("isTool", Lean.toJson t.isTool),
+      ("leanPath", Lean.toJson t.leanPath),
+      ("leanSrcPath", Lean.toJson t.leanSrcPath),
+      ("leanSysroot", Lean.toJson t.leanSysroot),
+      ("sharedLibPath", Lean.toJson t.sharedLibPath),
+      ("setup", Runner.moduleSetupToJson t.setup)
+    ]
+    let withHeader := match t.header? with
+      | some h => ("header", Runner.moduleHeaderToJson h) :: base
+      | none => base
+    Lean.Json.mkObj withHeader
+
+instance : Lean.FromJson WorkerTargetSetup where
+  fromJson? j := do
+    let relPath ← j.getObjValAs? String "relPath"
+    let wsDir ← j.getObjValAs? String "wsDir"
+    let absFile ← j.getObjValAs? String "absFile"
+    let isTool ← j.getObjValAs? Bool "isTool"
+    let leanPath ← j.getObjValAs? String "leanPath"
+    let leanSrcPath ← j.getObjValAs? String "leanSrcPath"
+    let leanSysroot ← j.getObjValAs? String "leanSysroot"
+    let sharedLibPath ← j.getObjValAs? String "sharedLibPath"
+    let setup ← j.getObjVal? "setup" >>= Runner.moduleSetupFromJson?
+    let header? ← match ← Runner.getOptionalField j "header" with
+      | none => pure none
+      | some v => some <$> Runner.moduleHeaderFromJson? v
+    return {
+      relPath, wsDir, absFile, isTool, leanPath, leanSrcPath, leanSysroot, sharedLibPath,
+      setup, header?
+    }
 
 def sharedLibEnvVar : String :=
   if System.Platform.isOSX then "DYLD_LIBRARY_PATH" else "LD_LIBRARY_PATH"
@@ -318,39 +378,54 @@ def runWorkspaceSetupMode : IO Unit := do
     updateDeps := flags.updateDeps
     updateToolchain := flags.updateToolchain
   }
-  let (ws?, log) ← (Lake.loadWorkspace loadCfg).captureLog
-  let some ws := ws?
-    | throw <| IO.userError s!"failed to load Lake workspace in {wsDir}:\n{log.toString}"
   let realCfg ← Lake.realConfigFile loadCfg.configFile
-  let mut modPairs : Array (Nat × Lake.Module) := #[]
-  let mut extPairs : Array (Nat × String × System.FilePath) := #[]
+  let mut nonConfigFiles : Array (Nat × String × System.FilePath) := #[]
   let mut results : Array (Option Lean.ModuleSetup) := Array.replicate req.files.size none
   let mut headersArr : Array (Option Lean.ModuleHeader) := Array.replicate req.files.size none
+  let mut hasNonTool := false
   for h : idx in [:req.files.size] do
     let f := req.files[idx]
-    let rawAbs := origWsDir / f.wsRelPath
-    let resolvedFile ← match ← Lake.resolvePath? rawAbs with
-      | some p => pure p
-      | none => pure rawAbs.normalize
     if !f.isTool then
+      hasNonTool := true
+      let rawAbs := origWsDir / f.wsRelPath
+      let resolvedFile ← match ← Lake.resolvePath? rawAbs with
+        | some p => pure p
+        | none => pure rawAbs.normalize
       if !realCfg.toString.isEmpty && resolvedFile == realCfg then
         let cfgSetup : Lean.ModuleSetup := {
           name := Lake.configModuleName
           plugins := #[lakeEnv.lake.sharedLib]
         }
         results := results.set! idx (some cfgSetup)
-      else if let some mod := ws.findModuleBySrc? resolvedFile then
+      else
+        nonConfigFiles := nonConfigFiles.push (idx, f.wsRelPath, resolvedFile)
+  if hasNonTool && realCfg.toString.isEmpty then
+    throw <| IO.userError s!"no Lake configuration file found in {wsDir}"
+  unless nonConfigFiles.isEmpty do
+    if let some errLog := (← IO.getEnv Lake.invalidConfigEnvVar) then
+      let prefixMsg :=
+        if errLog.isEmpty then ""
+        else if errLog.endsWith "\n" then errLog
+        else errLog ++ "\n"
+      throw <| IO.userError
+        s!"{prefixMsg}Failed to configure the Lake workspace. Please restart the server after fixing the error above."
+    let (ws?, log) ← (Lake.loadWorkspace loadCfg).captureLog
+    let some ws := ws?
+      | throw <| IO.userError s!"failed to load Lake workspace in {wsDir}:\n{log.toString}"
+    let mut modPairs : Array (Nat × Lake.Module) := #[]
+    let mut extPairs : Array (Nat × String × System.FilePath) := #[]
+    for (idx, wsRel, resolvedFile) in nonConfigFiles do
+      if let some mod := ws.findModuleBySrc? resolvedFile then
         modPairs := modPairs.push (idx, mod)
       else
-        extPairs := extPairs.push (idx, f.wsRelPath, resolvedFile)
-  let buildCfg : Lake.BuildConfig := {
-    oldMode := flags.oldMode
-    trustHash := flags.trustHash
-    noBuild := true
-    verbosity := .quiet
-    failLv := flags.failLv
-  }
-  unless modPairs.isEmpty && extPairs.isEmpty do
+        extPairs := extPairs.push (idx, wsRel, resolvedFile)
+    let buildCfg : Lake.BuildConfig := {
+      oldMode := flags.oldMode
+      trustHash := flags.trustHash
+      noBuild := true
+      verbosity := .quiet
+      failLv := flags.failLv
+    }
     let (modSetups, extSetups) ← ws.runBuild (do
       let modJobs ← modPairs.mapM fun (_, mod) => do
         let setupJob ← mod.setup.fetch

@@ -5,6 +5,128 @@ namespace NoComments.Runner
 
 open NoComments
 
+def nameToJson (n : Lean.Name) : Lean.Json :=
+  let rec go : Lean.Name → List Lean.Json → List Lean.Json
+    | .anonymous, acc => acc
+    | .str pre s, acc => go pre (Lean.Json.str s :: acc)
+    | .num pre k, acc => go pre (Lean.Json.num (Lean.JsonNumber.fromNat k) :: acc)
+  Lean.Json.arr (go n []).toArray
+
+def nameFromJson? : Lean.Json → Except String Lean.Name
+  | .arr elems =>
+    elems.foldlM (init := Lean.Name.anonymous) fun acc elem =>
+      match elem with
+      | .str s => pure (Lean.Name.str acc s)
+      | .num ⟨Int.ofNat k, 0⟩ => pure (Lean.Name.num acc k)
+      | other => throw s!"expected string or natural number name component, got '{other}'"
+  | j@(.str _) => Lean.Name.fromJson? j
+  | other => throw s!"expected structured `Name` array or string, got '{other}'"
+
+def getOptionalField (j : Lean.Json) (key : String) : Except String (Option Lean.Json) :=
+  match j with
+  | .obj kvs =>
+    match kvs.get? key with
+    | none => pure none
+    | some .null => pure none
+    | some v => pure (some v)
+  | _ => throw "object expected"
+
+private def getObjOptField {α : Type} [Lean.FromJson α] (j : Lean.Json) (key : String) (default : α) :
+    Except String α :=
+  match j with
+  | .obj kvs =>
+    match kvs.get? key with
+    | none => pure default
+    | some v => Lean.fromJson? v
+  | _ => throw "object expected"
+
+def importToJson (imp : Lean.Import) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("module", nameToJson imp.module),
+    ("importAll", Lean.toJson imp.importAll),
+    ("isExported", Lean.toJson imp.isExported),
+    ("isMeta", Lean.toJson imp.isMeta)
+  ]
+
+def importFromJson? (j : Lean.Json) : Except String Lean.Import := do
+  let moduleJson ← j.getObjVal? "module"
+  let module ← nameFromJson? moduleJson
+  let importAll ← getObjOptField j "importAll" false
+  let isExported ← getObjOptField j "isExported" true
+  let isMeta ← getObjOptField j "isMeta" false
+  return { module, importAll, isExported, isMeta }
+
+def moduleHeaderToJson (hdr : Lean.ModuleHeader) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("imports", Lean.Json.arr (hdr.imports.map importToJson)),
+    ("isModule", Lean.toJson hdr.isModule)
+  ]
+
+def moduleHeaderFromJson? (j : Lean.Json) : Except String Lean.ModuleHeader := do
+  let importsJson ← j.getObjVal? "imports"
+  let importsArr ← importsJson.getArr?
+  let imports ← importsArr.mapM importFromJson?
+  let isModule ← j.getObjValAs? Bool "isModule"
+  return { imports, isModule }
+
+def nameMapToJson {α : Type} [Lean.ToJson α] (m : Lean.NameMap α) : Lean.Json :=
+  let entries := m.foldl (init := #[]) fun acc k v => acc.push (k, v)
+  let sorted := entries.qsort fun a b => Lean.Name.lt a.1 b.1
+  Lean.Json.arr <| sorted.map fun (k, v) => Lean.Json.arr #[nameToJson k, Lean.toJson v]
+
+def nameMapFromJson? {α : Type} [Lean.FromJson α] : Lean.Json → Except String (Lean.NameMap α)
+  | .arr entries =>
+    entries.foldlM (init := {}) fun m entry => do
+      let pair ← entry.getArr?
+      if h : pair.size = 2 then
+        let k ← nameFromJson? pair[0]
+        let v ← Lean.fromJson? pair[1]
+        return m.insert k v
+      else
+        throw s!"expected [name, value] pair in NameMap, got '{entry}'"
+  | j@(.obj _) => Lean.NameMap.fromJson? j
+  | other => throw s!"expected `NameMap` array or object, got '{other}'"
+
+def leanOptionsToJson (opts : Lean.LeanOptions) : Lean.Json :=
+  nameMapToJson opts.values
+
+def leanOptionsFromJson? (j : Lean.Json) : Except String Lean.LeanOptions :=
+  Lean.LeanOptions.mk <$> nameMapFromJson? j
+
+def moduleSetupToJson (s : Lean.ModuleSetup) : Lean.Json :=
+  let base : List (String × Lean.Json) := [
+    ("name", nameToJson s.name),
+    ("isModule", Lean.toJson s.isModule),
+    ("importArts", nameMapToJson s.importArts),
+    ("dynlibs", Lean.toJson s.dynlibs),
+    ("plugins", Lean.toJson s.plugins),
+    ("options", leanOptionsToJson s.options)
+  ]
+  let withPkg := match s.package? with
+    | some pkg => ("package", Lean.toJson pkg) :: base
+    | none => base
+  let withImports := match s.imports? with
+    | some imps => ("imports", Lean.Json.arr (imps.map importToJson)) :: withPkg
+    | none => withPkg
+  Lean.Json.mkObj withImports
+
+def moduleSetupFromJson? (j : Lean.Json) : Except String Lean.ModuleSetup := do
+  let name ← j.getObjVal? "name" >>= nameFromJson?
+  let package? : Option Lean.PkgId ← match ← getOptionalField j "package" with
+    | none => pure none
+    | some v => some <$> Lean.fromJson? v
+  let isModule ← j.getObjValAs? Bool "isModule"
+  let imports? ← match ← getOptionalField j "imports" with
+    | none => pure none
+    | some v =>
+      let arr ← v.getArr?
+      some <$> arr.mapM importFromJson?
+  let importArts : Lean.NameMap Lean.ImportArtifacts ← j.getObjVal? "importArts" >>= nameMapFromJson?
+  let dynlibs ← j.getObjValAs? (Array System.FilePath) "dynlibs"
+  let plugins ← j.getObjValAs? (Array Lean.Plugin) "plugins"
+  let options ← j.getObjVal? "options" >>= leanOptionsFromJson?
+  return { name, package?, isModule, imports?, importArts, dynlibs, plugins, options }
+
 structure WorkerRequest where
   relPath : String
   absFile : String
@@ -12,7 +134,28 @@ structure WorkerRequest where
   leanSysroot : String
   setup : Lean.ModuleSetup
   stripLakePlugin : Bool := true
-  deriving Inhabited, Lean.ToJson, Lean.FromJson
+  deriving Inhabited
+
+instance : Lean.ToJson WorkerRequest where
+  toJson req :=
+    Lean.Json.mkObj [
+      ("relPath", Lean.toJson req.relPath),
+      ("absFile", Lean.toJson req.absFile),
+      ("leanPath", Lean.toJson req.leanPath),
+      ("leanSysroot", Lean.toJson req.leanSysroot),
+      ("setup", moduleSetupToJson req.setup),
+      ("stripLakePlugin", Lean.toJson req.stripLakePlugin)
+    ]
+
+instance : Lean.FromJson WorkerRequest where
+  fromJson? j := do
+    let relPath ← j.getObjValAs? String "relPath"
+    let absFile ← j.getObjValAs? String "absFile"
+    let leanPath ← j.getObjValAs? String "leanPath"
+    let leanSysroot ← j.getObjValAs? String "leanSysroot"
+    let setup ← j.getObjVal? "setup" >>= moduleSetupFromJson?
+    let stripLakePlugin ← getObjOptField j "stripLakePlugin" true
+    return { relPath, absFile, leanPath, leanSysroot, setup, stripLakePlugin }
 
 structure LoopRequest where
   reqId : Nat
@@ -35,7 +178,7 @@ structure LoopResponse where
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
 private def formatErrors (msgs : Lean.MessageLog) : IO String := do
-  let errMsgs := msgs.toList.filter (·.severity == .error)
+  let errMsgs := msgs.reportedPlusUnreported.toList.filter (·.severity == .error)
   let lines ← errMsgs.mapM fun m => m.toString
   return String.intercalate "\n" lines
 
@@ -51,20 +194,43 @@ private def mkParserCtx (inputCtx : Lean.Parser.InputContext) (cmdState : Lean.E
     toCacheableParserContext := { prec := 0 }
     tokens := Lean.Parser.getTokenTable cmdState.env }
 
+private def appendErrorMessages (acc msgs : Lean.MessageLog) : Lean.MessageLog :=
+  if msgs.hasErrors then acc ++ msgs else acc
+
+private def collectSnapshotErrors
+    (tasks : Array (Lean.Language.SnapshotTask Lean.Language.SnapshotTree))
+    (acc : Lean.MessageLog) : Lean.MessageLog :=
+  if tasks.isEmpty then acc
+  else
+    let tree := Lean.Language.SnapshotTree.mk { diagnostics := .empty } tasks
+    tree.getAll.foldl (init := acc) fun logs snap =>
+      appendErrorMessages logs snap.diagnostics.msgLog
+
 private partial def collectFrontendCommands (inputCtx : Lean.Parser.InputContext)
-    (acc : Array Core.CommandRange) : Lean.Elab.Frontend.FrontendM (Array Core.CommandRange) := do
+    (acc : Array Core.CommandRange) (errMsgs : Lean.MessageLog) :
+    Lean.Elab.Frontend.FrontendM (Array Core.CommandRange × Lean.MessageLog) := do
+  Lean.Elab.Frontend.updateCmdPos
   let stBefore ← get
   let prevPos := stBefore.parserState.pos
   let pmCtx := mkParserCtx inputCtx stBefore.commandState
-  let done ← Lean.Elab.Frontend.processCommand
+  let (cmd, ps, parseMsgs) :=
+    Lean.Parser.parseCommand inputCtx pmCtx.toParserModuleContext stBefore.parserState .empty
+  modify fun s => { s with commands := s.commands.push cmd }
+  Lean.Elab.Frontend.setParserState ps
+  Lean.Elab.Frontend.setMessages parseMsgs
+  Lean.Elab.Frontend.elabCommandAtFrontend cmd
   let stAfter ← get
   let nextPos := stAfter.parserState.pos
-  let cmd := stAfter.commands.back!
   let acc := acc.push { ctx := pmCtx, prevPos, nextPos, stx := cmd }
-  if done then
-    return acc
+  let errMsgs := appendErrorMessages errMsgs parseMsgs
+  let errMsgs := appendErrorMessages errMsgs stAfter.commandState.messages
+  let errMsgs := collectSnapshotErrors stAfter.commandState.snapshotTasks errMsgs
+  unless stAfter.commandState.snapshotTasks.isEmpty do
+    modify fun s => { s with commandState := { s.commandState with snapshotTasks := #[] } }
+  if Lean.Parser.isTerminalCommand cmd then
+    return (acc, errMsgs)
   else
-    collectFrontendCommands inputCtx acc
+    collectFrontendCommands inputCtx acc errMsgs
 
 private def applyWorkerOptionOverrides (base : Lean.Options) : Lean.Options :=
   let o1 := base.setBool `Elab.async false
@@ -161,8 +327,8 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
     isModule
     inServer := Lean.Elab.inServer.get opts
     imports
-    optionsJson := (Lean.toJson req.setup.options).compress
-    importArtsJson := (Lean.toJson req.setup.importArts).compress
+    optionsJson := (leanOptionsToJson req.setup.options).compress
+    importArtsJson := (nameMapToJson req.setup.importArts).compress
   }
   let (baseEnv, hdrMsgs0, nextBinding) ←
     loadBaseEnv req inputCtx headerParserState.pos headerMsgs imports isModule opts
@@ -187,10 +353,10 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
     parserState := headerParserState
     cmdPos := headerParserState.pos
   }
-  let (cmdRanges, finalState) ←
-    ((collectFrontendCommands inputCtx #[initialRange]).run { inputCtx }).run initFrontendState
-  if finalState.commandState.messages.hasErrors then
-    let errText ← formatErrors finalState.commandState.messages
+  let ((cmdRanges, cmdErrMsgs), finalState) ←
+    ((collectFrontendCommands inputCtx #[initialRange] {}).run { inputCtx }).run initFrontendState
+  if cmdErrMsgs.hasErrors then
+    let errText ← formatErrors cmdErrMsgs
     throw <| IO.userError s!"elaboration error in {req.relPath}:\n{errText}"
   let finalPos := finalState.parserState.pos
   let allRanges :=

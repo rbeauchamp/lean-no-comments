@@ -164,9 +164,9 @@ private def targetBatchKey (envKey : WorkerEnvKey) (target : LakeEnv.WorkerTarge
         Lean.toJson envKey.dynlibs,
         Lean.toJson envKey.plugins,
         Lean.toJson isMod,
-        Lean.toJson target.setup.options,
-        Lean.toJson target.setup.importArts,
-        Lean.toJson imps
+        Runner.leanOptionsToJson target.setup.options,
+        Runner.nameMapToJson target.setup.importArts,
+        Lean.Json.arr (imps.map Runner.importToJson)
       ]
     | _, _ =>
       Lean.toJson #[
