@@ -186,6 +186,7 @@ private def prepareStagedWorkspaces (selfExe repoRoot : System.FilePath)
   if staged.size == 1 || jobs <= 1 then
     return ← prepareStagedSequential selfExe repoRoot staged
   let mut keyToGroup : Std.HashMap String Nat := {}
+  let mut groupWsDirs : Array System.FilePath := #[]
   let mut groups : Array (Array (Nat × StagedWorkspace)) := #[]
   let mut allResolved := true
   for h : idx in [:staged.size] do
@@ -194,14 +195,21 @@ private def prepareStagedWorkspaces (selfExe repoRoot : System.FilePath)
     | none =>
       allResolved := false
       break
-    | some lockDir =>
-      let k := lockDir.toString
+    | some realWsDir =>
+      let k := realWsDir.toString
       if let some gIdx := keyToGroup[k]? then
         groups := groups.modify gIdx (·.push (idx, item))
       else
         keyToGroup := keyToGroup.insert k groups.size
+        groupWsDirs := groupWsDirs.push realWsDir
         groups := groups.push #[(idx, item)]
-  if !allResolved || groups.size <= 1 then
+  let mut allDisjoint := true
+  if allResolved then
+    for h1 : i in [:groupWsDirs.size] do
+      for h2 : j in [:groupWsDirs.size] do
+        if i < j && !LakeEnv.lakeStorageDisjoint groupWsDirs[i] groupWsDirs[j] then
+          allDisjoint := false
+  if !allResolved || !allDisjoint || groups.size <= 1 then
     return ← prepareStagedSequential selfExe repoRoot staged
   let workerCount := min jobs groups.size
   let poolMutex ← Std.Mutex.new {

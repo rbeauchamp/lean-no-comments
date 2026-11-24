@@ -253,7 +253,7 @@ private def parseRootDirShort : Char → LakeRootOptM Unit
     let some dir ← Lake.takeArg? | failure
     set (some dir)
   | 'f' | 'o' | 'K' => skipOptArg
-  | 'q' | 'v' | 'U' | 'R' | 'h' | 'H' | 'J' => pure ()
+  | 'q' | 'v' | 'R' | 'H' | 'J' => pure ()
   | _ => failure
 
 private def parseRootDirLong : String → LakeRootOptM Unit
@@ -265,11 +265,11 @@ private def parseRootDirLong : String → LakeRootOptM Unit
   | "--fail-level" | "--linters" | "--lint-only" | "--checks" | "--only"
   | "--add-downstream" | "--add-public-downstream" | "--config" | "--from-export"
   | "--challenge-from-export" | "--solution-from-export" => skipOptArg
-  | "--quiet" | "--verbose" | "--update" | "--keep-toolchain" | "--reconfigure"
+  | "--quiet" | "--verbose" | "--keep-toolchain" | "--reconfigure"
   | "--old" | "--text" | "--json" | "--allow-empty" | "--no-build" | "--fail-fast"
   | "--no-cache" | "--try-cache" | "--rehash" | "--offline" | "--wfail" | "--iofail"
   | "--no-overwrite" | "--force-overwrite" | "--force-download" | "--download-arts"
-  | "--mappings-only" | "--ansi" | "--no-ansi" | "--help" | "--builtin-lint"
+  | "--mappings-only" | "--ansi" | "--no-ansi" | "--builtin-lint"
   | "--builtin-only" | "--record-exceptions" | "--code-quality" | "--raw"
   | "--no-serve" | "--force" | "--keep-implied" | "--keep-prefix" | "--keep-public"
   | "--add-public" | "--gh-style" | "--explain" | "--trace" | "--fix"
@@ -282,6 +282,73 @@ private def parseRootDirOption : String → LakeRootOptM Unit :=
     long := parseRootDirLong
     longShort := Lake.shortOptionWithArg parseRootDirShort
   }
+
+private def isAbsentOrUniqueFile (path : System.FilePath) : BaseIO Bool := do
+  match ← path.symlinkMetadata.toBaseIO with
+  | .error (.noFileOrDirectory ..) => return true
+  | .error _ => return false
+  | .ok m => return m.type == .file && m.numLinks == 1
+
+private def isAbsentOrRealDir (path : System.FilePath) : BaseIO Bool := do
+  match ← path.symlinkMetadata.toBaseIO with
+  | .error (.noFileOrDirectory ..) => return true
+  | .error _ => return false
+  | .ok m => return m.type == .dir
+
+private def isIsolatedConfigSubtree (path : System.FilePath) (allowMissing : Bool)
+    (requireDir : Bool) : Nat → BaseIO Bool
+  | 0 => return false
+  | depth + 1 => do
+    match ← path.symlinkMetadata.toBaseIO with
+    | .error (.noFileOrDirectory ..) => return allowMissing
+    | .error _ => return false
+    | .ok m =>
+      match m.type with
+      | .file => return !requireDir && m.numLinks == 1
+      | .dir =>
+        match ← path.readDir.toBaseIO with
+        | .error _ => return false
+        | .ok entries =>
+          for ent in entries do
+            unless ← isIsolatedConfigSubtree ent.path false false depth do
+              return false
+          return true
+      | .symlink | .other => return false
+
+private def hasIsolatedLakeState (realWsDir : System.FilePath) : BaseIO Bool := do
+  match ← realWsDir.symlinkMetadata.toBaseIO with
+  | .ok m =>
+    unless m.type == .dir do
+      return false
+  | .error _ => return false
+  unless ← isAbsentOrUniqueFile (realWsDir / "lake-manifest.json") do
+    return false
+  unless ← isAbsentOrUniqueFile (realWsDir / "lean-toolchain") do
+    return false
+  let lakeDir := realWsDir / Lake.defaultLakeDir
+  match ← lakeDir.symlinkMetadata.toBaseIO with
+  | .error (.noFileOrDirectory ..) => return true
+  | .error _ => return false
+  | .ok m =>
+    unless m.type == .dir do
+      return false
+    unless ← isIsolatedConfigSubtree (lakeDir / "config") true true 32 do
+      return false
+    unless ← isAbsentOrRealDir (lakeDir / "packages") do
+      return false
+    unless ← isAbsentOrRealDir (lakeDir / "build") do
+      return false
+    return true
+
+private def isSegmentPrefix (prefixPath targetPath : System.FilePath) : Bool :=
+  let pre := prefixPath.components.filter (!·.isEmpty)
+  let tgt := targetPath.components.filter (!·.isEmpty)
+  pre.length <= tgt.length && pre == tgt.take pre.length
+
+def lakeStorageDisjoint (wsDirA wsDirB : System.FilePath) : Bool :=
+  let lakeA := wsDirA / Lake.defaultLakeDir
+  let lakeB := wsDirB / Lake.defaultLakeDir
+  !(isSegmentPrefix lakeA wsDirB) && !(isSegmentPrefix lakeB wsDirA)
 
 def resolveLakeLockKey? (repoRoot : System.FilePath) (w : Config.WorkspaceConfig) :
     IO (Option System.FilePath) := do
@@ -297,11 +364,9 @@ def resolveLakeLockKey? (repoRoot : System.FilePath) (w : Config.WorkspaceConfig
       | return none
     let some realWsDir ← Lake.resolvePath? effectiveDir
       | return none
-    let lakeDirPath := realWsDir / ".lake"
-    let lockDir ← match ← Lake.resolvePath? lakeDirPath with
-      | some realLakeDir => pure realLakeDir
-      | none => pure lakeDirPath
-    return some lockDir
+    unless ← hasIsolatedLakeState realWsDir do
+      return none
+    return some realWsDir
   | _ => return none
 
 private def parseConfigOpt (kvPair : String) : Lean.Name × String :=
