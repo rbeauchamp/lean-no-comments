@@ -134,11 +134,12 @@ structure WorkerRequest where
   leanSysroot : String
   setup : Lean.ModuleSetup
   stripLakePlugin : Bool := true
+  lakePkgDir? : Option String := none
   deriving Inhabited
 
 instance : Lean.ToJson WorkerRequest where
   toJson req :=
-    Lean.Json.mkObj [
+    let base : List (String × Lean.Json) := [
       ("relPath", Lean.toJson req.relPath),
       ("absFile", Lean.toJson req.absFile),
       ("leanPath", Lean.toJson req.leanPath),
@@ -146,6 +147,10 @@ instance : Lean.ToJson WorkerRequest where
       ("setup", moduleSetupToJson req.setup),
       ("stripLakePlugin", Lean.toJson req.stripLakePlugin)
     ]
+    let withPkgDir := match req.lakePkgDir? with
+      | some d => ("lakePkgDir", Lean.toJson d) :: base
+      | none => base
+    Lean.Json.mkObj withPkgDir
 
 instance : Lean.FromJson WorkerRequest where
   fromJson? j := do
@@ -155,7 +160,10 @@ instance : Lean.FromJson WorkerRequest where
     let leanSysroot ← j.getObjValAs? String "leanSysroot"
     let setup ← j.getObjVal? "setup" >>= moduleSetupFromJson?
     let stripLakePlugin ← getObjOptField j "stripLakePlugin" true
-    return { relPath, absFile, leanPath, leanSysroot, setup, stripLakePlugin }
+    let lakePkgDir? ← match ← getOptionalField j "lakePkgDir" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
+    return { relPath, absFile, leanPath, leanSysroot, setup, stripLakePlugin, lakePkgDir? }
 
 structure LoopRequest where
   reqId : Nat
@@ -177,9 +185,105 @@ structure LoopResponse where
   error? : Option String := none
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
-private def formatErrors (msgs : Lean.MessageLog) : IO String := do
+private def remapIOErrorFile (fromPath toPath : String) : IO.Error → IO.Error
+  | .alreadyExists (some fn) code details =>
+    .alreadyExists (some (if fn == fromPath then toPath else fn)) code details
+  | .interrupted fn code details =>
+    .interrupted (if fn == fromPath then toPath else fn) code details
+  | .noFileOrDirectory fn code details =>
+    .noFileOrDirectory (if fn == fromPath then toPath else fn) code details
+  | .invalidArgument (some fn) code details =>
+    .invalidArgument (some (if fn == fromPath then toPath else fn)) code details
+  | .permissionDenied (some fn) code details =>
+    .permissionDenied (some (if fn == fromPath then toPath else fn)) code details
+  | .resourceExhausted (some fn) code details =>
+    .resourceExhausted (some (if fn == fromPath then toPath else fn)) code details
+  | .inappropriateType (some fn) code details =>
+    .inappropriateType (some (if fn == fromPath then toPath else fn)) code details
+  | .noSuchThing (some fn) code details =>
+    .noSuchThing (some (if fn == fromPath then toPath else fn)) code details
+  | .userError msg =>
+    if msg == s!"Tried to read file '{fromPath}' containing non UTF-8 data." then
+      .userError s!"Tried to read file '{toPath}' containing non UTF-8 data."
+    else
+      .userError msg
+  | e@(.alreadyExists none _ _)
+  | e@(.invalidArgument none _ _)
+  | e@(.permissionDenied none _ _)
+  | e@(.resourceExhausted none _ _)
+  | e@(.inappropriateType none _ _)
+  | e@(.noSuchThing none _ _)
+  | e@(.otherError _ _)
+  | e@(.resourceBusy _ _)
+  | e@(.resourceVanished _ _)
+  | e@(.unsupportedOperation _ _)
+  | e@(.hardwareFault _ _)
+  | e@(.unsatisfiedConstraints _ _)
+  | e@(.illegalOperation _ _)
+  | e@(.protocolError _ _)
+  | e@(.timeExpired _ _)
+  | e@(.unexpectedEof) => e
+
+private unsafe def evalIncludeFilePathImpl (stx : Lean.Syntax) :
+    Lean.Elab.Term.TermElabM System.FilePath :=
+  Lean.Elab.Term.evalTerm System.FilePath (Lean.mkConst ``System.FilePath) stx
+
+@[implemented_by evalIncludeFilePathImpl]
+private def evalIncludeFilePath (_stx : Lean.Syntax) :
+    Lean.Elab.Term.TermElabM System.FilePath :=
+  Lean.throwError "include_str path evaluator unavailable"
+
+private def relativeIncludeDisplayPath (relPath : String) (relArg : System.FilePath) :
+    System.FilePath :=
+  match (System.FilePath.mk relPath).parent with
+  | some relDir => relDir / relArg
+  | none => if relArg.toString.isEmpty then System.FilePath.mk "." else relArg
+
+private def elabIncludeStrWithRelDiag (resolvedFileName relPath : String) :
+    Lean.Elab.Term.TermElab
+  | `(include_str $path:term), _ => do
+    let argPath ← evalIncludeFilePath path
+    let ctx ← readThe Lean.Core.Context
+    let srcPath := System.FilePath.mk ctx.fileName
+    let some srcDir := srcPath.parent
+      | Lean.throwError "cannot compute parent directory of `{srcPath}`"
+    let fullPath := srcDir / argPath
+    let displayPath? : Option System.FilePath :=
+      if ctx.fileName == resolvedFileName && !argPath.isAbsolute then
+        some (relativeIncludeDisplayPath relPath argPath)
+      else
+        none
+    let content ← liftM (m := IO) do
+      try
+        IO.FS.readFile fullPath
+      catch err =>
+        match displayPath? with
+        | some displayPath => throw (remapIOErrorFile fullPath.toString displayPath.toString err)
+        | none => throw err
+    return Lean.mkStrLit content
+  | _, _ => Lean.Elab.throwUnsupportedSyntax
+
+private def installIncludeStrRelDiag (resolvedFileName relPath : String)
+    (env : Lean.Environment) : Lean.Environment :=
+  Lean.Elab.Term.termElabAttribute.ext.modifyState env fun st =>
+    match st.table.find? ``Lean.includeStr with
+    | none => st
+    | some entries =>
+      let entries' := entries.map fun entry =>
+        if entry.declName == ``Lean.Elab.Term.elabIncludeStr then
+          { entry with value := elabIncludeStrWithRelDiag resolvedFileName relPath }
+        else
+          entry
+      { st with table := st.table.insert ``Lean.includeStr entries' }
+
+private def formatErrors (resolvedFileName rawFileName relPath : String)
+    (msgs : Lean.MessageLog) : IO String := do
   let errMsgs := msgs.reportedPlusUnreported.toList.filter (·.severity == .error)
-  let lines ← errMsgs.mapM fun m => m.toString
+  let lines ← errMsgs.mapM fun m => do
+    let sm ← m.serialize
+    let isTargetFile := sm.fileName == resolvedFileName || sm.fileName == rawFileName
+    let sm := if isTargetFile then { sm with fileName := relPath } else sm
+    return sm.toString
   return String.intercalate "\n" lines
 
 private def mkParserCtx (inputCtx : Lean.Parser.InputContext) (cmdState : Lean.Elab.Command.State) :
@@ -301,13 +405,27 @@ private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputConte
     let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
     return (env, msgs, binding)
 
-private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBinding) :
+private def resolveWorkerFile (rawAbs : String) : IO System.FilePath := do
+  let rawPath := System.FilePath.mk rawAbs
+  match ← (IO.FS.realPath rawPath).toBaseIO with
+  | .ok real =>
+    if (← real.pathExists) then
+      pure real.normalize
+    else
+      pure rawPath
+  | .error _ =>
+    pure rawPath
+
+private def analyzeTargetWithState
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment)
+    (req : WorkerRequest) (binding : WorkerBinding) :
     IO (Array Core.Comment × WorkerBinding) := do
-  let content ← IO.FS.readFile (System.FilePath.mk req.absFile)
-  let inputCtx := Lean.Parser.mkInputContext content req.relPath
+  let resolvedFile ← resolveWorkerFile req.absFile
+  let content ← IO.FS.readFile resolvedFile
+  let inputCtx := Lean.Parser.mkInputContext content resolvedFile.toString
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
   if headerMsgs.hasErrors then
-    let errText ← formatErrors headerMsgs
+    let errText ← formatErrors inputCtx.fileName req.absFile req.relPath headerMsgs
     throw <| IO.userError s!"parse error in header of {req.relPath}:\n{errText}"
   let opts := applyWorkerOptionOverrides req.setup.options.toOptions
   let headerSyntax : Lean.Elab.HeaderSyntax := ⟨headerStx⟩
@@ -338,8 +456,10 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
     hdrMsgs0 (some headerSyntax) (some headerSyntax)
   let hdrMsgs := Lean.Elab.checkModuleNamePortability mainModule inputCtx headerParserState.pos hdrMsgs
   if hdrMsgs.hasErrors then
-    let errText ← formatErrors hdrMsgs
+    let errText ← formatErrors inputCtx.fileName req.absFile req.relPath hdrMsgs
     throw <| IO.userError s!"import/header elaboration error in {req.relPath}:\n{errText}"
+  let env := prepareEnv req resolvedFile mainModule env
+  let env := installIncludeStrRelDiag inputCtx.fileName req.relPath env
   let cmdState := Lean.Elab.Command.mkState env hdrMsgs opts
   let hdrCtx := mkParserCtx inputCtx cmdState
   let initialRange : Core.CommandRange := {
@@ -356,7 +476,7 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
   let ((cmdRanges, cmdErrMsgs), finalState) ←
     ((collectFrontendCommands inputCtx #[initialRange] {}).run { inputCtx }).run initFrontendState
   if cmdErrMsgs.hasErrors then
-    let errText ← formatErrors cmdErrMsgs
+    let errText ← formatErrors inputCtx.fileName req.absFile req.relPath cmdErrMsgs
     throw <| IO.userError s!"elaboration error in {req.relPath}:\n{errText}"
   let finalPos := finalState.parserState.pos
   let allRanges :=
@@ -374,17 +494,23 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
   | .ok acc =>
     return (Core.sourceOrder acc, nextBinding)
 
-def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
-  let (comments, _) ← analyzeTargetWithState req .oneShot
+def analyzeTarget (req : WorkerRequest)
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment :=
+      fun _ _ _ env => env) :
+    IO (Array Core.Comment) := do
+  let (comments, _) ← analyzeTargetWithState prepareEnv req .oneShot
   return comments
 
-def runWorkerMode : IO Unit := do
+def runWorkerMode
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment :=
+      fun _ _ _ env => env) :
+    IO Unit := do
   let stdin ← IO.getStdin
   let raw ← stdin.readToEnd
   let req : WorkerRequest ← match Lean.Json.parse raw >>= Lean.fromJson? with
     | .ok r => pure r
     | .error e => throw <| IO.userError s!"invalid worker request JSON: {e}"
-  let comments ← analyzeTarget req
+  let comments ← analyzeTarget req prepareEnv
   for c in comments do
     IO.println s!"{c.fingerprint} {c.kind} {c.startLine} {c.endLine}"
 
@@ -414,7 +540,10 @@ private def mkCaptureStream (bufRef : IO.Ref ByteArray) : IO.FS.Stream := {
   isTty := pure false
 }
 
-def runWorkerLoopMode : IO Unit := do
+def runWorkerLoopMode
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment :=
+      fun _ _ _ env => env) :
+    IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
   let initCwd ← IO.Process.getCurrentDir
@@ -443,7 +572,7 @@ def runWorkerLoopMode : IO Unit := do
         let captureOut := mkCaptureStream capturedOutRef
         let runRes ← (try
           IO.withStdin nullStream <| IO.withStdout captureOut <|
-            analyzeTargetWithState lreq.request binding
+            analyzeTargetWithState prepareEnv lreq.request binding
         finally
           IO.Process.setCurrentDir initCwd).toBaseIO
         match runRes with

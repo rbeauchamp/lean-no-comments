@@ -9,7 +9,7 @@ import NoComments.Worker
 
 open NoComments
 
-private def toolVersion : String := "0.3.0"
+private def toolVersion : String := "0.3.1"
 
 private inductive CommandMode where
   | inventory (file? : Option String) (asJson : Bool)

@@ -1,4 +1,6 @@
 import Lean
+import Lake.DSL.Extensions
+import Lake.Load.Lean.Elab
 import Std.Sync.Mutex
 import NoComments.Core
 import NoComments.Runner
@@ -12,11 +14,29 @@ open NoComments
 private def coreSource : String := include_str "Core.lean"
 private def runnerSource : String := include_str "Runner.lean"
 
+private def prepareLakeEnv (req : Runner.WorkerRequest) (resolvedFile : System.FilePath)
+    (mainModule : Lean.Name) (env : Lean.Environment) : Lean.Environment :=
+  let explicitPkgDir? : Option System.FilePath :=
+    match req.lakePkgDir? with
+    | some dir => if !dir.isEmpty then some (System.FilePath.mk dir) else none
+    | none => none
+  let pkgDir? : Option System.FilePath :=
+    match explicitPkgDir? with
+    | some pkgDir => some pkgDir
+    | none =>
+      if mainModule == Lake.configModuleName && req.setup.plugins.any Runner.isLakeSharedPlugin then
+        resolvedFile.parent
+      else
+        none
+  match pkgDir? with
+  | some pkgDir => Lake.dirExt.setState env (some pkgDir)
+  | none => env
+
 def runWorkerMode : IO Unit :=
-  Runner.runWorkerMode
+  Runner.runWorkerMode prepareLakeEnv
 
 def runWorkerLoopMode : IO Unit :=
-  Runner.runWorkerLoopMode
+  Runner.runWorkerLoopMode prepareLakeEnv
 
 private def needsSharedLeanWorker (target : LakeEnv.WorkerTargetSetup) : Bool :=
   !target.setup.dynlibs.isEmpty || target.setup.plugins.any (!Runner.isLakeSharedPlugin ·)
@@ -29,6 +49,7 @@ private def toRunnerRequest (target : LakeEnv.WorkerTargetSetup) (stripLakePlugi
   leanSysroot := target.leanSysroot
   setup := target.setup
   stripLakePlugin
+  lakePkgDir? := target.lakePkgDir?
 }
 
 private def leanExeForSysroot (sysroot : String) : String :=
