@@ -185,9 +185,11 @@ structure LoopResponse where
   error? : Option String := none
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
-private def formatErrors (msgs : Lean.MessageLog) : IO String := do
+private def formatErrors (inputFileName relPath : String) (msgs : Lean.MessageLog) : IO String := do
   let errMsgs := msgs.reportedPlusUnreported.toList.filter (·.severity == .error)
-  let lines ← errMsgs.mapM fun m => m.toString
+  let lines ← errMsgs.mapM fun m =>
+    let m := if m.fileName == inputFileName then { m with fileName := relPath } else m
+    m.toString
   return String.intercalate "\n" lines
 
 private def mkParserCtx (inputCtx : Lean.Parser.InputContext) (cmdState : Lean.Elab.Command.State) :
@@ -317,7 +319,7 @@ private def analyzeTargetWithState
   let inputCtx := Lean.Parser.mkInputContext content req.absFile
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
   if headerMsgs.hasErrors then
-    let errText ← formatErrors headerMsgs
+    let errText ← formatErrors inputCtx.fileName req.relPath headerMsgs
     throw <| IO.userError s!"parse error in header of {req.relPath}:\n{errText}"
   let opts := applyWorkerOptionOverrides req.setup.options.toOptions
   let headerSyntax : Lean.Elab.HeaderSyntax := ⟨headerStx⟩
@@ -348,7 +350,7 @@ private def analyzeTargetWithState
     hdrMsgs0 (some headerSyntax) (some headerSyntax)
   let hdrMsgs := Lean.Elab.checkModuleNamePortability mainModule inputCtx headerParserState.pos hdrMsgs
   if hdrMsgs.hasErrors then
-    let errText ← formatErrors hdrMsgs
+    let errText ← formatErrors inputCtx.fileName req.relPath hdrMsgs
     throw <| IO.userError s!"import/header elaboration error in {req.relPath}:\n{errText}"
   let env := prepareEnv req mainModule env
   let cmdState := Lean.Elab.Command.mkState env hdrMsgs opts
@@ -367,7 +369,7 @@ private def analyzeTargetWithState
   let ((cmdRanges, cmdErrMsgs), finalState) ←
     ((collectFrontendCommands inputCtx #[initialRange] {}).run { inputCtx }).run initFrontendState
   if cmdErrMsgs.hasErrors then
-    let errText ← formatErrors cmdErrMsgs
+    let errText ← formatErrors inputCtx.fileName req.relPath cmdErrMsgs
     throw <| IO.userError s!"elaboration error in {req.relPath}:\n{errText}"
   let finalPos := finalState.parserState.pos
   let allRanges :=

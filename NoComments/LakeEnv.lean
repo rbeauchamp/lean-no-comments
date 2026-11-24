@@ -257,6 +257,26 @@ private def resolveFromInitDir (initWsDir : System.FilePath) (raw : String) : Sy
   let p := System.FilePath.mk raw
   if p.isAbsolute then p else initWsDir / p
 
+private def isCommonLakeArgLongOpt : String → Bool
+  | "--package" | "--service" | "--scope" | "--repo"
+  | "--platform" | "--toolchain" | "--rev" | "--max-revs" | "--log-level"
+  | "--fail-level" | "--linters" | "--lint-only" | "--checks" | "--only"
+  | "--add-downstream" | "--add-public-downstream" | "--config" | "--from-export"
+  | "--challenge-from-export" | "--solution-from-export" => true
+  | _ => false
+
+private def isCommonLakeFlagLongOpt : String → Bool
+  | "--quiet" | "--verbose" | "--keep-toolchain" | "--reconfigure"
+  | "--old" | "--text" | "--json" | "--allow-empty" | "--no-build" | "--fail-fast"
+  | "--no-cache" | "--try-cache" | "--rehash" | "--offline" | "--wfail" | "--iofail"
+  | "--no-overwrite" | "--force-overwrite" | "--force-download" | "--download-arts"
+  | "--mappings-only" | "--ansi" | "--no-ansi" | "--builtin-lint"
+  | "--builtin-only" | "--record-exceptions" | "--code-quality" | "--raw"
+  | "--no-serve" | "--force" | "--keep-implied" | "--keep-prefix" | "--keep-public"
+  | "--add-public" | "--gh-style" | "--explain" | "--trace" | "--fix"
+  | "--paranoid" | "--inadvisably-no-sandbox" => true
+  | _ => false
+
 private abbrev LakeRootOptM := Lake.ArgsT (StateT (Option String) Option)
 
 private def skipOptArg : LakeRootOptM Unit := do
@@ -271,25 +291,15 @@ private def parseRootDirShort : Char → LakeRootOptM Unit
   | 'q' | 'v' | 'R' | 'H' | 'J' => pure ()
   | _ => failure
 
-private def parseRootDirLong : String → LakeRootOptM Unit
+private def parseRootDirLong (opt : String) : LakeRootOptM Unit :=
+  match opt with
   | "--dir" => do
     let some dir ← Lake.takeArg? | failure
     set (some dir)
-  | "--package" | "--service" | "--scope" | "--repo"
-  | "--platform" | "--toolchain" | "--rev" | "--max-revs" | "--log-level"
-  | "--fail-level" | "--linters" | "--lint-only" | "--checks" | "--only"
-  | "--add-downstream" | "--add-public-downstream" | "--config" | "--from-export"
-  | "--challenge-from-export" | "--solution-from-export" => skipOptArg
-  | "--quiet" | "--verbose" | "--keep-toolchain" | "--reconfigure"
-  | "--old" | "--text" | "--json" | "--allow-empty" | "--no-build" | "--fail-fast"
-  | "--no-cache" | "--try-cache" | "--rehash" | "--offline" | "--wfail" | "--iofail"
-  | "--no-overwrite" | "--force-overwrite" | "--force-download" | "--download-arts"
-  | "--mappings-only" | "--ansi" | "--no-ansi" | "--builtin-lint"
-  | "--builtin-only" | "--record-exceptions" | "--code-quality" | "--raw"
-  | "--no-serve" | "--force" | "--keep-implied" | "--keep-prefix" | "--keep-public"
-  | "--add-public" | "--gh-style" | "--explain" | "--trace" | "--fix"
-  | "--paranoid" | "--inadvisably-no-sandbox" => pure ()
-  | _ => failure
+  | _ =>
+    if isCommonLakeArgLongOpt opt then skipOptArg
+    else if isCommonLakeFlagLongOpt opt then pure ()
+    else failure
 
 private def parseRootDirOption : String → LakeRootOptM Unit :=
   Lake.option {
@@ -297,6 +307,75 @@ private def parseRootDirOption : String → LakeRootOptM Unit :=
     long := parseRootDirLong
     longShort := Lake.shortOptionWithArg parseRootDirShort
   }
+
+private structure ParsedLakeConfigOpt where
+  rootDir? : Option String := none
+  configFile? : Option String := none
+
+private abbrev LakeConfigOptM := Lake.ArgsT (StateT ParsedLakeConfigOpt Option)
+
+private def skipConfigOptArg : LakeConfigOptM Unit := do
+  let some _ ← Lake.takeArg? | failure
+  pure ()
+
+private def parseLakeConfigShort : Char → LakeConfigOptM Unit
+  | 'd' => do
+    let some dir ← Lake.takeArg? | failure
+    modifyThe ParsedLakeConfigOpt fun s => { s with rootDir? := some dir }
+  | 'f' => do
+    let some cfg ← Lake.takeArg? | failure
+    modifyThe ParsedLakeConfigOpt fun s => { s with configFile? := some cfg }
+  | 'o' | 'K' => skipConfigOptArg
+  | 'q' | 'v' | 'U' | 'R' | 'h' | 'H' | 'J' => pure ()
+  | _ => failure
+
+private def parseLakeConfigLong (opt : String) : LakeConfigOptM Unit :=
+  match opt with
+  | "--dir" => do
+    let some dir ← Lake.takeArg? | failure
+    modifyThe ParsedLakeConfigOpt fun s => { s with rootDir? := some dir }
+  | "--file" => do
+    let some cfg ← Lake.takeArg? | failure
+    modifyThe ParsedLakeConfigOpt fun s => { s with configFile? := some cfg }
+  | "--packages" => skipConfigOptArg
+  | "--update" | "--help" => pure ()
+  | _ =>
+    if isCommonLakeArgLongOpt opt then skipConfigOptArg
+    else if isCommonLakeFlagLongOpt opt then pure ()
+    else failure
+
+private def parseLakeConfigOption : String → LakeConfigOptM Unit :=
+  Lake.option {
+    short := parseLakeConfigShort
+    long := parseLakeConfigLong
+    longShort := Lake.shortOptionWithArg parseLakeConfigShort
+  }
+
+private def resolveSourceFile (rawAbs : System.FilePath) : IO System.FilePath := do
+  match ← Lake.resolvePath? rawAbs with
+  | some p => pure p
+  | none => pure rawAbs.normalize
+
+private def resolveLakeConfigInfo? (initWsDir : System.FilePath) (lakeArgs : Array String) :
+    IO (Option (System.FilePath × System.FilePath)) := do
+  let parsed? :=
+    ((Lake.processLeadingOptions parseLakeConfigOption).run lakeArgs.toList).run {}
+  match parsed? with
+  | some (((), []), opts) =>
+    let effectiveDir? := match opts.rootDir? with
+      | some d => if d.isEmpty then none else some (resolveFromInitDir initWsDir d)
+      | none => some initWsDir
+    let some effectiveDir := effectiveDir?
+      | return none
+    let some realPkgDir ← Lake.resolvePath? effectiveDir
+      | return none
+    let relConfigFile : System.FilePath := match opts.configFile? with
+      | some c => System.FilePath.mk c
+      | none => Lake.defaultConfigFile
+    let configFile := Lake.joinRelative realPkgDir relConfigFile
+    let realCfg ← Lake.realConfigFile configFile
+    return some (realPkgDir, realCfg)
+  | _ => return none
 
 private def isAbsentPath (path : System.FilePath) : BaseIO Bool := do
   match ← path.symlinkMetadata.toBaseIO with
@@ -761,9 +840,7 @@ def runWorkspaceSetupMode : IO Unit := do
     if !f.isTool then
       hasNonTool := true
       let rawAbs := origWsDir / f.wsRelPath
-      let resolvedFile ← match ← Lake.resolvePath? rawAbs with
-        | some p => pure p
-        | none => pure rawAbs.normalize
+      let resolvedFile ← resolveSourceFile rawAbs
       if !realCfg.toString.isEmpty && resolvedFile == realCfg then
         let cfgSetup : Lean.ModuleSetup := {
           name := Lake.configModuleName
@@ -1047,55 +1124,52 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
       pure (env, ({} : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader × Option String)))
     else
       runWorkspaceSetupBatch selfExe wsDir w.srcDir w.lakeArgs nonToolReqs
+  let wsLakeConfig? ← resolveLakeConfigInfo? wsDir w.lakeArgs
   let mut targets := Array.emptyWithCapacity files.size
   for f in files do
-    let absFile := (wsDir / f.wsRelPath).toString
-    if f.isTool then
-      let (setup, effLeanPath, header) ← prepareToolImports wsEnv f.wsRelPath stageDir
-      targets := targets.push {
-        relPath := f.relPath
-        wsDir := wsEnv.wsDir
-        absFile
-        isTool := true
-        leanPath := effLeanPath
-        leanSrcPath := wsEnv.leanSrcPath
-        leanSysroot := wsEnv.leanSysroot
-        sharedLibPath := wsEnv.sharedLibPath
-        setup
-        header? := some header
-      }
-    else
-      match moduleSetups[f.relPath]? with
-      | some (setup, header?, lakePkgDir?) =>
-        targets := targets.push {
-          relPath := f.relPath
-          wsDir := wsEnv.wsDir
-          absFile
-          isTool := false
-          leanPath := wsEnv.leanPath
-          leanSrcPath := wsEnv.leanSrcPath
-          leanSysroot := wsEnv.leanSysroot
-          sharedLibPath := wsEnv.sharedLibPath
-          setup
-          header?
-          lakePkgDir?
-        }
+    let resolvedFile ← resolveSourceFile (wsDir / f.wsRelPath)
+    let absFile := resolvedFile.toString
+    let (setup, effLeanPath, header?, batchLakePkgDir?) ←
+      if f.isTool then
+        let (setup, effLeanPath, header) ← prepareToolImports wsEnv f.wsRelPath stageDir
+        pure (setup, effLeanPath, some header, none)
+      else
+        match moduleSetups[f.relPath]? with
+        | some (setup, header?, lakePkgDir?) =>
+          pure (setup, wsEnv.leanPath, header?, lakePkgDir?)
+        | none =>
+          match ← runLakeSetupFile wsEnv f.wsRelPath true with
+          | .ok setup =>
+            pure (setup, wsEnv.leanPath, none, none)
+          | .error err =>
+            throw <| IO.userError s!"failed to resolve Lake setup for '{f.relPath}' in {wsEnv.wsDir}: {err}"
+    let lakePkgDir? :=
+      match batchLakePkgDir? with
+      | some d => some d
       | none =>
-        match ← runLakeSetupFile wsEnv f.wsRelPath true with
-        | .ok setup =>
-          targets := targets.push {
-            relPath := f.relPath
-            wsDir := wsEnv.wsDir
-            absFile
-            isTool := false
-            leanPath := wsEnv.leanPath
-            leanSrcPath := wsEnv.leanSrcPath
-            leanSysroot := wsEnv.leanSysroot
-            sharedLibPath := wsEnv.sharedLibPath
-            setup
-          }
-        | .error err =>
-          throw <| IO.userError s!"failed to resolve Lake setup for '{f.relPath}' in {wsEnv.wsDir}: {err}"
+        if setup.name == Lake.configModuleName then
+          match wsLakeConfig? with
+          | some (realPkgDir, realCfg) =>
+            if !realCfg.toString.isEmpty && resolvedFile == realCfg then
+              some realPkgDir.toString
+            else
+              none
+          | none => none
+        else
+          none
+    targets := targets.push {
+      relPath := f.relPath
+      wsDir := wsEnv.wsDir
+      absFile
+      isTool := f.isTool
+      leanPath := effLeanPath
+      leanSrcPath := wsEnv.leanSrcPath
+      leanSysroot := wsEnv.leanSysroot
+      sharedLibPath := wsEnv.sharedLibPath
+      setup
+      header?
+      lakePkgDir?
+    }
   return targets
 
 end NoComments.LakeEnv
