@@ -199,14 +199,17 @@ private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
       let prepared ← LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir
       allTargets := allTargets ++ prepared
   else
-    let mut prepTasks := Array.emptyWithCapacity activeWorkspaces.size
+    let mut stagedWorkspaces := Array.emptyWithCapacity activeWorkspaces.size
     for (wsIdx, wsCfg, reqs) in activeWorkspaces do
       let wsStageDir := stageDir / s!"ws-{wsIdx}"
       IO.FS.createDirAll wsStageDir
-      let t ← IO.asTask (LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir)
-      prepTasks := prepTasks.push t
-    for t in prepTasks do
-      let prepared ← IO.ofExcept t.get
+      stagedWorkspaces := stagedWorkspaces.push (wsCfg, reqs, wsStageDir)
+    let prepTasks ← stagedWorkspaces.mapM fun (wsCfg, reqs, wsStageDir) =>
+      IO.asTask (LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir)
+        Task.Priority.dedicated
+    let results ← (prepTasks.mapM IO.wait : BaseIO _)
+    for res in results do
+      let prepared ← IO.ofExcept res
       allTargets := allTargets ++ prepared
   return (allTargets, checkedFiles, excludedFiles)
 

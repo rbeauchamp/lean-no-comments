@@ -244,129 +244,160 @@ private def spawnPersistentWorker (selfExe stageDir : System.FilePath)
     stdout := .piped
     stderr := .piped
   }
-  let stderrTask ← IO.asTask child.stderr.readToEnd
+  let stderrTask ← IO.asTask child.stderr.readToEnd Task.Priority.dedicated
   return { child, stderrTask }
 
 private def shutdownPersistentWorker (w : PersistentWorker) : IO (UInt32 × String) := do
-  let (_, child) ← w.child.takeStdin
-  let exitCode ← child.wait
-  let stderr ← match w.stderrTask.get with
-    | .ok s => pure s
-    | .error _ => pure ""
-  return (exitCode, stderr)
+  let waitRes ← (do
+    let (_, child) ← w.child.takeStdin
+    child.wait).toBaseIO
+  let stderrRes ← IO.wait w.stderrTask
+  match waitRes, stderrRes with
+  | .ok exitCode, .ok stderr => return (exitCode, stderr)
+  | .error err, _ => throw err
+  | .ok _, .error err => throw err
 
 private def killAndShutdownPersistentWorker (w : PersistentWorker) : IO (UInt32 × String) := do
   let _ ← w.child.kill.toBaseIO
-  let (_, child) ← w.child.takeStdin
-  let exitCode ← child.wait
-  let stderr ← match w.stderrTask.get with
-    | .ok s => pure s
-    | .error _ => pure ""
-  return (exitCode, stderr)
+  let waitRes ← (do
+    let (_, child) ← w.child.takeStdin
+    child.wait).toBaseIO
+  let stderrRes ← IO.wait w.stderrTask
+  match waitRes with
+  | .ok exitCode =>
+    let stderr := match stderrRes with
+      | .ok s => s
+      | .error _ => ""
+    return (exitCode, stderr)
+  | .error err => throw err
 
-private def shutdownWorkerQuietly (w? : Option PersistentWorker) : IO Unit := do
-  if let some w := w? then
-    let _ ← (shutdownPersistentWorker w).toBaseIO
-    pure ()
+private def formatStderrSuffix (stderr : String) : String :=
+  let trimmed := stderr.trimAscii.toString
+  if trimmed.isEmpty then "" else s!" (stderr: {trimmed})"
+
+private inductive StepResult where
+  | ok (analysis : RatchetCore.FileAnalysis) (worker : PersistentWorker)
+  | failed (err : String)
 
 private def runTargetOnWorker (w : PersistentWorker) (target : LakeEnv.WorkerTargetSetup)
-    (stripLakePlugin : Bool) : IO (RatchetCore.FileAnalysis × PersistentWorker) := do
+    (stripLakePlugin : Bool) : BaseIO StepResult := do
   let reqId := w.nextReqId
   let lreq : Runner.LoopRequest := {
     reqId
     request := toRunnerRequest target stripLakePlugin
   }
-  let rawLine ← try
+  let rawLineRes ← (do
     w.child.stdin.putStr ((Lean.toJson lreq).compress ++ "\n")
     w.child.stdin.flush
-    w.child.stdout.getLine
-  catch e =>
-    let (exitCode, stderr) ← killAndShutdownPersistentWorker w
-    let errSuffix := if stderr.trimAscii.toString.isEmpty then "" else s!" (stderr: {stderr.trimAscii.toString})"
-    throw <| IO.userError s!"worker IPC failed on {target.relPath} (exit {exitCode}): {e}{errSuffix}"
+    w.child.stdout.getLine).toBaseIO
+  let rawLine ← match rawLineRes with
+    | .ok line => pure line
+    | .error e =>
+      match ← (killAndShutdownPersistentWorker w).toBaseIO with
+      | .ok (exitCode, stderr) =>
+        return .failed s!"worker IPC failed on {target.relPath} (exit {exitCode}): {e}{formatStderrSuffix stderr}"
+      | .error waitErr =>
+        return .failed s!"worker IPC failed on {target.relPath}: {e} (wait failed: {waitErr})"
   if rawLine.isEmpty then
-    let (exitCode, stderr) ← shutdownPersistentWorker w
-    throw <| IO.userError s!"worker failed on {target.relPath} (exit {exitCode}): {stderr.trimAscii.toString}"
+    match ← (shutdownPersistentWorker w).toBaseIO with
+    | .ok (exitCode, stderr) =>
+      return .failed s!"worker failed on {target.relPath} (exit {exitCode}): {stderr.trimAscii.toString}"
+    | .error waitErr =>
+      return .failed s!"worker failed on {target.relPath} (closed stdout; wait failed: {waitErr})"
   let line := rawLine.trimAscii.toString
   let resp : Runner.LoopResponse ← match Lean.Json.parse line >>= Lean.fromJson? with
     | .ok r => pure r
     | .error e =>
-      let (exitCode, stderr) ← killAndShutdownPersistentWorker w
-      let errSuffix := if stderr.trimAscii.toString.isEmpty then "" else s!" (stderr: {stderr.trimAscii.toString})"
-      throw <| IO.userError s!"malformed worker response for {target.relPath} (exit {exitCode}): {e}{errSuffix}"
+      match ← (killAndShutdownPersistentWorker w).toBaseIO with
+      | .ok (exitCode, stderr) =>
+        return .failed s!"malformed worker response for {target.relPath} (exit {exitCode}): {e}{formatStderrSuffix stderr}"
+      | .error waitErr =>
+        return .failed s!"malformed worker response for {target.relPath}: {e} (wait failed: {waitErr})"
   if resp.reqId != reqId || resp.relPath != target.relPath then
-    let _ ← killAndShutdownPersistentWorker w
-    throw <| IO.userError s!"mismatched worker response for {target.relPath}: got reqId={resp.reqId} relPath='{resp.relPath}'"
+    let _ ← (killAndShutdownPersistentWorker w).toBaseIO
+    return .failed s!"mismatched worker response for {target.relPath}: got reqId={resp.reqId} relPath='{resp.relPath}'"
   unless resp.ok do
-    let _ ← shutdownPersistentWorker w
-    throw <| IO.userError s!"worker failed on {target.relPath}: {resp.error?.getD "unknown worker error"}"
-  let comments ← match validateWireComments target.relPath resp.comments with
-    | .ok cs => pure cs
-    | .error e =>
-      let _ ← killAndShutdownPersistentWorker w
-      throw <| IO.userError e
-  return (RatchetCore.analyzeComments target.relPath comments, { w with nextReqId := reqId + 1 })
+    let _ ← (shutdownPersistentWorker w).toBaseIO
+    return .failed s!"worker failed on {target.relPath}: {resp.error?.getD "unknown worker error"}"
+  match validateWireComments target.relPath resp.comments with
+  | .ok comments =>
+    return .ok (RatchetCore.analyzeComments target.relPath comments) { w with nextReqId := reqId + 1 }
+  | .error e =>
+    let _ ← (killAndShutdownPersistentWorker w).toBaseIO
+    return .failed e
 
 private structure PoolState where
   nextBatchIdx : Nat
   results : Array (Option RatchetCore.FileAnalysis)
   firstError? : Option String
 
+private def recordFirstError (poolMutex : Std.Mutex PoolState) (errMsg : String) : BaseIO Unit :=
+  poolMutex.atomically do
+    modify fun (st : PoolState) =>
+      if st.firstError?.isNone then { st with firstError? := some errMsg }
+      else st
+
 private def resolveEntryLean? (entryLeanTask? : Option (Task (Except IO.Error System.FilePath)))
     (useSharedLean : Bool) : IO (Option System.FilePath) := do
   if !useSharedLean then
     return none
   match entryLeanTask? with
-  | some t => some <$> IO.ofExcept t.get
+  | some t => some <$> IO.ofExcept (← IO.wait t)
   | none => throw <| IO.userError "internal error: missing staged shared Lean runner"
 
 private def runBatch (selfExe stageDir : System.FilePath)
     (entryLeanTask? : Option (Task (Except IO.Error System.FilePath))) (batch : TargetBatch)
-    (poolMutex : Std.Mutex PoolState) : IO Unit := do
-  let mut worker? : Option PersistentWorker := none
+    (poolMutex : Std.Mutex PoolState) : BaseIO Unit := do
+  if batch.items.isEmpty then
+    return
+  let abortedBeforeStart ← poolMutex.atomically do
+    return (← get).firstError?.isSome
+  if abortedBeforeStart then
+    return
+  let entryLean? ← match ← (resolveEntryLean? entryLeanTask? batch.envKey.useSharedLean).toBaseIO with
+    | .ok e? => pure e?
+    | .error err =>
+      recordFirstError poolMutex (toString err)
+      return
+  let abortedBeforeSpawn ← poolMutex.atomically do
+    return (← get).firstError?.isSome
+  if abortedBeforeSpawn then
+    return
+  let initWorker ← match ← (spawnPersistentWorker selfExe stageDir entryLean? batch.envKey).toBaseIO with
+    | .ok fresh => pure fresh
+    | .error err =>
+      recordFirstError poolMutex (toString err)
+      return
   let stripLakePlugin := !batch.envKey.useSharedLean
-  try
-    let entryLean? ← match ← (resolveEntryLean? entryLeanTask? batch.envKey.useSharedLean).toBaseIO with
-      | .ok e? => pure e?
-      | .error err =>
-        poolMutex.atomically do
-          modify fun (st : PoolState) =>
-            if st.firstError?.isNone then { st with firstError? := some (toString err) }
-            else st
-        return
-    for (origIdx, target) in batch.items do
+  let rec loop (idx : Nat) (w : PersistentWorker)
+      (acc : Array (Nat × RatchetCore.FileAnalysis)) : BaseIO Unit := do
+    if h : idx < batch.items.size then
       let aborted ← poolMutex.atomically do
         return (← get).firstError?.isSome
       if aborted then
-        break
-      let w ← match worker? with
-        | some existing => pure existing
-        | none =>
-          match ← (spawnPersistentWorker selfExe stageDir entryLean? batch.envKey).toBaseIO with
-          | .ok fresh =>
-            worker? := some fresh
-            pure fresh
-          | .error err =>
-            poolMutex.atomically do
-              modify fun (st : PoolState) =>
-                if st.firstError?.isNone then { st with firstError? := some (toString err) }
-                else st
-            break
-      match ← (runTargetOnWorker w target stripLakePlugin).toBaseIO with
-      | .ok (analysis, w') =>
-        worker? := some w'
-        poolMutex.atomically do
-          modify fun (st : PoolState) =>
-            { st with results := st.results.set! origIdx (some analysis) }
+        let _ ← (shutdownPersistentWorker w).toBaseIO
+        return
+      let (origIdx, target) := batch.items[idx]
+      match ← runTargetOnWorker w target stripLakePlugin with
+      | .ok analysis w' =>
+        loop (idx + 1) w' (acc.push (origIdx, analysis))
+      | .failed err =>
+        recordFirstError poolMutex err
+    else
+      match ← (shutdownPersistentWorker w).toBaseIO with
+      | .ok (exitCode, stderr) =>
+        if exitCode != 0 then
+          recordFirstError poolMutex
+            s!"worker exited with code {exitCode} after batch{formatStderrSuffix stderr}"
+        else
+          poolMutex.atomically do
+            modify fun (st : PoolState) =>
+              acc.foldl (init := st) fun s (origIdx, analysis) =>
+                { s with results := s.results.set! origIdx (some analysis) }
       | .error err =>
-        worker? := none
-        poolMutex.atomically do
-          modify fun (st : PoolState) =>
-            if st.firstError?.isNone then { st with firstError? := some (toString err) }
-            else st
-        break
-  finally
-    shutdownWorkerQuietly worker?
+        recordFirstError poolMutex s!"failed to shut down worker cleanly: {err}"
+  termination_by batch.items.size - idx
+  loop 0 initWorker (Array.emptyWithCapacity batch.items.size)
 
 def runWorkerPool (selfExe stageDir : System.FilePath) (targets : Array LakeEnv.WorkerTargetSetup)
     (jobs : Nat) : IO (Array RatchetCore.FileAnalysis) := do
@@ -376,7 +407,7 @@ def runWorkerPool (selfExe stageDir : System.FilePath) (targets : Array LakeEnv.
     return #[]
   let sharedTarget? := targets.find? needsSharedLeanWorker
   let entryLeanTask? ← match sharedTarget? with
-    | some t => some <$> IO.asTask (prepareSharedLeanRunner stageDir t.leanSysroot)
+    | some t => some <$> IO.asTask (prepareSharedLeanRunner stageDir t.leanSysroot) Task.Priority.dedicated
     | none => pure none
   let batches := buildBatches targets jobs
   let workerCount := min jobs batches.size
@@ -388,7 +419,7 @@ def runWorkerPool (selfExe stageDir : System.FilePath) (targets : Array LakeEnv.
   }
   let mut tasks := Array.emptyWithCapacity workerCount
   for _ in [:workerCount] do
-    let t ← IO.asTask (do
+    let t ← BaseIO.asTask (prio := .dedicated) (do
       let mut keepGoing := true
       while keepGoing do
         let picked? ← poolMutex.atomically do
@@ -402,12 +433,13 @@ def runWorkerPool (selfExe stageDir : System.FilePath) (targets : Array LakeEnv.
         match picked? with
         | none => keepGoing := false
         | some batchIdx =>
-          runBatch selfExe stageDir entryLeanTask? batches[batchIdx]! poolMutex)
+          if h : batchIdx < batches.size then
+            runBatch selfExe stageDir entryLeanTask? batches[batchIdx] poolMutex)
     tasks := tasks.push t
   for t in tasks do
-    IO.ofExcept t.get
+    IO.wait t
   if let some stask := entryLeanTask? then
-    let _ := stask.get
+    discard <| IO.wait stask
   let finalSt ← poolMutex.atomically get
   if let some errMsg := finalSt.firstError? then
     throw <| IO.userError errMsg

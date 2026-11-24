@@ -323,7 +323,6 @@ def runWorkspaceSetupMode : IO Unit := do
   let realCfg ← Lake.realConfigFile loadCfg.configFile
   let mut modPairs : Array (Nat × Lake.Module) := #[]
   let mut extPairs : Array (Nat × String × System.FilePath) := #[]
-  let mut toolModPairs : Array (Nat × Lake.Module) := #[]
   let mut results : Array (Option Lean.ModuleSetup) := Array.replicate req.files.size none
   let mut headersArr : Array (Option Lean.ModuleHeader) := Array.replicate req.files.size none
   for h : idx in [:req.files.size] do
@@ -343,8 +342,6 @@ def runWorkspaceSetupMode : IO Unit := do
         modPairs := modPairs.push (idx, mod)
       else
         extPairs := extPairs.push (idx, f.wsRelPath, resolvedFile)
-    else if let some mod := ws.findModuleBySrc? resolvedFile then
-      toolModPairs := toolModPairs.push (idx, mod)
   let buildCfg : Lake.BuildConfig := {
     oldMode := flags.oldMode
     trustHash := flags.trustHash
@@ -357,7 +354,7 @@ def runWorkspaceSetupMode : IO Unit := do
       let modJobs ← modPairs.mapM fun (_, mod) => do
         let setupJob ← mod.setup.fetch
         let hdrJob ← mod.header.fetch
-        return setupJob.zipWith (fun s h => (s, h)) hdrJob
+        return setupJob.zipWith (fun s h => ({ s with options := mod.serverOptions }, h)) hdrJob
       let extJobs ← extPairs.mapM fun (_, wsRel, resolvedPath) => do
         let content ← IO.FS.readFile resolvedPath
         let hdr ← Lean.parseImports' content wsRel
@@ -376,15 +373,6 @@ def runWorkspaceSetupMode : IO Unit := do
       let (setup, hdr) := extSetups[j]!
       results := results.set! origIdx (some setup)
       headersArr := headersArr.set! origIdx (some hdr)
-  for (origIdx, mod) in toolModPairs do
-    match ← (ws.runBuild (do
-      let setupJob ← mod.setup.fetch
-      let hdrJob ← mod.header.fetch
-      return setupJob.zipWith (fun s h => (s, h)) hdrJob) buildCfg).toBaseIO with
-    | .ok (setup, hdr) =>
-      results := results.set! origIdx (some setup)
-      headersArr := headersArr.set! origIdx (some hdr)
-    | .error _ => pure ()
   let outFiles : Array SetupFileResult := Array.ofFn fun (i : Fin req.files.size) =>
     { relPath := req.files[i].relPath
       setup? := results[i]!
@@ -416,19 +404,26 @@ private def runWorkspaceSetupBatch (selfExe : System.FilePath) (wsDir : System.F
     stdout := .piped
     stderr := .piped
   }
-  let stdoutTask ← IO.asTask child.stdout.readToEnd
-  let stderrTask ← IO.asTask child.stderr.readToEnd
+  let stdoutTask ← IO.asTask child.stdout.readToEnd Task.Priority.dedicated
+  let stderrTask ← IO.asTask child.stderr.readToEnd Task.Priority.dedicated
   let writeRes ← (do
     child.stdin.putStr (Lean.toJson req).compress
     child.stdin.flush).toBaseIO
-  let (_, child) ← child.takeStdin
-  let exitCode ← child.wait
-  let stdout ← IO.ofExcept stdoutTask.get
-  let stderr ← IO.ofExcept stderrTask.get
+  let waitRes ← (do
+    let (_, child) ← child.takeStdin
+    child.wait).toBaseIO
+  let stdoutRes ← IO.wait stdoutTask
+  let stderrRes ← IO.wait stderrTask
+  let exitCode ← IO.ofExcept waitRes
   if exitCode != 0 then
-    throw <| IO.userError s!"workspace setup failed in {wsDir}: {stderr.trimAscii.toString}"
+    let stderrMsg := match stderrRes with
+      | .ok s => s.trimAscii.toString
+      | .error e => toString e
+    throw <| IO.userError s!"workspace setup failed in {wsDir}: {stderrMsg}"
   if let .error err := writeRes then
     throw <| IO.userError s!"failed to write workspace setup request in {wsDir}: {err}"
+  let _ ← IO.ofExcept stderrRes
+  let stdout ← IO.ofExcept stdoutRes
   let parsed : WorkspaceSetupResponse ← match Lean.Json.parse stdout >>= Lean.fromJson? with
     | .ok r => pure r
     | .error e => throw <| IO.userError s!"invalid workspace setup JSON from {wsDir}: {e}"
@@ -540,7 +535,7 @@ private partial def compileLocalToolHelper (mod : Lean.Name)
   return (curCompiled.insert mod, true)
 
 def prepareToolImports (wsEnv : WorkspaceRuntimeEnv) (wsRelPath : String)
-    (stageDir : System.FilePath) (precomputedSetup? : Option Lean.ModuleSetup := none) :
+    (stageDir : System.FilePath) :
     IO (Lean.ModuleSetup × String × Lean.ModuleHeader) := do
   let wsDir := System.FilePath.mk wsEnv.wsDir
   let srcDir := System.FilePath.mk wsEnv.srcDir
@@ -548,10 +543,6 @@ def prepareToolImports (wsEnv : WorkspaceRuntimeEnv) (wsRelPath : String)
   let header ← parseModuleHeader absFile
   let directImports := header.imports
   let searchPath := System.SearchPath.parse wsEnv.leanPath
-  if let some setup := precomputedSetup? then
-    let setupMissing ← missingNonBuiltinImports (setup.imports?.getD #[] ++ directImports) setup.importArts searchPath
-    if setupMissing.isEmpty then
-      return (setup, wsEnv.leanPath, header)
   match ← runLakeSetupFile wsEnv wsRelPath true with
   | .ok setup =>
     let setupMissing ← missingNonBuiltinImports (setup.imports?.getD #[] ++ directImports) setup.importArts searchPath
@@ -603,8 +594,7 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
   for f in files do
     let absFile := (wsDir / f.wsRelPath).toString
     if f.isTool then
-      let pre? := moduleSetups[f.relPath]?
-      let (setup, effLeanPath, header) ← prepareToolImports wsEnv f.wsRelPath stageDir (pre?.map Prod.fst)
+      let (setup, effLeanPath, header) ← prepareToolImports wsEnv f.wsRelPath stageDir
       targets := targets.push {
         relPath := f.relPath
         wsDir := wsEnv.wsDir

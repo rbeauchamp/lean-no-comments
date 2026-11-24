@@ -94,15 +94,9 @@ private structure HeaderCacheKey where
   importArtsJson : String
   deriving BEq
 
-private structure CachedBaseEnv where
-  key : HeaderCacheKey
-  env : Lean.Environment
-
-private structure PersistentState where
-  searchPathKey? : Option (String × String) := none
-  loadedDynlibs : Std.HashSet String := {}
-  loadedPlugins : Std.HashSet (String × Option String) := {}
-  cachedBaseEnv? : Option CachedBaseEnv := none
+private inductive WorkerBinding where
+  | unbound
+  | bound (key : HeaderCacheKey) (env : Lean.Environment)
 
 private structure AnalyzeOutcome where
   comments : Array Core.Comment
@@ -111,59 +105,49 @@ private structure AnalyzeOutcome where
 private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputContext)
     (headerPos : String.Pos.Raw) (headerMsgs : Lean.MessageLog)
     (imports : Array Lean.Import) (isModule : Bool) (opts : Lean.Options)
-    (unloadedPlugins : Array Lean.Plugin) (cacheKey : HeaderCacheKey)
-    (st : PersistentState) :
-    IO (Lean.Environment × Lean.MessageLog × Bool × PersistentState) := do
-  if unloadedPlugins.isEmpty then
-    if let some cached := st.cachedBaseEnv? then
-      if cached.key == cacheKey then
-        return (cached.env, headerMsgs, true, st)
-  let level : Lean.OLeanLevel :=
-    if isModule then
-      if Lean.Elab.inServer.get opts then .server else .exported
-    else
-      .private
-  let leakFirstEnv := st.cachedBaseEnv?.isNone
-  enableInitializers
-  try
-    let env ← Lean.importModules (leakEnv := leakFirstEnv) (loadExts := true) (level := level)
-      imports opts 0 unloadedPlugins req.setup.importArts
-    let mut loadedPlugins := st.loadedPlugins
-    for p in unloadedPlugins do
-      loadedPlugins := loadedPlugins.insert (p.path.toString, p.initFn?)
-    let st' := {
-      st with
-      loadedPlugins
-      cachedBaseEnv? := some { key := cacheKey, env }
-    }
-    return (env, headerMsgs, false, st')
-  catch e =>
-    let env ← Lean.mkEmptyEnvironment
-    let pos := inputCtx.fileMap.toPosition headerPos
-    let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
-    return (env, msgs, false, { st with cachedBaseEnv? := none })
-
-private def analyzeTargetWithState (req : WorkerRequest) (st : PersistentState) :
-    IO (AnalyzeOutcome × PersistentState) := do
-  let mut st := st
-  let spKey := (req.leanSysroot, req.leanPath)
-  if st.searchPathKey? != some spKey then
+    (filteredPlugins : Array Lean.Plugin) (cacheKey : HeaderCacheKey)
+    (binding : WorkerBinding) :
+    IO (Lean.Environment × Lean.MessageLog × Bool × WorkerBinding) := do
+  match binding with
+  | .bound boundKey env =>
+    if boundKey != cacheKey then
+      throw <| IO.userError s!"worker process is bound to a different import header/environment; refusing to reuse worker for {req.relPath}"
+    return (env, headerMsgs, true, binding)
+  | .unbound =>
     let sysroot ←
       if req.leanSysroot != "" then pure (System.FilePath.mk req.leanSysroot)
       else Lean.findSysroot
     Lean.initSearchPath sysroot (System.SearchPath.parse req.leanPath)
-    st := { st with searchPathKey? := some spKey, cachedBaseEnv? := none }
+    let mut loadedDynlibs : Std.HashSet String := {}
+    for dynlib in req.setup.dynlibs do
+      let key := dynlib.toString
+      unless loadedDynlibs.contains key do
+        Lean.loadDynlib dynlib
+        loadedDynlibs := loadedDynlibs.insert key
+    let level : Lean.OLeanLevel :=
+      if isModule then
+        if Lean.Elab.inServer.get opts then .server else .exported
+      else
+        .private
+    enableInitializers
+    try
+      let env ← Lean.importModules (leakEnv := true) (loadExts := true) (level := level)
+        imports opts 0 filteredPlugins req.setup.importArts
+      return (env, headerMsgs, false, .bound cacheKey env)
+    catch e =>
+      let env ← Lean.mkEmptyEnvironment
+      let pos := inputCtx.fileMap.toPosition headerPos
+      let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
+      return (env, msgs, false, .unbound)
+
+private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBinding) :
+    IO (AnalyzeOutcome × WorkerBinding) := do
   let content ← IO.FS.readFile (System.FilePath.mk req.absFile)
   let inputCtx := Lean.Parser.mkInputContext content req.relPath
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
   if headerMsgs.hasErrors then
     let errText ← formatErrors headerMsgs
     throw <| IO.userError s!"parse error in header of {req.relPath}:\n{errText}"
-  for dynlib in req.setup.dynlibs do
-    let key := dynlib.toString
-    unless st.loadedDynlibs.contains key do
-      Lean.loadDynlib dynlib
-      st := { st with loadedDynlibs := st.loadedDynlibs.insert key }
   let opts := applyWorkerOptionOverrides req.setup.options.toOptions
   let headerSyntax : Lean.Elab.HeaderSyntax := ⟨headerStx⟩
   let imports := req.setup.imports?.getD (headerSyntax.imports (includeInit := true))
@@ -174,8 +158,6 @@ private def analyzeTargetWithState (req : WorkerRequest) (st : PersistentState) 
   let filteredPlugins :=
     if req.stripLakePlugin then req.setup.plugins.filter (!isLakeSharedPlugin ·)
     else req.setup.plugins
-  let unloadedPlugins := filteredPlugins.filter fun p =>
-    !st.loadedPlugins.contains (p.path.toString, p.initFn?)
   let cacheKey : HeaderCacheKey := {
     leanSysroot := req.leanSysroot
     leanPath := req.leanPath
@@ -187,10 +169,9 @@ private def analyzeTargetWithState (req : WorkerRequest) (st : PersistentState) 
     optionsJson := (Lean.toJson req.setup.options).compress
     importArtsJson := (Lean.toJson req.setup.importArts).compress
   }
-  let (baseEnv, hdrMsgs0, cacheHit, stAfterImport) ←
+  let (baseEnv, hdrMsgs0, cacheHit, nextBinding) ←
     loadBaseEnv req inputCtx headerParserState.pos headerMsgs imports isModule opts
-      unloadedPlugins cacheKey st
-  st := stAfterImport
+      filteredPlugins cacheKey binding
   let env := baseEnv.setMainModule mainModule |>.setModulePackage req.setup.package?
   let hdrMsgs := Lean.Elab.checkDeprecatedImports env imports opts inputCtx headerParserState.pos
     hdrMsgs0 (some headerSyntax) (some headerSyntax)
@@ -234,10 +215,10 @@ private def analyzeTargetWithState (req : WorkerRequest) (st : PersistentState) 
       comments := Core.sourceOrder acc
       cacheHit
     }
-    return (outcome, st)
+    return (outcome, nextBinding)
 
 def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
-  let (outcome, _) ← analyzeTargetWithState req {}
+  let (outcome, _) ← analyzeTargetWithState req .unbound
   return outcome.comments
 
 def runWorkerMode : IO Unit := do
@@ -261,7 +242,7 @@ private def toWireComments (comments : Array Core.Comment) : Array WireComment :
 def runWorkerLoopMode : IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
-  let mut st : PersistentState := {}
+  let mut binding : WorkerBinding := .unbound
   let mut keepGoing := true
   while keepGoing do
     let rawLine ← stdin.getLine
@@ -282,9 +263,9 @@ def runWorkerLoopMode : IO Unit := do
           stdout.flush
           keepGoing := false
         | .ok lreq =>
-          match ← (analyzeTargetWithState lreq.request st).toBaseIO with
-          | .ok (outcome, st') =>
-            st := st'
+          match ← (analyzeTargetWithState lreq.request binding).toBaseIO with
+          | .ok (outcome, binding') =>
+            binding := binding'
             let resp : LoopResponse := {
               reqId := lreq.reqId
               relPath := lreq.request.relPath
