@@ -1,3 +1,4 @@
+import Std.Sync.Mutex
 import NoComments.Core
 import NoComments.Config
 import NoComments.ConfigIO
@@ -8,7 +9,7 @@ import NoComments.Worker
 
 open NoComments
 
-private def toolVersion : String := "0.2.0"
+private def toolVersion : String := "0.3.0"
 
 private inductive CommandMode where
   | inventory (file? : Option String) (asJson : Bool)
@@ -157,11 +158,117 @@ private def parseArgs (args : List String) (st : CliOptions := {}) :
 
 private def defaultJobs : Nat :=
   let hw := (System.Platform.Internal.getHardwareConcurrency ()).toNat
-  min (max 1 hw) 4
+  min (max 1 hw) 8
+
+private structure StagedWorkspace where
+  wsCfg : Config.WorkspaceConfig
+  reqs : Array LakeEnv.SetupFileRequest
+  stageDir : System.FilePath
+
+private structure PrepPoolState where
+  nextGroupIdx : Nat
+  results : Array (Option (Array LakeEnv.WorkerTargetSetup))
+  firstError? : Option IO.Error
+
+private def prepareStagedSequential (selfExe repoRoot : System.FilePath)
+    (staged : Array StagedWorkspace) : IO (Array LakeEnv.WorkerTargetSetup) := do
+  let mut allTargets : Array LakeEnv.WorkerTargetSetup := #[]
+  for item in staged do
+    let prepared ←
+      LakeEnv.prepareWorkspaceTargets selfExe repoRoot item.wsCfg item.reqs item.stageDir
+    allTargets := allTargets ++ prepared
+  return allTargets
+
+private def prepareStagedWorkspaces (selfExe repoRoot : System.FilePath)
+    (staged : Array StagedWorkspace) (jobs : Nat) : IO (Array LakeEnv.WorkerTargetSetup) := do
+  if staged.isEmpty then
+    return #[]
+  if staged.size == 1 || jobs <= 1 then
+    return ← prepareStagedSequential selfExe repoRoot staged
+  let mut keyToGroup : Std.HashMap String Nat := {}
+  let mut groupWsDirs : Array System.FilePath := #[]
+  let mut groups : Array (Array (Nat × StagedWorkspace)) := #[]
+  let mut allResolved := true
+  for h : idx in [:staged.size] do
+    let item := staged[idx]
+    match ← LakeEnv.resolveLakeLockKey? repoRoot item.wsCfg with
+    | none =>
+      allResolved := false
+      break
+    | some realWsDir =>
+      let k := realWsDir.toString
+      if let some gIdx := keyToGroup[k]? then
+        groups := groups.modify gIdx (·.push (idx, item))
+      else
+        keyToGroup := keyToGroup.insert k groups.size
+        groupWsDirs := groupWsDirs.push realWsDir
+        groups := groups.push #[(idx, item)]
+  let mut allDisjoint := true
+  if allResolved then
+    for h1 : i in [:groupWsDirs.size] do
+      for h2 : j in [:groupWsDirs.size] do
+        if i < j && !LakeEnv.lakeStorageDisjoint groupWsDirs[i] groupWsDirs[j] then
+          allDisjoint := false
+  if !allResolved || !allDisjoint || groups.size <= 1 then
+    return ← prepareStagedSequential selfExe repoRoot staged
+  let workerCount := min jobs groups.size
+  let poolMutex ← Std.Mutex.new {
+    nextGroupIdx := 0
+    results := Array.replicate staged.size none
+    firstError? := none
+    : PrepPoolState
+  }
+  let mut tasks := Array.emptyWithCapacity workerCount
+  for _ in [:workerCount] do
+    let t ← BaseIO.asTask (prio := .dedicated) (do
+      let mut keepGoing := true
+      while keepGoing do
+        let picked? : Option (Fin groups.size) ← poolMutex.atomically do
+          let st ← get
+          if st.firstError?.isSome then
+            return none
+          else if h : st.nextGroupIdx < groups.size then
+            let idx : Fin groups.size := ⟨st.nextGroupIdx, h⟩
+            set { st with nextGroupIdx := st.nextGroupIdx + 1 }
+            return some idx
+          else
+            return none
+        match picked? with
+        | none => keepGoing := false
+        | some gIdx =>
+          for (origIdx, item) in groups[gIdx] do
+            let aborted ← poolMutex.atomically do
+              return (← get).firstError?.isSome
+            if aborted then
+              break
+            match ← (LakeEnv.prepareWorkspaceTargets selfExe repoRoot item.wsCfg item.reqs item.stageDir).toBaseIO with
+            | .ok prepared =>
+              poolMutex.atomically do
+                modify fun (st : PrepPoolState) =>
+                  { st with results := st.results.set! origIdx (some prepared) }
+            | .error err =>
+              poolMutex.atomically do
+                modify fun (st : PrepPoolState) =>
+                  if st.firstError?.isNone then { st with firstError? := some err }
+                  else st
+              break)
+    tasks := tasks.push t
+  for t in tasks do
+    IO.wait t
+  let finalSt ← poolMutex.atomically get
+  if let some err := finalSt.firstError? then
+    throw err
+  let mut allTargets : Array LakeEnv.WorkerTargetSetup := #[]
+  for h : idx in [:staged.size] do
+    match finalSt.results[idx]? with
+    | some (some prepared) => allTargets := allTargets ++ prepared
+    | _ =>
+      throw <| IO.userError s!"missing workspace setup result for {staged[idx].wsCfg.dir}"
+  return allTargets
 
 private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
     (cfg : Config.RepoConfig) (classified : Array Config.ClassifiedFile)
-    (targetFile? : Option String) (stageDir : System.FilePath) :
+    (targetFile? : Option String) (stageDir : System.FilePath) (jobs : Nat) :
     IO (Array LakeEnv.WorkerTargetSetup × Array String × Array String) := do
   let mut checkedFiles : Array String := #[]
   let mut excludedFiles : Array String := #[]
@@ -182,16 +289,22 @@ private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
       if includeIt then
         if targetFile? == some rel then
           foundTarget := true
-        perWs := perWs.set! wsIdx (perWs[wsIdx]!.push { relPath := rel, wsRelPath := wsRel, isTool })
+        perWs := perWs.modify wsIdx (·.push { relPath := rel, wsRelPath := wsRel, isTool })
   if let some t := targetFile? then
     unless foundTarget do
       throw <| IO.userError s!"target file '{t}' is not a tracked Lean file in {repoRoot}"
-  let mut allTargets : Array LakeEnv.WorkerTargetSetup := #[]
+  let mut stagedWorkspaces : Array StagedWorkspace := #[]
   for h : wsIdx in [:cfg.workspaces.size] do
     let reqs := perWs[wsIdx]!
     unless reqs.isEmpty do
-      let prepared ← LakeEnv.prepareWorkspaceTargets selfExe repoRoot cfg.workspaces[wsIdx] reqs stageDir
-      allTargets := allTargets ++ prepared
+      let wsStageDir := stageDir / s!"ws-{wsIdx}"
+      IO.FS.createDirAll wsStageDir
+      stagedWorkspaces := stagedWorkspaces.push {
+        wsCfg := cfg.workspaces[wsIdx]
+        reqs
+        stageDir := wsStageDir
+      }
+  let allTargets ← prepareStagedWorkspaces selfExe repoRoot stagedWorkspaces jobs
   return (allTargets, checkedFiles, excludedFiles)
 
 private def formatRatchetJson (analyses : Array RatchetCore.FileAnalysis) : String :=
@@ -258,7 +371,7 @@ private def runUserCli (rawArgs : List String) : IO Unit := do
     | .inventory file? asJson =>
       let targetRel? ← file?.mapM (ConfigIO.resolveTargetFile repoRoot)
       let (targets, checkedFiles, excludedFiles) ←
-        groupAndPrepareTargets selfExe repoRoot cfg classified targetRel? stageDir
+        groupAndPrepareTargets selfExe repoRoot cfg classified targetRel? stageDir jobs
       let analyses ← Worker.runWorkerPool selfExe stageDir targets jobs
       if asJson then
         IO.println (formatRatchetJson analyses)
@@ -271,7 +384,7 @@ private def runUserCli (rawArgs : List String) : IO Unit := do
         Ratchet.resolveBaseRatchet repoRoot cfg.ratchet baseRef? bootstrap
       let usedBootstrap := baseRatchet?.isNone
       let (targets, checkedFiles, excludedFiles) ←
-        groupAndPrepareTargets selfExe repoRoot cfg classified targetRel? stageDir
+        groupAndPrepareTargets selfExe repoRoot cfg classified targetRel? stageDir jobs
       let analyses ← Worker.runWorkerPool selfExe stageDir targets jobs
       match RatchetCore.validateCheck analyses checkedFiles excludedFiles currentRatchet baseRatchet? targetRel? with
       | .error e => throw <| IO.userError e
@@ -295,6 +408,8 @@ def main (args : List String) : IO UInt32 := do
       LakeEnv.runWorkspaceSetupMode
     | ["--worker"] =>
       Worker.runWorkerMode
+    | ["--worker-loop"] =>
+      Worker.runWorkerLoopMode
     | _ =>
       runUserCli args
     return 0
