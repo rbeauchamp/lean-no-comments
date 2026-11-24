@@ -85,6 +85,8 @@ private def enableInitializers : IO Unit := pure ()
 private structure HeaderCacheKey where
   leanSysroot : String
   leanPath : String
+  dynlibs : Array String
+  plugins : Array (String × Option String)
   isModule : Bool
   inServer : Bool
   imports : Array Lean.Import
@@ -177,6 +179,8 @@ private def analyzeTargetWithState (req : WorkerRequest) (st : PersistentState) 
   let cacheKey : HeaderCacheKey := {
     leanSysroot := req.leanSysroot
     leanPath := req.leanPath
+    dynlibs := req.setup.dynlibs.map (·.toString)
+    plugins := filteredPlugins.map fun p => (p.path.toString, p.initFn?)
     isModule
     inServer := Lean.Elab.inServer.get opts
     imports

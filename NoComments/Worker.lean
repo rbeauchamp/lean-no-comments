@@ -142,24 +142,37 @@ private structure TargetBatch where
   deriving Inhabited
 
 private def targetBatchKey (envKey : WorkerEnvKey) (target : LakeEnv.WorkerTargetSetup) : String :=
-  let impPart := match target.setup.imports? <|> target.directImports? with
-    | some imps => (Lean.toJson imps).compress
-    | none => s!"file:{target.relPath}"
-  let envPart := (Lean.toJson #[
-    Lean.toJson envKey.useSharedLean,
-    Lean.toJson envKey.wsDir,
-    Lean.toJson envKey.leanPath,
-    Lean.toJson envKey.leanSrcPath,
-    Lean.toJson envKey.leanSysroot,
-    Lean.toJson envKey.sharedLibPath,
-    Lean.toJson envKey.dynlibs,
-    Lean.toJson (envKey.plugins.map fun (p, f?) => s!"{p}:{f?.getD ""}")
-  ]).compress
-  s!"{envPart}|{target.setup.isModule}|{(Lean.toJson target.setup.options).compress}|{(Lean.toJson target.setup.importArts).compress}|{impPart}"
+  let effectiveImports? := target.setup.imports? <|> target.header?.map (·.imports)
+  let effectiveIsModule? :=
+    if target.setup.isModule then some true
+    else target.header?.map (·.isModule)
+  let keyJson := match effectiveImports?, effectiveIsModule? with
+    | some imps, some isMod =>
+      Lean.toJson #[
+        Lean.toJson "batch",
+        Lean.toJson envKey.useSharedLean,
+        Lean.toJson envKey.wsDir,
+        Lean.toJson envKey.leanPath,
+        Lean.toJson envKey.leanSrcPath,
+        Lean.toJson envKey.leanSysroot,
+        Lean.toJson envKey.sharedLibPath,
+        Lean.toJson envKey.dynlibs,
+        Lean.toJson envKey.plugins,
+        Lean.toJson isMod,
+        Lean.toJson target.setup.options,
+        Lean.toJson target.setup.importArts,
+        Lean.toJson imps
+      ]
+    | _, _ =>
+      Lean.toJson #[
+        Lean.toJson "solo",
+        Lean.toJson target.relPath
+      ]
+  keyJson.compress
 
 private def targetWeight (target : LakeEnv.WorkerTargetSetup) : Nat :=
   let artWeight := target.setup.importArts.size
-  let impWeight := match target.setup.imports? <|> target.directImports? with
+  let impWeight := match target.setup.imports? <|> target.header?.map (·.imports) with
     | some imps => imps.size
     | none => 0
   artWeight * 10 + impWeight
@@ -263,9 +276,14 @@ private def runTargetOnWorker (w : PersistentWorker) (target : LakeEnv.WorkerTar
     reqId
     request := toRunnerRequest target stripLakePlugin
   }
-  w.child.stdin.putStr ((Lean.toJson lreq).compress ++ "\n")
-  w.child.stdin.flush
-  let rawLine ← w.child.stdout.getLine
+  let rawLine ← try
+    w.child.stdin.putStr ((Lean.toJson lreq).compress ++ "\n")
+    w.child.stdin.flush
+    w.child.stdout.getLine
+  catch e =>
+    let (exitCode, stderr) ← killAndShutdownPersistentWorker w
+    let errSuffix := if stderr.trimAscii.toString.isEmpty then "" else s!" (stderr: {stderr.trimAscii.toString})"
+    throw <| IO.userError s!"worker IPC failed on {target.relPath} (exit {exitCode}): {e}{errSuffix}"
   if rawLine.isEmpty then
     let (exitCode, stderr) ← shutdownPersistentWorker w
     throw <| IO.userError s!"worker failed on {target.relPath} (exit {exitCode}): {stderr.trimAscii.toString}"
@@ -324,9 +342,16 @@ private def runBatch (selfExe stageDir : System.FilePath)
       let w ← match worker? with
         | some existing => pure existing
         | none =>
-          let fresh ← spawnPersistentWorker selfExe stageDir entryLean? batch.envKey
-          worker? := some fresh
-          pure fresh
+          match ← (spawnPersistentWorker selfExe stageDir entryLean? batch.envKey).toBaseIO with
+          | .ok fresh =>
+            worker? := some fresh
+            pure fresh
+          | .error err =>
+            poolMutex.atomically do
+              modify fun (st : PoolState) =>
+                if st.firstError?.isNone then { st with firstError? := some (toString err) }
+                else st
+            break
       match ← (runTargetOnWorker w target stripLakePlugin).toBaseIO with
       | .ok (analysis, w') =>
         worker? := some w'
