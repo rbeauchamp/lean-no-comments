@@ -185,57 +185,104 @@ structure LoopResponse where
   error? : Option String := none
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
-private def rewriteImplicitIncludePath (resolvedFileName relPath candidate : String) : String :=
-  match (System.FilePath.mk resolvedFileName).parent with
-  | none => candidate
-  | some resolvedDir =>
-    let sep := String.singleton System.FilePath.pathSeparator
-    match candidate.dropPrefix? (resolvedDir.toString ++ sep) with
-    | none => candidate
-    | some restSlice =>
-      let rest := restSlice.toString
-      if (System.FilePath.mk rest).isAbsolute then
-        candidate
+private def remapIOErrorFile (fromPath toPath : String) : IO.Error → IO.Error
+  | .alreadyExists (some fn) code details =>
+    .alreadyExists (some (if fn == fromPath then toPath else fn)) code details
+  | .interrupted fn code details =>
+    .interrupted (if fn == fromPath then toPath else fn) code details
+  | .noFileOrDirectory fn code details =>
+    .noFileOrDirectory (if fn == fromPath then toPath else fn) code details
+  | .invalidArgument (some fn) code details =>
+    .invalidArgument (some (if fn == fromPath then toPath else fn)) code details
+  | .permissionDenied (some fn) code details =>
+    .permissionDenied (some (if fn == fromPath then toPath else fn)) code details
+  | .resourceExhausted (some fn) code details =>
+    .resourceExhausted (some (if fn == fromPath then toPath else fn)) code details
+  | .inappropriateType (some fn) code details =>
+    .inappropriateType (some (if fn == fromPath then toPath else fn)) code details
+  | .noSuchThing (some fn) code details =>
+    .noSuchThing (some (if fn == fromPath then toPath else fn)) code details
+  | .userError msg =>
+    if msg == s!"Tried to read file '{fromPath}' containing non UTF-8 data." then
+      .userError s!"Tried to read file '{toPath}' containing non UTF-8 data."
+    else
+      .userError msg
+  | e@(.alreadyExists none _ _)
+  | e@(.invalidArgument none _ _)
+  | e@(.permissionDenied none _ _)
+  | e@(.resourceExhausted none _ _)
+  | e@(.inappropriateType none _ _)
+  | e@(.noSuchThing none _ _)
+  | e@(.otherError _ _)
+  | e@(.resourceBusy _ _)
+  | e@(.resourceVanished _ _)
+  | e@(.unsupportedOperation _ _)
+  | e@(.hardwareFault _ _)
+  | e@(.unsatisfiedConstraints _ _)
+  | e@(.illegalOperation _ _)
+  | e@(.protocolError _ _)
+  | e@(.timeExpired _ _)
+  | e@(.unexpectedEof) => e
+
+private unsafe def evalIncludeFilePathImpl (stx : Lean.Syntax) :
+    Lean.Elab.Term.TermElabM System.FilePath :=
+  Lean.Elab.Term.evalTerm System.FilePath (Lean.mkConst ``System.FilePath) stx
+
+@[implemented_by evalIncludeFilePathImpl]
+private def evalIncludeFilePath (_stx : Lean.Syntax) :
+    Lean.Elab.Term.TermElabM System.FilePath :=
+  Lean.throwError "include_str path evaluator unavailable"
+
+private def relativeIncludeDisplayPath (relPath : String) (relArg : System.FilePath) :
+    System.FilePath :=
+  match (System.FilePath.mk relPath).parent with
+  | some relDir => relDir / relArg
+  | none => if relArg.toString.isEmpty then System.FilePath.mk "." else relArg
+
+private def elabIncludeStrWithRelDiag (resolvedFileName relPath : String) :
+    Lean.Elab.Term.TermElab
+  | `(include_str $path:term), _ => do
+    let argPath ← evalIncludeFilePath path
+    let ctx ← readThe Lean.Core.Context
+    let srcPath := System.FilePath.mk ctx.fileName
+    let some srcDir := srcPath.parent
+      | Lean.throwError "cannot compute parent directory of `{srcPath}`"
+    let fullPath := srcDir / argPath
+    let displayPath? : Option System.FilePath :=
+      if ctx.fileName == resolvedFileName && !argPath.isAbsolute then
+        some (relativeIncludeDisplayPath relPath argPath)
       else
-        match (System.FilePath.mk relPath).parent with
-        | some relDir => (relDir / rest).toString
-        | none => if rest.isEmpty then "." else rest
+        none
+    let content ← liftM (m := IO) do
+      try
+        IO.FS.readFile fullPath
+      catch err =>
+        match displayPath? with
+        | some displayPath => throw (remapIOErrorFile fullPath.toString displayPath.toString err)
+        | none => throw err
+    return Lean.mkStrLit content
+  | _, _ => Lean.Elab.throwUnsupportedSyntax
 
-private def rewriteIncludeDiagnosticLine (resolvedFileName relPath line : String) : String := Id.run do
-  let indent := (line.takeWhile (· == ' ')).toString
-  let body := (line.drop indent.length).toString
-  if indent.length >= 2 then
-    if let some pathSlice := body.dropPrefix? "file: " then
-      return indent ++ "file: " ++
-        rewriteImplicitIncludePath resolvedFileName relPath pathSlice.toString
-  if let some afterPre := body.dropPrefix? "Tried to read file '" then
-    if let some pathSlice := afterPre.dropSuffix? "' containing non UTF-8 data." then
-      return indent ++ "Tried to read file '" ++
-        rewriteImplicitIncludePath resolvedFileName relPath pathSlice.toString ++
-        "' containing non UTF-8 data."
-  return line
-
-private def rewriteIncludeDiagnosticBody (resolvedFileName relPath body : String) : String :=
-  String.intercalate "\n" <|
-    (body.splitOn "\n").map (rewriteIncludeDiagnosticLine resolvedFileName relPath)
+private def installIncludeStrRelDiag (resolvedFileName relPath : String)
+    (env : Lean.Environment) : Lean.Environment :=
+  Lean.Elab.Term.termElabAttribute.ext.modifyState env fun st =>
+    match st.table.find? ``Lean.includeStr with
+    | none => st
+    | some entries =>
+      let entries' := entries.map fun entry =>
+        if entry.declName == ``Lean.Elab.Term.elabIncludeStr then
+          { entry with value := elabIncludeStrWithRelDiag resolvedFileName relPath }
+        else
+          entry
+      { st with table := st.table.insert ``Lean.includeStr entries' }
 
 private def formatErrors (resolvedFileName rawFileName relPath : String)
-    (msgs : Lean.MessageLog) (rewriteIncludePaths : Bool := false) : IO String := do
+    (msgs : Lean.MessageLog) : IO String := do
   let errMsgs := msgs.reportedPlusUnreported.toList.filter (·.severity == .error)
   let lines ← errMsgs.mapM fun m => do
     let sm ← m.serialize
     let isTargetFile := sm.fileName == resolvedFileName || sm.fileName == rawFileName
-    let sm :=
-      if isTargetFile then
-        { sm with
-          fileName := relPath
-          data :=
-            if rewriteIncludePaths then
-              rewriteIncludeDiagnosticBody resolvedFileName relPath sm.data
-            else
-              sm.data }
-      else
-        sm
+    let sm := if isTargetFile then { sm with fileName := relPath } else sm
     return sm.toString
   return String.intercalate "\n" lines
 
@@ -412,6 +459,7 @@ private def analyzeTargetWithState
     let errText ← formatErrors inputCtx.fileName req.absFile req.relPath hdrMsgs
     throw <| IO.userError s!"import/header elaboration error in {req.relPath}:\n{errText}"
   let env := prepareEnv req resolvedFile mainModule env
+  let env := installIncludeStrRelDiag inputCtx.fileName req.relPath env
   let cmdState := Lean.Elab.Command.mkState env hdrMsgs opts
   let hdrCtx := mkParserCtx inputCtx cmdState
   let initialRange : Core.CommandRange := {
@@ -429,7 +477,6 @@ private def analyzeTargetWithState
     ((collectFrontendCommands inputCtx #[initialRange] {}).run { inputCtx }).run initFrontendState
   if cmdErrMsgs.hasErrors then
     let errText ← formatErrors inputCtx.fileName req.absFile req.relPath cmdErrMsgs
-      (rewriteIncludePaths := true)
     throw <| IO.userError s!"elaboration error in {req.relPath}:\n{errText}"
   let finalPos := finalState.parserState.pos
   let allRanges :=
