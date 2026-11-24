@@ -14,6 +14,27 @@ structure WorkerRequest where
   stripLakePlugin : Bool := true
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
+structure LoopRequest where
+  reqId : Nat
+  request : WorkerRequest
+  deriving Inhabited, Lean.ToJson, Lean.FromJson
+
+structure WireComment where
+  kind : String
+  startLine : Nat
+  endLine : Nat
+  fingerprint : String
+  deriving Inhabited, Lean.ToJson, Lean.FromJson
+
+structure LoopResponse where
+  reqId : Nat
+  relPath : String
+  ok : Bool
+  comments : Array WireComment := #[]
+  error? : Option String := none
+  cacheHit : Bool := false
+  deriving Inhabited, Lean.ToJson, Lean.FromJson
+
 private def formatErrors (msgs : Lean.MessageLog) : IO String := do
   let errMsgs := msgs.toList.filter (·.severity == .error)
   let lines ← errMsgs.mapM fun m => m.toString
@@ -61,11 +82,75 @@ private unsafe def enableInitializersImpl : IO Unit :=
 @[implemented_by enableInitializersImpl]
 private def enableInitializers : IO Unit := pure ()
 
-def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
-  let sysroot ←
-    if req.leanSysroot != "" then pure (System.FilePath.mk req.leanSysroot)
-    else Lean.findSysroot
-  Lean.initSearchPath sysroot (System.SearchPath.parse req.leanPath)
+private structure HeaderCacheKey where
+  leanSysroot : String
+  leanPath : String
+  isModule : Bool
+  inServer : Bool
+  imports : Array Lean.Import
+  optionsJson : String
+  importArtsJson : String
+  deriving BEq
+
+private structure CachedBaseEnv where
+  key : HeaderCacheKey
+  env : Lean.Environment
+
+private structure PersistentState where
+  searchPathKey? : Option (String × String) := none
+  loadedDynlibs : Std.HashSet String := {}
+  loadedPlugins : Std.HashSet (String × Option String) := {}
+  cachedBaseEnv? : Option CachedBaseEnv := none
+
+private structure AnalyzeOutcome where
+  comments : Array Core.Comment
+  cacheHit : Bool
+
+private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputContext)
+    (headerPos : String.Pos.Raw) (headerMsgs : Lean.MessageLog)
+    (imports : Array Lean.Import) (isModule : Bool) (opts : Lean.Options)
+    (unloadedPlugins : Array Lean.Plugin) (cacheKey : HeaderCacheKey)
+    (st : PersistentState) :
+    IO (Lean.Environment × Lean.MessageLog × Bool × PersistentState) := do
+  if unloadedPlugins.isEmpty then
+    if let some cached := st.cachedBaseEnv? then
+      if cached.key == cacheKey then
+        return (cached.env, headerMsgs, true, st)
+  let level : Lean.OLeanLevel :=
+    if isModule then
+      if Lean.Elab.inServer.get opts then .server else .exported
+    else
+      .private
+  let leakFirstEnv := st.cachedBaseEnv?.isNone
+  enableInitializers
+  try
+    let env ← Lean.importModules (leakEnv := leakFirstEnv) (loadExts := true) (level := level)
+      imports opts 0 unloadedPlugins req.setup.importArts
+    let mut loadedPlugins := st.loadedPlugins
+    for p in unloadedPlugins do
+      loadedPlugins := loadedPlugins.insert (p.path.toString, p.initFn?)
+    let st' := {
+      st with
+      loadedPlugins
+      cachedBaseEnv? := some { key := cacheKey, env }
+    }
+    return (env, headerMsgs, false, st')
+  catch e =>
+    let env ← Lean.mkEmptyEnvironment
+    let pos := inputCtx.fileMap.toPosition headerPos
+    let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
+    return (env, msgs, false, { st with cachedBaseEnv? := none })
+
+private def analyzeTargetWithState (req : WorkerRequest) (st : PersistentState) :
+    IO (AnalyzeOutcome × PersistentState) := do
+  let mut st := st
+  let spKey := (req.leanSysroot, req.leanPath)
+  if st.searchPathKey? != some spKey then
+    let sysroot ←
+      if req.leanSysroot != "" then pure (System.FilePath.mk req.leanSysroot)
+      else Lean.findSysroot
+    Lean.initSearchPath sysroot (System.SearchPath.parse req.leanPath)
+    st := { st with searchPathKey? := some spKey, cachedBaseEnv? := none }
   let content ← IO.FS.readFile (System.FilePath.mk req.absFile)
   let inputCtx := Lean.Parser.mkInputContext content req.relPath
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
@@ -73,8 +158,10 @@ def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
     let errText ← formatErrors headerMsgs
     throw <| IO.userError s!"parse error in header of {req.relPath}:\n{errText}"
   for dynlib in req.setup.dynlibs do
-    Lean.loadDynlib dynlib
-  enableInitializers
+    let key := dynlib.toString
+    unless st.loadedDynlibs.contains key do
+      Lean.loadDynlib dynlib
+      st := { st with loadedDynlibs := st.loadedDynlibs.insert key }
   let opts := applyWorkerOptionOverrides req.setup.options.toOptions
   let headerSyntax : Lean.Elab.HeaderSyntax := ⟨headerStx⟩
   let imports := req.setup.imports?.getD (headerSyntax.imports (includeInit := true))
@@ -85,19 +172,25 @@ def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
   let filteredPlugins :=
     if req.stripLakePlugin then req.setup.plugins.filter (!isLakeSharedPlugin ·)
     else req.setup.plugins
-  let (env, hdrMsgs) ← Lean.Elab.processHeaderCore
-    headerParserState.pos
-    imports
+  let unloadedPlugins := filteredPlugins.filter fun p =>
+    !st.loadedPlugins.contains (p.path.toString, p.initFn?)
+  let cacheKey : HeaderCacheKey := {
+    leanSysroot := req.leanSysroot
+    leanPath := req.leanPath
     isModule
-    opts
-    headerMsgs
-    inputCtx
-    (plugins := filteredPlugins)
-    (mainModule := mainModule)
-    (package? := req.setup.package?)
-    (arts := req.setup.importArts)
-    (headerStx? := some headerSyntax)
-    (origHeaderStx? := some headerSyntax)
+    inServer := Lean.Elab.inServer.get opts
+    imports
+    optionsJson := (Lean.toJson req.setup.options).compress
+    importArtsJson := (Lean.toJson req.setup.importArts).compress
+  }
+  let (baseEnv, hdrMsgs0, cacheHit, stAfterImport) ←
+    loadBaseEnv req inputCtx headerParserState.pos headerMsgs imports isModule opts
+      unloadedPlugins cacheKey st
+  st := stAfterImport
+  let env := baseEnv.setMainModule mainModule |>.setModulePackage req.setup.package?
+  let hdrMsgs := Lean.Elab.checkDeprecatedImports env imports opts inputCtx headerParserState.pos
+    hdrMsgs0 (some headerSyntax) (some headerSyntax)
+  let hdrMsgs := Lean.Elab.checkModuleNamePortability mainModule inputCtx headerParserState.pos hdrMsgs
   if hdrMsgs.hasErrors then
     let errText ← formatErrors hdrMsgs
     throw <| IO.userError s!"import/header elaboration error in {req.relPath}:\n{errText}"
@@ -132,7 +225,16 @@ def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
       cmdRanges
   match Core.collectRanges allRanges.toList {} with
   | .error e => throw <| IO.userError s!"comment audit error in {req.relPath}: {e}"
-  | .ok acc => return Core.sourceOrder acc
+  | .ok acc =>
+    let outcome : AnalyzeOutcome := {
+      comments := Core.sourceOrder acc
+      cacheHit
+    }
+    return (outcome, st)
+
+def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
+  let (outcome, _) ← analyzeTargetWithState req {}
+  return outcome.comments
 
 def runWorkerMode : IO Unit := do
   let stdin ← IO.getStdin
@@ -143,5 +245,60 @@ def runWorkerMode : IO Unit := do
   let comments ← analyzeTarget req
   for c in comments do
     IO.println s!"{c.fingerprint} {c.kind} {c.startLine} {c.endLine}"
+
+private def toWireComments (comments : Array Core.Comment) : Array WireComment :=
+  comments.map fun c => {
+    kind := c.kind
+    startLine := c.startLine
+    endLine := c.endLine
+    fingerprint := c.fingerprint
+  }
+
+def runWorkerLoopMode : IO Unit := do
+  let stdin ← IO.getStdin
+  let stdout ← IO.getStdout
+  let mut st : PersistentState := {}
+  let mut keepGoing := true
+  while keepGoing do
+    let rawLine ← stdin.getLine
+    if rawLine.isEmpty then
+      keepGoing := false
+    else
+      let line := rawLine.trimAscii.toString
+      unless line.isEmpty do
+        match Lean.Json.parse line >>= Lean.fromJson? (α := LoopRequest) with
+        | .error e =>
+          let resp : LoopResponse := {
+            reqId := 0
+            relPath := ""
+            ok := false
+            error? := some s!"invalid worker request JSON: {e}"
+          }
+          stdout.putStrLn (Lean.toJson resp).compress
+          stdout.flush
+          keepGoing := false
+        | .ok lreq =>
+          match ← (analyzeTargetWithState lreq.request st).toBaseIO with
+          | .ok (outcome, st') =>
+            st := st'
+            let resp : LoopResponse := {
+              reqId := lreq.reqId
+              relPath := lreq.request.relPath
+              ok := true
+              comments := toWireComments outcome.comments
+              cacheHit := outcome.cacheHit
+            }
+            stdout.putStrLn (Lean.toJson resp).compress
+            stdout.flush
+          | .error err =>
+            let resp : LoopResponse := {
+              reqId := lreq.reqId
+              relPath := lreq.request.relPath
+              ok := false
+              error? := some (toString err)
+            }
+            stdout.putStrLn (Lean.toJson resp).compress
+            stdout.flush
+            keepGoing := false
 
 end NoComments.Runner

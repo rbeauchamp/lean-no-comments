@@ -25,8 +25,8 @@ Every theorem in `NoComments/Core.lean` and `specification/NoCommentsSpecificati
 ### Unproved Harness TCB (`NoCommentsCLI` and External Boundaries)
 
 - Unproved `NoCommentsCLI` and binary modules (`NoComments.ConfigIO`, `NoComments.Ratchet`, `NoComments.Runner`, `NoComments.LakeEnv`, `NoComments.Worker`, `NoComments.TestListing`, and `NoComments.Main`): filesystem reads/writes, subprocess execution, CLI flag parsing, multi-worker IPC, and `lakefile.toml` / workspace discovery.
-- Lean `v4.36.0` runtime, dynamic library loader (`Lean.loadDynlib`), opaque `Lean.Json.parse` / `Json.Parser.anyCore`, `Lean.Parser.parseHeader`, `Elab.processHeaderCore`, `Elab.Frontend.processCommand`, and `Parser.parseCommand` / `Parser.tokenFn` / `Parser.interpolatedStrFn` / `Parser.symbolFn`.
-- `Lake` workspace/environment evaluation (`lake env`, `Lake.loadWorkspace`, `lake setup-file --no-build`) and toolchain version checks (`lean --version` version + commit hash).
+- Lean `v4.36.0` runtime, dynamic library loader (`Lean.loadDynlib`), opaque `Lean.Json.parse` / `Json.Parser.anyCore`, `Lean.Parser.parseHeader`, `Lean.importModules`, `Elab.checkDeprecatedImports`, `Elab.checkModuleNamePortability`, `Elab.Frontend.processCommand`, and `Parser.parseCommand` / `Parser.tokenFn` / `Parser.interpolatedStrFn` / `Parser.symbolFn`.
+- `Lake` workspace/environment evaluation (`lake env`, `Lake.loadWorkspace`, `Lake.setupServerModule`, `lake setup-file --no-build`) and toolchain version checks (`lean --version` version + commit hash).
 - Git invocation (`git ls-files --full-name -z -- '*.lean'`, `git merge-base`, `git ls-tree`, `git show`) and operating-system filesystem behavior.
 
 ## Configuration: `.no-comments.json`
@@ -70,7 +70,7 @@ Place `.no-comments.json` at the repository root:
 - **Exhaustive, unambiguous file coverage:** Every tracked `.lean` file returned by `git ls-files --full-name -z -- '*.lean'` must match **at most one** top-level `exclude` rule and, if unexcluded, **exactly one** workspace in `workspaces` (respecting workspace-relative `excludePrefixes`). Any unowned or doubly owned file fails closed.
 - **`dir` and `ratchet`:** Repository-relative paths. Top-level `exclude[].prefix` is also repository-relative; `srcDir`, `toolPrefixes`, and `excludePrefixes` inside a workspace are relative to `workspaces[i].dir`. Trailing `/` matches directory trees (`tools/` matches `tools/Check.lean`); paths without `/` match exact files or subtrees (`lakefile.lean` matches only `lakefile.lean`; `docs` matches `docs` or `docs/...`).
 - **Toolchain lock:** Before inspecting any workspace, `no-comments` runs `lean --version` in that workspace and fails closed if either the Lean version or commit githash disagrees with the compiled binary.
-- **Native worker isolation:** For each file, `no-comments` queries workspace paths once via `lake <lakeArgs> env`, resolves target `leanOptions` / `dynlibs` / `plugins` via Lake (`Lake.loadWorkspace` / `lake setup-file --no-build` and `prepareToolImports` for `toolPrefixes` scripts), loads required dynamic libraries via `Lean.loadDynlib` before initializers/headers, and elaborates in per-file child workers (`--jobs N`) overriding **only** `Elab.async := false`, `debug.byAsSorry := true`, `warningAsError := false`, and `linter.all := false`.
+- **Native worker isolation:** For each active workspace (prepared in parallel when multiple workspaces are configured), `no-comments` captures workspace paths and resolves target `leanOptions` / `dynlibs` / `plugins` / direct imports in a single `lake <lakeArgs> env` pass via `Lake.loadWorkspace` (`mod.setup.fetch`, `mod.header.fetch`, `Lake.setupServerModule`, and `Lake.realConfigFile` for `lakefile.lean`, falling back to `lake setup-file --no-build` and `prepareToolImports` for `toolPrefixes` scripts). Files sharing an identical worker runtime environment and import header are grouped into exact-header batches and scheduled across persistent child workers (`--jobs N`) that load required `dynlibs` / `plugins` once via `Lean.loadDynlib` / `Lean.importModules`, reuse the imported base `Environment` before `setMainModule` / `setModulePackage` across exact-header matches while isolating distinct import headers in fresh worker address spaces, and elaborate overriding **only** `Elab.async := false`, `debug.byAsSorry := true`, `warningAsError := false`, and `linter.all := false`.
 
 ## CLI Reference
 
@@ -87,7 +87,7 @@ no-comments [--version | --help]
 - `--base-ref <ref>`: Target branch/commit for `merge-base` (defaults to `origin/main` when present, otherwise `main`). Never silently masks a broken `origin/main` merge-base with `main`.
 - `--bootstrap`: Admits a missing `<ratchet>` file at the computed merge-base **only** when the merge-base commit is reachable and genuinely lacks `<ratchet>`. If `<ratchet>` already exists at the merge-base, `--bootstrap` still enforces full monotonicity against it.
 - `--file <file>`: Targets a single tracked file for fast iterative checks (while still validating repository config coverage and ratchets).
-- `--jobs <n>` / `-j <n>`: Number of concurrent per-file worker processes (defaults to `min(cpus, 4)`).
+- `--jobs <n>` / `-j <n>`: Number of concurrent worker processes (defaults to `min(cpus, 8)`).
 - `--repo <dir>` / `--config <path>`: Run against a specified Git repository root or explicit configuration file path.
 
 ## Bootstrap Workflow (2-PR Lifecycle)

@@ -8,7 +8,7 @@ import NoComments.Worker
 
 open NoComments
 
-private def toolVersion : String := "0.2.0"
+private def toolVersion : String := "0.3.0"
 
 private inductive CommandMode where
   | inventory (file? : Option String) (asJson : Bool)
@@ -157,7 +157,7 @@ private def parseArgs (args : List String) (st : CliOptions := {}) :
 
 private def defaultJobs : Nat :=
   let hw := (System.Platform.Internal.getHardwareConcurrency ()).toNat
-  min (max 1 hw) 4
+  min (max 1 hw) 8
 
 private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
     (cfg : Config.RepoConfig) (classified : Array Config.ClassifiedFile)
@@ -186,11 +186,27 @@ private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
   if let some t := targetFile? then
     unless foundTarget do
       throw <| IO.userError s!"target file '{t}' is not a tracked Lean file in {repoRoot}"
-  let mut allTargets : Array LakeEnv.WorkerTargetSetup := #[]
+  let mut activeWorkspaces : Array (Nat × Config.WorkspaceConfig × Array LakeEnv.SetupFileRequest) := #[]
   for h : wsIdx in [:cfg.workspaces.size] do
     let reqs := perWs[wsIdx]!
     unless reqs.isEmpty do
-      let prepared ← LakeEnv.prepareWorkspaceTargets selfExe repoRoot cfg.workspaces[wsIdx] reqs stageDir
+      activeWorkspaces := activeWorkspaces.push (wsIdx, cfg.workspaces[wsIdx], reqs)
+  let mut allTargets : Array LakeEnv.WorkerTargetSetup := #[]
+  if activeWorkspaces.size <= 1 then
+    for (wsIdx, wsCfg, reqs) in activeWorkspaces do
+      let wsStageDir := stageDir / s!"ws-{wsIdx}"
+      IO.FS.createDirAll wsStageDir
+      let prepared ← LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir
+      allTargets := allTargets ++ prepared
+  else
+    let mut prepTasks := Array.emptyWithCapacity activeWorkspaces.size
+    for (wsIdx, wsCfg, reqs) in activeWorkspaces do
+      let wsStageDir := stageDir / s!"ws-{wsIdx}"
+      IO.FS.createDirAll wsStageDir
+      let t ← IO.asTask (LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir)
+      prepTasks := prepTasks.push t
+    for t in prepTasks do
+      let prepared ← IO.ofExcept t.get
       allTargets := allTargets ++ prepared
   return (allTargets, checkedFiles, excludedFiles)
 
@@ -295,6 +311,8 @@ def main (args : List String) : IO UInt32 := do
       LakeEnv.runWorkspaceSetupMode
     | ["--worker"] =>
       Worker.runWorkerMode
+    | ["--worker-loop"] =>
+      Worker.runWorkerLoopMode
     | _ =>
       runUserCli args
     return 0
