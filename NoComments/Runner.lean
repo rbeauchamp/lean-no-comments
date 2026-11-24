@@ -185,16 +185,58 @@ structure LoopResponse where
   error? : Option String := none
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
-private def formatErrors (resolvedFileName rawFileName relPath : String)
-    (msgs : Lean.MessageLog) : IO String := do
-  let errMsgs := msgs.reportedPlusUnreported.toList.filter (·.severity == .error)
-  let lines ← errMsgs.mapM fun m =>
-    let m :=
-      if m.fileName == resolvedFileName || m.fileName == rawFileName then
-        { m with fileName := relPath }
+private def rewriteImplicitIncludePath (resolvedFileName relPath candidate : String) : String :=
+  match (System.FilePath.mk resolvedFileName).parent with
+  | none => candidate
+  | some resolvedDir =>
+    let sep := String.singleton System.FilePath.pathSeparator
+    match candidate.dropPrefix? (resolvedDir.toString ++ sep) with
+    | none => candidate
+    | some restSlice =>
+      let rest := restSlice.toString
+      if (System.FilePath.mk rest).isAbsolute then
+        candidate
       else
-        m
-    m.toString
+        match (System.FilePath.mk relPath).parent with
+        | some relDir => (relDir / rest).toString
+        | none => if rest.isEmpty then "." else rest
+
+private def rewriteIncludeDiagnosticLine (resolvedFileName relPath line : String) : String := Id.run do
+  let indent := (line.takeWhile (· == ' ')).toString
+  let body := (line.drop indent.length).toString
+  if indent.length >= 2 then
+    if let some pathSlice := body.dropPrefix? "file: " then
+      return indent ++ "file: " ++
+        rewriteImplicitIncludePath resolvedFileName relPath pathSlice.toString
+  if let some afterPre := body.dropPrefix? "Tried to read file '" then
+    if let some pathSlice := afterPre.dropSuffix? "' containing non UTF-8 data." then
+      return indent ++ "Tried to read file '" ++
+        rewriteImplicitIncludePath resolvedFileName relPath pathSlice.toString ++
+        "' containing non UTF-8 data."
+  return line
+
+private def rewriteIncludeDiagnosticBody (resolvedFileName relPath body : String) : String :=
+  String.intercalate "\n" <|
+    (body.splitOn "\n").map (rewriteIncludeDiagnosticLine resolvedFileName relPath)
+
+private def formatErrors (resolvedFileName rawFileName relPath : String)
+    (msgs : Lean.MessageLog) (rewriteIncludePaths : Bool := false) : IO String := do
+  let errMsgs := msgs.reportedPlusUnreported.toList.filter (·.severity == .error)
+  let lines ← errMsgs.mapM fun m => do
+    let sm ← m.serialize
+    let isTargetFile := sm.fileName == resolvedFileName || sm.fileName == rawFileName
+    let sm :=
+      if isTargetFile then
+        { sm with
+          fileName := relPath
+          data :=
+            if rewriteIncludePaths then
+              rewriteIncludeDiagnosticBody resolvedFileName relPath sm.data
+            else
+              sm.data }
+      else
+        sm
+    return sm.toString
   return String.intercalate "\n" lines
 
 private def mkParserCtx (inputCtx : Lean.Parser.InputContext) (cmdState : Lean.Elab.Command.State) :
@@ -387,6 +429,7 @@ private def analyzeTargetWithState
     ((collectFrontendCommands inputCtx #[initialRange] {}).run { inputCtx }).run initFrontendState
   if cmdErrMsgs.hasErrors then
     let errText ← formatErrors inputCtx.fileName req.absFile req.relPath cmdErrMsgs
+      (rewriteIncludePaths := true)
     throw <| IO.userError s!"elaboration error in {req.relPath}:\n{errText}"
   let finalPos := finalState.parserState.pos
   let allRanges :=
