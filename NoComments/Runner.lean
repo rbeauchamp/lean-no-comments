@@ -209,25 +209,22 @@ private def collectSnapshotErrors
 private partial def collectFrontendCommands (inputCtx : Lean.Parser.InputContext)
     (acc : Array Core.CommandRange) (errMsgs : Lean.MessageLog) :
     Lean.Elab.Frontend.FrontendM (Array Core.CommandRange × Lean.MessageLog) := do
-  Lean.Elab.Frontend.updateCmdPos
   let stBefore ← get
   let prevPos := stBefore.parserState.pos
   let pmCtx := mkParserCtx inputCtx stBefore.commandState
-  let (cmd, ps, parseMsgs) :=
+  let (_, _, parseMsgs) :=
     Lean.Parser.parseCommand inputCtx pmCtx.toParserModuleContext stBefore.parserState .empty
-  modify fun s => { s with commands := s.commands.push cmd }
-  Lean.Elab.Frontend.setParserState ps
-  Lean.Elab.Frontend.setMessages parseMsgs
-  Lean.Elab.Frontend.elabCommandAtFrontend cmd
+  let done ← Lean.Elab.Frontend.processCommand
   let stAfter ← get
   let nextPos := stAfter.parserState.pos
+  let cmd := stAfter.commands.back?.getD .missing
   let acc := acc.push { ctx := pmCtx, prevPos, nextPos, stx := cmd }
   let errMsgs := appendErrorMessages errMsgs parseMsgs
   let errMsgs := appendErrorMessages errMsgs stAfter.commandState.messages
   let errMsgs := collectSnapshotErrors stAfter.commandState.snapshotTasks errMsgs
   unless stAfter.commandState.snapshotTasks.isEmpty do
     modify fun s => { s with commandState := { s.commandState with snapshotTasks := #[] } }
-  if Lean.Parser.isTerminalCommand cmd then
+  if done then
     return (acc, errMsgs)
   else
     collectFrontendCommands inputCtx acc errMsgs
@@ -260,6 +257,7 @@ private structure HeaderCacheKey where
   deriving BEq
 
 private inductive WorkerBinding where
+  | oneShot
   | unbound
   | bound (key : HeaderCacheKey) (env : Lean.Environment)
 
@@ -269,37 +267,39 @@ private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputConte
     (filteredPlugins : Array Lean.Plugin) (cacheKey : HeaderCacheKey)
     (binding : WorkerBinding) :
     IO (Lean.Environment × Lean.MessageLog × WorkerBinding) := do
-  match binding with
-  | .bound boundKey env =>
-    if boundKey != cacheKey then
-      throw <| IO.userError s!"worker process is bound to a different import header/environment; refusing to reuse worker for {req.relPath}"
-    return (env, headerMsgs, binding)
-  | .unbound =>
-    let sysroot ←
-      if req.leanSysroot != "" then pure (System.FilePath.mk req.leanSysroot)
-      else Lean.findSysroot
-    Lean.initSearchPath sysroot (System.SearchPath.parse req.leanPath)
-    let mut loadedDynlibs : Std.HashSet String := {}
-    for dynlib in req.setup.dynlibs do
-      let key := dynlib.toString
-      unless loadedDynlibs.contains key do
-        Lean.loadDynlib dynlib
-        loadedDynlibs := loadedDynlibs.insert key
-    let level : Lean.OLeanLevel :=
-      if isModule then
-        if Lean.Elab.inServer.get opts then .server else .exported
-      else
-        .private
-    enableInitializers
-    try
-      let env ← Lean.importModules (leakEnv := true) (loadExts := true) (level := level)
-        imports opts 0 filteredPlugins req.setup.importArts
-      return (env, headerMsgs, .bound cacheKey env)
-    catch e =>
-      let env ← Lean.mkEmptyEnvironment
-      let pos := inputCtx.fileMap.toPosition headerPos
-      let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
-      return (env, msgs, .unbound)
+  let persistEnv ← match binding with
+    | .bound boundKey env =>
+      if boundKey != cacheKey then
+        throw <| IO.userError s!"worker process is bound to a different import header/environment; refusing to reuse worker for {req.relPath}"
+      return (env, headerMsgs, binding)
+    | .unbound => pure true
+    | .oneShot => pure false
+  let sysroot ←
+    if req.leanSysroot != "" then pure (System.FilePath.mk req.leanSysroot)
+    else Lean.findSysroot
+  Lean.initSearchPath sysroot (System.SearchPath.parse req.leanPath)
+  let mut loadedDynlibs : Std.HashSet String := {}
+  for dynlib in req.setup.dynlibs do
+    let key := dynlib.toString
+    unless loadedDynlibs.contains key do
+      Lean.loadDynlib dynlib
+      loadedDynlibs := loadedDynlibs.insert key
+  let level : Lean.OLeanLevel :=
+    if isModule then
+      if Lean.Elab.inServer.get opts then .server else .exported
+    else
+      .private
+  enableInitializers
+  try
+    let env ← Lean.importModules (leakEnv := persistEnv) (loadExts := true) (level := level)
+      imports opts 0 filteredPlugins req.setup.importArts
+    let nextBinding := if persistEnv then .bound cacheKey env else .oneShot
+    return (env, headerMsgs, nextBinding)
+  catch e =>
+    let env ← Lean.mkEmptyEnvironment
+    let pos := inputCtx.fileMap.toPosition headerPos
+    let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
+    return (env, msgs, binding)
 
 private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBinding) :
     IO (Array Core.Comment × WorkerBinding) := do
@@ -375,7 +375,7 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
     return (Core.sourceOrder acc, nextBinding)
 
 def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
-  let (comments, _) ← analyzeTargetWithState req .unbound
+  let (comments, _) ← analyzeTargetWithState req .oneShot
   return comments
 
 def runWorkerMode : IO Unit := do

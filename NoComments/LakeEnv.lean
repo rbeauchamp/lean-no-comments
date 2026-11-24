@@ -242,6 +242,68 @@ private def resolveFromInitDir (initWsDir : System.FilePath) (raw : String) : Sy
   let p := System.FilePath.mk raw
   if p.isAbsolute then p else initWsDir / p
 
+private abbrev LakeRootOptM := Lake.ArgsT (StateT (Option String) Option)
+
+private def skipOptArg : LakeRootOptM Unit := do
+  let some _ ← Lake.takeArg? | failure
+  pure ()
+
+private def parseRootDirShort : Char → LakeRootOptM Unit
+  | 'd' => do
+    let some dir ← Lake.takeArg? | failure
+    set (some dir)
+  | 'f' | 'o' | 'K' => skipOptArg
+  | 'q' | 'v' | 'U' | 'R' | 'h' | 'H' | 'J' => pure ()
+  | _ => failure
+
+private def parseRootDirLong : String → LakeRootOptM Unit
+  | "--dir" => do
+    let some dir ← Lake.takeArg? | failure
+    set (some dir)
+  | "--file" | "--packages" | "--package" | "--service" | "--scope" | "--repo"
+  | "--platform" | "--toolchain" | "--rev" | "--max-revs" | "--log-level"
+  | "--fail-level" | "--linters" | "--lint-only" | "--checks" | "--only"
+  | "--add-downstream" | "--add-public-downstream" | "--config" | "--from-export"
+  | "--challenge-from-export" | "--solution-from-export" => skipOptArg
+  | "--quiet" | "--verbose" | "--update" | "--keep-toolchain" | "--reconfigure"
+  | "--old" | "--text" | "--json" | "--allow-empty" | "--no-build" | "--fail-fast"
+  | "--no-cache" | "--try-cache" | "--rehash" | "--offline" | "--wfail" | "--iofail"
+  | "--no-overwrite" | "--force-overwrite" | "--force-download" | "--download-arts"
+  | "--mappings-only" | "--ansi" | "--no-ansi" | "--help" | "--builtin-lint"
+  | "--builtin-only" | "--record-exceptions" | "--code-quality" | "--raw"
+  | "--no-serve" | "--force" | "--keep-implied" | "--keep-prefix" | "--keep-public"
+  | "--add-public" | "--gh-style" | "--explain" | "--trace" | "--fix"
+  | "--paranoid" | "--inadvisably-no-sandbox" => pure ()
+  | _ => failure
+
+private def parseRootDirOption : String → LakeRootOptM Unit :=
+  Lake.option {
+    short := parseRootDirShort
+    long := parseRootDirLong
+    longShort := Lake.shortOptionWithArg parseRootDirShort
+  }
+
+def resolveLakeLockKey? (repoRoot : System.FilePath) (w : Config.WorkspaceConfig) :
+    IO (Option System.FilePath) := do
+  let initWsDir := if w.dir == "." then repoRoot else repoRoot / w.dir
+  let parsed? :=
+    ((Lake.processLeadingOptions parseRootDirOption).run w.lakeArgs.toList).run none
+  match parsed? with
+  | some (((), []), rootDir?) =>
+    let effectiveDir? := match rootDir? with
+      | some d => if d.isEmpty then none else some (resolveFromInitDir initWsDir d)
+      | none => some initWsDir
+    let some effectiveDir := effectiveDir?
+      | return none
+    let some realWsDir ← Lake.resolvePath? effectiveDir
+      | return none
+    let lakeDirPath := realWsDir / ".lake"
+    let lockDir ← match ← Lake.resolvePath? lakeDirPath with
+      | some realLakeDir => pure realLakeDir
+      | none => pure lakeDirPath
+    return some lockDir
+  | _ => return none
+
 private def parseConfigOpt (kvPair : String) : Lean.Name × String :=
   let pos := kvPair.find '='
   if h : pos.IsAtEnd then
