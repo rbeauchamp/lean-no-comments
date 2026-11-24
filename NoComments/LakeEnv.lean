@@ -39,6 +39,7 @@ structure SetupFileResult where
   relPath : String
   setup? : Option Lean.ModuleSetup
   header? : Option Lean.ModuleHeader := none
+  lakePkgDir? : Option String := none
 
 instance : Lean.ToJson SetupFileResult where
   toJson r :=
@@ -49,7 +50,10 @@ instance : Lean.ToJson SetupFileResult where
     let withHeader := match r.header? with
       | some h => ("header", Runner.moduleHeaderToJson h) :: withSetup
       | none => withSetup
-    Lean.Json.mkObj withHeader
+    let withPkgDir := match r.lakePkgDir? with
+      | some d => ("lakePkgDir", Lean.toJson d) :: withHeader
+      | none => withHeader
+    Lean.Json.mkObj withPkgDir
 
 instance : Lean.FromJson SetupFileResult where
   fromJson? j := do
@@ -60,7 +64,10 @@ instance : Lean.FromJson SetupFileResult where
     let header? ← match ← Runner.getOptionalField j "header" with
       | none => pure none
       | some v => some <$> Runner.moduleHeaderFromJson? v
-    return { relPath, setup?, header? }
+    let lakePkgDir? ← match ← Runner.getOptionalField j "lakePkgDir" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
+    return { relPath, setup?, header?, lakePkgDir? }
 
 structure WorkspaceSetupResponse where
   leanPath : String
@@ -82,6 +89,7 @@ structure WorkerTargetSetup where
   sharedLibPath : String
   setup : Lean.ModuleSetup
   header? : Option Lean.ModuleHeader := none
+  lakePkgDir? : Option String := none
   deriving Inhabited
 
 instance : Lean.ToJson WorkerTargetSetup where
@@ -100,7 +108,10 @@ instance : Lean.ToJson WorkerTargetSetup where
     let withHeader := match t.header? with
       | some h => ("header", Runner.moduleHeaderToJson h) :: base
       | none => base
-    Lean.Json.mkObj withHeader
+    let withPkgDir := match t.lakePkgDir? with
+      | some d => ("lakePkgDir", Lean.toJson d) :: withHeader
+      | none => withHeader
+    Lean.Json.mkObj withPkgDir
 
 instance : Lean.FromJson WorkerTargetSetup where
   fromJson? j := do
@@ -116,9 +127,12 @@ instance : Lean.FromJson WorkerTargetSetup where
     let header? ← match ← Runner.getOptionalField j "header" with
       | none => pure none
       | some v => some <$> Runner.moduleHeaderFromJson? v
+    let lakePkgDir? ← match ← Runner.getOptionalField j "lakePkgDir" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
     return {
       relPath, wsDir, absFile, isTool, leanPath, leanSrcPath, leanSysroot, sharedLibPath,
-      setup, header?
+      setup, header?, lakePkgDir?
     }
 
 def sharedLibEnvVar : String :=
@@ -740,6 +754,7 @@ def runWorkspaceSetupMode : IO Unit := do
   let mut nonConfigFiles : Array (Nat × String × System.FilePath) := #[]
   let mut results : Array (Option Lean.ModuleSetup) := Array.replicate req.files.size none
   let mut headersArr : Array (Option Lean.ModuleHeader) := Array.replicate req.files.size none
+  let mut lakePkgDirsArr : Array (Option String) := Array.replicate req.files.size none
   let mut hasNonTool := false
   for h : idx in [:req.files.size] do
     let f := req.files[idx]
@@ -755,6 +770,7 @@ def runWorkspaceSetupMode : IO Unit := do
           plugins := #[lakeEnv.lake.sharedLib]
         }
         results := results.set! idx (some cfgSetup)
+        lakePkgDirsArr := lakePkgDirsArr.set! idx (some pkgDir.toString)
       else
         nonConfigFiles := nonConfigFiles.push (idx, f.wsRelPath, resolvedFile)
   if hasNonTool && realCfg.toString.isEmpty then
@@ -810,7 +826,8 @@ def runWorkspaceSetupMode : IO Unit := do
   let outFiles : Array SetupFileResult := Array.ofFn fun (i : Fin req.files.size) =>
     { relPath := req.files[i].relPath
       setup? := results[i]!
-      header? := headersArr[i]! }
+      header? := headersArr[i]!
+      lakePkgDir? := lakePkgDirsArr[i]! }
   let resp : WorkspaceSetupResponse := {
     leanPath := (← IO.getEnv "LEAN_PATH").getD ""
     leanSrcPath := (← IO.getEnv "LEAN_SRC_PATH").getD ""
@@ -824,7 +841,7 @@ def runWorkspaceSetupMode : IO Unit := do
 private def runWorkspaceSetupBatch (selfExe : System.FilePath) (wsDir : System.FilePath)
     (srcDirRel : String) (lakeArgs : Array String)
     (files : Array SetupFileRequest) :
-    IO (WorkspaceRuntimeEnv × Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader)) := do
+    IO (WorkspaceRuntimeEnv × Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader × Option String)) := do
   let req : WorkspaceSetupRequest := {
     wsDir := wsDir.toString
     lakeArgs
@@ -872,10 +889,10 @@ private def runWorkspaceSetupBatch (selfExe : System.FilePath) (wsDir : System.F
     sharedLibPath := buildSharedLibPath parsed.leanSysroot parsed.sharedLibPath
     pathEnv := parsed.pathEnv
   }
-  let mut map : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader) := {}
+  let mut map : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader × Option String) := {}
   for item in parsed.files do
     if let some s := item.setup? then
-      map := map.insert item.relPath (s, item.header?)
+      map := map.insert item.relPath (s, item.header?, item.lakePkgDir?)
   return (wsEnv, map)
 
 private def runLakeSetupFile (wsEnv : WorkspaceRuntimeEnv) (wsRelPath : String)
@@ -1027,7 +1044,7 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
   let (wsEnv, moduleSetups) ←
     if nonToolReqs.isEmpty then
       let env ← queryWorkspaceEnv selfExe wsDir w.srcDir w.lakeArgs
-      pure (env, ({} : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader)))
+      pure (env, ({} : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader × Option String)))
     else
       runWorkspaceSetupBatch selfExe wsDir w.srcDir w.lakeArgs nonToolReqs
   let mut targets := Array.emptyWithCapacity files.size
@@ -1049,7 +1066,7 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
       }
     else
       match moduleSetups[f.relPath]? with
-      | some (setup, header?) =>
+      | some (setup, header?, lakePkgDir?) =>
         targets := targets.push {
           relPath := f.relPath
           wsDir := wsEnv.wsDir
@@ -1061,6 +1078,7 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
           sharedLibPath := wsEnv.sharedLibPath
           setup
           header?
+          lakePkgDir?
         }
       | none =>
         match ← runLakeSetupFile wsEnv f.wsRelPath true with

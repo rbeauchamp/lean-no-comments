@@ -134,11 +134,12 @@ structure WorkerRequest where
   leanSysroot : String
   setup : Lean.ModuleSetup
   stripLakePlugin : Bool := true
+  lakePkgDir? : Option String := none
   deriving Inhabited
 
 instance : Lean.ToJson WorkerRequest where
   toJson req :=
-    Lean.Json.mkObj [
+    let base : List (String × Lean.Json) := [
       ("relPath", Lean.toJson req.relPath),
       ("absFile", Lean.toJson req.absFile),
       ("leanPath", Lean.toJson req.leanPath),
@@ -146,6 +147,10 @@ instance : Lean.ToJson WorkerRequest where
       ("setup", moduleSetupToJson req.setup),
       ("stripLakePlugin", Lean.toJson req.stripLakePlugin)
     ]
+    let withPkgDir := match req.lakePkgDir? with
+      | some d => ("lakePkgDir", Lean.toJson d) :: base
+      | none => base
+    Lean.Json.mkObj withPkgDir
 
 instance : Lean.FromJson WorkerRequest where
   fromJson? j := do
@@ -155,7 +160,10 @@ instance : Lean.FromJson WorkerRequest where
     let leanSysroot ← j.getObjValAs? String "leanSysroot"
     let setup ← j.getObjVal? "setup" >>= moduleSetupFromJson?
     let stripLakePlugin ← getObjOptField j "stripLakePlugin" true
-    return { relPath, absFile, leanPath, leanSysroot, setup, stripLakePlugin }
+    let lakePkgDir? ← match ← getOptionalField j "lakePkgDir" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
+    return { relPath, absFile, leanPath, leanSysroot, setup, stripLakePlugin, lakePkgDir? }
 
 structure LoopRequest where
   reqId : Nat
@@ -301,10 +309,12 @@ private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputConte
     let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
     return (env, msgs, binding)
 
-private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBinding) :
+private def analyzeTargetWithState
+    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment)
+    (req : WorkerRequest) (binding : WorkerBinding) :
     IO (Array Core.Comment × WorkerBinding) := do
   let content ← IO.FS.readFile (System.FilePath.mk req.absFile)
-  let inputCtx := Lean.Parser.mkInputContext content req.relPath
+  let inputCtx := Lean.Parser.mkInputContext content req.absFile
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
   if headerMsgs.hasErrors then
     let errText ← formatErrors headerMsgs
@@ -340,6 +350,7 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
   if hdrMsgs.hasErrors then
     let errText ← formatErrors hdrMsgs
     throw <| IO.userError s!"import/header elaboration error in {req.relPath}:\n{errText}"
+  let env := prepareEnv req mainModule env
   let cmdState := Lean.Elab.Command.mkState env hdrMsgs opts
   let hdrCtx := mkParserCtx inputCtx cmdState
   let initialRange : Core.CommandRange := {
@@ -374,17 +385,21 @@ private def analyzeTargetWithState (req : WorkerRequest) (binding : WorkerBindin
   | .ok acc =>
     return (Core.sourceOrder acc, nextBinding)
 
-def analyzeTarget (req : WorkerRequest) : IO (Array Core.Comment) := do
-  let (comments, _) ← analyzeTargetWithState req .oneShot
+def analyzeTarget (req : WorkerRequest)
+    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment := fun _ _ env => env) :
+    IO (Array Core.Comment) := do
+  let (comments, _) ← analyzeTargetWithState prepareEnv req .oneShot
   return comments
 
-def runWorkerMode : IO Unit := do
+def runWorkerMode
+    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment := fun _ _ env => env) :
+    IO Unit := do
   let stdin ← IO.getStdin
   let raw ← stdin.readToEnd
   let req : WorkerRequest ← match Lean.Json.parse raw >>= Lean.fromJson? with
     | .ok r => pure r
     | .error e => throw <| IO.userError s!"invalid worker request JSON: {e}"
-  let comments ← analyzeTarget req
+  let comments ← analyzeTarget req prepareEnv
   for c in comments do
     IO.println s!"{c.fingerprint} {c.kind} {c.startLine} {c.endLine}"
 
@@ -414,7 +429,9 @@ private def mkCaptureStream (bufRef : IO.Ref ByteArray) : IO.FS.Stream := {
   isTty := pure false
 }
 
-def runWorkerLoopMode : IO Unit := do
+def runWorkerLoopMode
+    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment := fun _ _ env => env) :
+    IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
   let initCwd ← IO.Process.getCurrentDir
@@ -443,7 +460,7 @@ def runWorkerLoopMode : IO Unit := do
         let captureOut := mkCaptureStream capturedOutRef
         let runRes ← (try
           IO.withStdin nullStream <| IO.withStdout captureOut <|
-            analyzeTargetWithState lreq.request binding
+            analyzeTargetWithState prepareEnv lreq.request binding
         finally
           IO.Process.setCurrentDir initCwd).toBaseIO
         match runRes with
