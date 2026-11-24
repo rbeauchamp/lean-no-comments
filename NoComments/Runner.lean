@@ -252,44 +252,43 @@ def runWorkerLoopMode : IO Unit := do
       keepGoing := false
     else
       let line := rawLine.trimAscii.toString
-      unless line.isEmpty do
-        match Lean.Json.parse line >>= Lean.fromJson? (α := LoopRequest) with
-        | .error e =>
+      match Lean.Json.parse line >>= Lean.fromJson? (α := LoopRequest) with
+      | .error e =>
+        let resp : LoopResponse := {
+          reqId := 0
+          relPath := ""
+          ok := false
+          error? := some s!"invalid worker request JSON: {e}"
+        }
+        stdout.putStrLn (Lean.toJson resp).compress
+        stdout.flush
+        keepGoing := false
+      | .ok lreq =>
+        IO.setNumHeartbeats 0
+        let runRes ← (try
+          analyzeTargetWithState lreq.request binding
+        finally
+          IO.Process.setCurrentDir initCwd).toBaseIO
+        match runRes with
+        | .ok (comments, binding') =>
+          binding := binding'
           let resp : LoopResponse := {
-            reqId := 0
-            relPath := ""
+            reqId := lreq.reqId
+            relPath := lreq.request.relPath
+            ok := true
+            comments := toWireComments comments
+          }
+          stdout.putStrLn (Lean.toJson resp).compress
+          stdout.flush
+        | .error err =>
+          let resp : LoopResponse := {
+            reqId := lreq.reqId
+            relPath := lreq.request.relPath
             ok := false
-            error? := some s!"invalid worker request JSON: {e}"
+            error? := some (toString err)
           }
           stdout.putStrLn (Lean.toJson resp).compress
           stdout.flush
           keepGoing := false
-        | .ok lreq =>
-          IO.setNumHeartbeats 0
-          let runRes ← (try
-            analyzeTargetWithState lreq.request binding
-          finally
-            IO.Process.setCurrentDir initCwd).toBaseIO
-          match runRes with
-          | .ok (comments, binding') =>
-            binding := binding'
-            let resp : LoopResponse := {
-              reqId := lreq.reqId
-              relPath := lreq.request.relPath
-              ok := true
-              comments := toWireComments comments
-            }
-            stdout.putStrLn (Lean.toJson resp).compress
-            stdout.flush
-          | .error err =>
-            let resp : LoopResponse := {
-              reqId := lreq.reqId
-              relPath := lreq.request.relPath
-              ok := false
-              error? := some (toString err)
-            }
-            stdout.putStrLn (Lean.toJson resp).compress
-            stdout.flush
-            keepGoing := false
 
 end NoComments.Runner

@@ -186,31 +186,21 @@ private def groupAndPrepareTargets (selfExe repoRoot : System.FilePath)
   if let some t := targetFile? then
     unless foundTarget do
       throw <| IO.userError s!"target file '{t}' is not a tracked Lean file in {repoRoot}"
-  let mut activeWorkspaces : Array (Nat × Config.WorkspaceConfig × Array LakeEnv.SetupFileRequest) := #[]
+  let mut stagedWorkspaces : Array (Config.WorkspaceConfig × Array LakeEnv.SetupFileRequest × System.FilePath) := #[]
   for h : wsIdx in [:cfg.workspaces.size] do
     let reqs := perWs[wsIdx]!
     unless reqs.isEmpty do
-      activeWorkspaces := activeWorkspaces.push (wsIdx, cfg.workspaces[wsIdx], reqs)
+      let wsStageDir := stageDir / s!"ws-{wsIdx}"
+      IO.FS.createDirAll wsStageDir
+      stagedWorkspaces := stagedWorkspaces.push (cfg.workspaces[wsIdx], reqs, wsStageDir)
+  let prepTasks ← stagedWorkspaces.mapM fun (wsCfg, reqs, wsStageDir) =>
+    IO.asTask (LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir)
+      Task.Priority.dedicated
+  let results ← (prepTasks.mapM IO.wait : BaseIO _)
   let mut allTargets : Array LakeEnv.WorkerTargetSetup := #[]
-  if activeWorkspaces.size <= 1 then
-    for (wsIdx, wsCfg, reqs) in activeWorkspaces do
-      let wsStageDir := stageDir / s!"ws-{wsIdx}"
-      IO.FS.createDirAll wsStageDir
-      let prepared ← LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir
-      allTargets := allTargets ++ prepared
-  else
-    let mut stagedWorkspaces := Array.emptyWithCapacity activeWorkspaces.size
-    for (wsIdx, wsCfg, reqs) in activeWorkspaces do
-      let wsStageDir := stageDir / s!"ws-{wsIdx}"
-      IO.FS.createDirAll wsStageDir
-      stagedWorkspaces := stagedWorkspaces.push (wsCfg, reqs, wsStageDir)
-    let prepTasks ← stagedWorkspaces.mapM fun (wsCfg, reqs, wsStageDir) =>
-      IO.asTask (LakeEnv.prepareWorkspaceTargets selfExe repoRoot wsCfg reqs wsStageDir)
-        Task.Priority.dedicated
-    let results ← (prepTasks.mapM IO.wait : BaseIO _)
-    for res in results do
-      let prepared ← IO.ofExcept res
-      allTargets := allTargets ++ prepared
+  for res in results do
+    let prepared ← IO.ofExcept res
+    allTargets := allTargets ++ prepared
   return (allTargets, checkedFiles, excludedFiles)
 
 private def formatRatchetJson (analyses : Array RatchetCore.FileAnalysis) : String :=
