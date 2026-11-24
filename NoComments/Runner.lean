@@ -185,10 +185,15 @@ structure LoopResponse where
   error? : Option String := none
   deriving Inhabited, Lean.ToJson, Lean.FromJson
 
-private def formatErrors (inputFileName relPath : String) (msgs : Lean.MessageLog) : IO String := do
+private def formatErrors (resolvedFileName rawFileName relPath : String)
+    (msgs : Lean.MessageLog) : IO String := do
   let errMsgs := msgs.reportedPlusUnreported.toList.filter (·.severity == .error)
   let lines ← errMsgs.mapM fun m =>
-    let m := if m.fileName == inputFileName then { m with fileName := relPath } else m
+    let m :=
+      if m.fileName == resolvedFileName || m.fileName == rawFileName then
+        { m with fileName := relPath }
+      else
+        m
     m.toString
   return String.intercalate "\n" lines
 
@@ -311,15 +316,27 @@ private def loadBaseEnv (req : WorkerRequest) (inputCtx : Lean.Parser.InputConte
     let msgs := headerMsgs.add { fileName := inputCtx.fileName, data := toString e, pos }
     return (env, msgs, binding)
 
+private def resolveWorkerFile (rawAbs : String) : IO System.FilePath := do
+  let rawPath := System.FilePath.mk rawAbs
+  match ← (IO.FS.realPath rawPath).toBaseIO with
+  | .ok real =>
+    if (← real.pathExists) then
+      pure real.normalize
+    else
+      pure rawPath
+  | .error _ =>
+    pure rawPath
+
 private def analyzeTargetWithState
-    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment)
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment)
     (req : WorkerRequest) (binding : WorkerBinding) :
     IO (Array Core.Comment × WorkerBinding) := do
-  let content ← IO.FS.readFile (System.FilePath.mk req.absFile)
-  let inputCtx := Lean.Parser.mkInputContext content req.absFile
+  let resolvedFile ← resolveWorkerFile req.absFile
+  let content ← IO.FS.readFile resolvedFile
+  let inputCtx := Lean.Parser.mkInputContext content resolvedFile.toString
   let (headerStx, headerParserState, headerMsgs) ← Lean.Parser.parseHeader inputCtx
   if headerMsgs.hasErrors then
-    let errText ← formatErrors inputCtx.fileName req.relPath headerMsgs
+    let errText ← formatErrors inputCtx.fileName req.absFile req.relPath headerMsgs
     throw <| IO.userError s!"parse error in header of {req.relPath}:\n{errText}"
   let opts := applyWorkerOptionOverrides req.setup.options.toOptions
   let headerSyntax : Lean.Elab.HeaderSyntax := ⟨headerStx⟩
@@ -350,9 +367,9 @@ private def analyzeTargetWithState
     hdrMsgs0 (some headerSyntax) (some headerSyntax)
   let hdrMsgs := Lean.Elab.checkModuleNamePortability mainModule inputCtx headerParserState.pos hdrMsgs
   if hdrMsgs.hasErrors then
-    let errText ← formatErrors inputCtx.fileName req.relPath hdrMsgs
+    let errText ← formatErrors inputCtx.fileName req.absFile req.relPath hdrMsgs
     throw <| IO.userError s!"import/header elaboration error in {req.relPath}:\n{errText}"
-  let env := prepareEnv req mainModule env
+  let env := prepareEnv req resolvedFile mainModule env
   let cmdState := Lean.Elab.Command.mkState env hdrMsgs opts
   let hdrCtx := mkParserCtx inputCtx cmdState
   let initialRange : Core.CommandRange := {
@@ -369,7 +386,7 @@ private def analyzeTargetWithState
   let ((cmdRanges, cmdErrMsgs), finalState) ←
     ((collectFrontendCommands inputCtx #[initialRange] {}).run { inputCtx }).run initFrontendState
   if cmdErrMsgs.hasErrors then
-    let errText ← formatErrors inputCtx.fileName req.relPath cmdErrMsgs
+    let errText ← formatErrors inputCtx.fileName req.absFile req.relPath cmdErrMsgs
     throw <| IO.userError s!"elaboration error in {req.relPath}:\n{errText}"
   let finalPos := finalState.parserState.pos
   let allRanges :=
@@ -388,13 +405,15 @@ private def analyzeTargetWithState
     return (Core.sourceOrder acc, nextBinding)
 
 def analyzeTarget (req : WorkerRequest)
-    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment := fun _ _ env => env) :
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment :=
+      fun _ _ _ env => env) :
     IO (Array Core.Comment) := do
   let (comments, _) ← analyzeTargetWithState prepareEnv req .oneShot
   return comments
 
 def runWorkerMode
-    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment := fun _ _ env => env) :
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment :=
+      fun _ _ _ env => env) :
     IO Unit := do
   let stdin ← IO.getStdin
   let raw ← stdin.readToEnd
@@ -432,7 +451,8 @@ private def mkCaptureStream (bufRef : IO.Ref ByteArray) : IO.FS.Stream := {
 }
 
 def runWorkerLoopMode
-    (prepareEnv : WorkerRequest → Lean.Name → Lean.Environment → Lean.Environment := fun _ _ env => env) :
+    (prepareEnv : WorkerRequest → System.FilePath → Lean.Name → Lean.Environment → Lean.Environment :=
+      fun _ _ _ env => env) :
     IO Unit := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout

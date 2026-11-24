@@ -14,19 +14,23 @@ open NoComments
 private def coreSource : String := include_str "Core.lean"
 private def runnerSource : String := include_str "Runner.lean"
 
-private def prepareLakeEnv (req : Runner.WorkerRequest) (mainModule : Lean.Name)
-    (env : Lean.Environment) : Lean.Environment :=
-  if mainModule == Lake.configModuleName then
-    let pkgDir? := match req.lakePkgDir? with
-      | some dir =>
-        if dir.isEmpty then (System.FilePath.mk req.absFile).parent
-        else some (System.FilePath.mk dir)
-      | none => (System.FilePath.mk req.absFile).parent
-    match pkgDir? with
-    | some pkgDir => Lake.dirExt.setState env (some pkgDir)
-    | none => env
-  else
-    env
+private def prepareLakeEnv (req : Runner.WorkerRequest) (resolvedFile : System.FilePath)
+    (mainModule : Lean.Name) (env : Lean.Environment) : Lean.Environment :=
+  let explicitPkgDir? : Option System.FilePath :=
+    match req.lakePkgDir? with
+    | some dir => if !dir.isEmpty then some (System.FilePath.mk dir) else none
+    | none => none
+  let pkgDir? : Option System.FilePath :=
+    match explicitPkgDir? with
+    | some pkgDir => some pkgDir
+    | none =>
+      if mainModule == Lake.configModuleName && req.setup.plugins.any Runner.isLakeSharedPlugin then
+        resolvedFile.parent
+      else
+        none
+  match pkgDir? with
+  | some pkgDir => Lake.dirExt.setState env (some pkgDir)
+  | none => env
 
 def runWorkerMode : IO Unit :=
   Runner.runWorkerMode prepareLakeEnv

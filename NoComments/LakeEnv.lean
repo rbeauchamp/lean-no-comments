@@ -21,7 +21,50 @@ structure WorkspaceRuntimeEnv where
   leanSysroot : String
   sharedLibPath : String
   pathEnv : String
-  deriving Repr, Inhabited, Lean.ToJson, Lean.FromJson
+  activeConfigFile? : Option String := none
+  activeLakePkgDir? : Option String := none
+  deriving Repr, Inhabited
+
+instance : Lean.ToJson WorkspaceRuntimeEnv where
+  toJson e :=
+    let base : List (String × Lean.Json) := [
+      ("wsDir", Lean.toJson e.wsDir),
+      ("srcDir", Lean.toJson e.srcDir),
+      ("lakeArgs", Lean.toJson e.lakeArgs),
+      ("leanPath", Lean.toJson e.leanPath),
+      ("leanSrcPath", Lean.toJson e.leanSrcPath),
+      ("leanSysroot", Lean.toJson e.leanSysroot),
+      ("sharedLibPath", Lean.toJson e.sharedLibPath),
+      ("pathEnv", Lean.toJson e.pathEnv)
+    ]
+    let withCfg := match e.activeConfigFile? with
+      | some c => ("activeConfigFile", Lean.toJson c) :: base
+      | none => base
+    let withPkg := match e.activeLakePkgDir? with
+      | some d => ("activeLakePkgDir", Lean.toJson d) :: withCfg
+      | none => withCfg
+    Lean.Json.mkObj withPkg
+
+instance : Lean.FromJson WorkspaceRuntimeEnv where
+  fromJson? j := do
+    let wsDir ← j.getObjValAs? String "wsDir"
+    let srcDir ← j.getObjValAs? String "srcDir"
+    let lakeArgs ← j.getObjValAs? (Array String) "lakeArgs"
+    let leanPath ← j.getObjValAs? String "leanPath"
+    let leanSrcPath ← j.getObjValAs? String "leanSrcPath"
+    let leanSysroot ← j.getObjValAs? String "leanSysroot"
+    let sharedLibPath ← j.getObjValAs? String "sharedLibPath"
+    let pathEnv ← j.getObjValAs? String "pathEnv"
+    let activeConfigFile? ← match ← Runner.getOptionalField j "activeConfigFile" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
+    let activeLakePkgDir? ← match ← Runner.getOptionalField j "activeLakePkgDir" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
+    return {
+      wsDir, srcDir, lakeArgs, leanPath, leanSrcPath, leanSysroot, sharedLibPath, pathEnv,
+      activeConfigFile?, activeLakePkgDir?
+    }
 
 structure SetupFileRequest where
   relPath : String
@@ -76,7 +119,45 @@ structure WorkspaceSetupResponse where
   sharedLibPath : String
   pathEnv : String
   files : Array SetupFileResult
-  deriving Lean.ToJson, Lean.FromJson
+  activeConfigFile? : Option String := none
+  activeLakePkgDir? : Option String := none
+
+instance : Lean.ToJson WorkspaceSetupResponse where
+  toJson r :=
+    let base : List (String × Lean.Json) := [
+      ("leanPath", Lean.toJson r.leanPath),
+      ("leanSrcPath", Lean.toJson r.leanSrcPath),
+      ("leanSysroot", Lean.toJson r.leanSysroot),
+      ("sharedLibPath", Lean.toJson r.sharedLibPath),
+      ("pathEnv", Lean.toJson r.pathEnv),
+      ("files", Lean.toJson r.files)
+    ]
+    let withCfg := match r.activeConfigFile? with
+      | some c => ("activeConfigFile", Lean.toJson c) :: base
+      | none => base
+    let withPkg := match r.activeLakePkgDir? with
+      | some d => ("activeLakePkgDir", Lean.toJson d) :: withCfg
+      | none => withCfg
+    Lean.Json.mkObj withPkg
+
+instance : Lean.FromJson WorkspaceSetupResponse where
+  fromJson? j := do
+    let leanPath ← j.getObjValAs? String "leanPath"
+    let leanSrcPath ← j.getObjValAs? String "leanSrcPath"
+    let leanSysroot ← j.getObjValAs? String "leanSysroot"
+    let sharedLibPath ← j.getObjValAs? String "sharedLibPath"
+    let pathEnv ← j.getObjValAs? String "pathEnv"
+    let files ← j.getObjValAs? (Array SetupFileResult) "files"
+    let activeConfigFile? ← match ← Runner.getOptionalField j "activeConfigFile" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
+    let activeLakePkgDir? ← match ← Runner.getOptionalField j "activeLakePkgDir" with
+      | none => pure none
+      | some v => some <$> Lean.fromJson? v
+    return {
+      leanPath, leanSrcPath, leanSysroot, sharedLibPath, pathEnv, files,
+      activeConfigFile?, activeLakePkgDir?
+    }
 
 structure WorkerTargetSetup where
   relPath : String
@@ -205,45 +286,11 @@ private def buildSharedLibPath (leanSysroot existing : String) : String :=
     let baseLib := (sys / "lib").toString
     joinSearchPath #[leanLib, baseLib, existing]
 
-def queryWorkspaceEnv (selfExe : System.FilePath) (wsDir : System.FilePath)
-    (srcDirRel : String) (lakeArgs : Array String) : IO WorkspaceRuntimeEnv := do
-  let out ← IO.Process.output {
-    cmd := "lake"
-    args := lakeArgs ++ #["env", selfExe.toString, "--print-env"]
-    cwd := some wsDir
-  }
-  if out.exitCode != 0 then
-    throw <| IO.userError
-      s!"`lake {String.intercalate " " lakeArgs.toList} env` failed in {wsDir}: {out.stderr.trimAscii.toString}"
-  let json ← match Lean.Json.parse out.stdout with
-    | .ok j => pure j
-    | .error e => throw <| IO.userError s!"failed to parse environment JSON from {wsDir}: {e}"
-  let getField (k : String) : IO String := do
-    match json.getObjValAs? String k with
-    | .ok s => pure s
-    | .error e => throw <| IO.userError s!"missing env field '{k}': {e}"
-  let leanPath ← getField "leanPath"
-  let leanSrcPath ← getField "leanSrcPath"
-  let leanSysroot ← getField "leanSysroot"
-  let rawShared ← getField "sharedLibPath"
-  let pathEnv ← getField "pathEnv"
-  let srcDir := if srcDirRel == "." then wsDir else wsDir / srcDirRel
-  return {
-    wsDir := wsDir.toString
-    srcDir := srcDir.toString
-    lakeArgs
-    leanPath
-    leanSrcPath
-    leanSysroot
-    sharedLibPath := buildSharedLibPath leanSysroot rawShared
-    pathEnv
-  }
-
 private structure ParsedLakeFlags where
   relConfigFile : System.FilePath := Lake.defaultConfigFile
-  wsDir : System.FilePath
+  rootDir? : Option String := none
   relPkgDir : System.FilePath := "."
-  packageOverrides : Array Lake.PackageEntry := #[]
+  packageOverrideFiles : Array System.FilePath := #[]
   lakeOpts : Lean.NameMap String := ∅
   reconfigure : Bool := false
   updateToolchain : Bool := true
@@ -277,6 +324,173 @@ private def isCommonLakeFlagLongOpt : String → Bool
   | "--paranoid" | "--inadvisably-no-sandbox" => true
   | _ => false
 
+private def stripLeadingElanToolchain (lakeArgs : Array String) : List String :=
+  match lakeArgs.toList with
+  | arg :: rest => if arg.startsWith "+" && arg.length > 1 then rest else arg :: rest
+  | [] => []
+
+private abbrev LakeFlagsM := Lake.ArgsT (StateT ParsedLakeFlags (Except String))
+
+private def takeLakeFlagArg (flag : String) : LakeFlagsM String := do
+  let some val ← Lake.takeArg?
+    | throw s!"missing value after '{flag}' in lakeArgs"
+  return val
+
+private def parseConfigOpt (kvPair : String) : Lean.Name × String :=
+  let pos := kvPair.find '='
+  if h : pos.IsAtEnd then
+    (kvPair.toName, "")
+  else
+    ((kvPair.extract kvPair.startPos pos).toName, kvPair.extract (pos.next h) kvPair.endPos)
+
+private def parseLakeFlagShort : Char → LakeFlagsM Unit
+  | 'd' => do
+    let dir ← takeLakeFlagArg "-d"
+    modifyThe ParsedLakeFlags fun s => { s with rootDir? := some dir }
+  | 'f' => do
+    let cfg ← takeLakeFlagArg "-f"
+    modifyThe ParsedLakeFlags fun s => { s with relConfigFile := cfg }
+  | 'o' => do
+    let _ ← takeLakeFlagArg "-o"
+    pure ()
+  | 'K' => do
+    let kv ← takeLakeFlagArg "-K"
+    let (k, v) := parseConfigOpt kv
+    modifyThe ParsedLakeFlags fun s => { s with lakeOpts := s.lakeOpts.insert k v }
+  | 'U' => modifyThe ParsedLakeFlags fun s => { s with updateDeps := true }
+  | 'R' => modifyThe ParsedLakeFlags fun s => { s with reconfigure := true }
+  | 'H' => modifyThe ParsedLakeFlags fun s => { s with trustHash := false }
+  | 'q' | 'v' | 'J' => pure ()
+  | opt => throw s!"unsupported Lake CLI argument '-{opt}' in lakeArgs"
+
+private def parseLakeFlagLong (initWsDir : System.FilePath) (opt : String) : LakeFlagsM Unit :=
+  match opt with
+  | "--dir" => do
+    let dir ← takeLakeFlagArg "--dir"
+    modifyThe ParsedLakeFlags fun s => { s with rootDir? := some dir }
+  | "--file" => do
+    let cfg ← takeLakeFlagArg "--file"
+    modifyThe ParsedLakeFlags fun s => { s with relConfigFile := cfg }
+  | "--packages" => do
+    let path ← takeLakeFlagArg "--packages"
+    modifyThe ParsedLakeFlags fun s =>
+      { s with packageOverrideFiles := s.packageOverrideFiles.push (resolveFromInitDir initWsDir path) }
+  | "--reconfigure" => modifyThe ParsedLakeFlags fun s => { s with reconfigure := true }
+  | "--update" => modifyThe ParsedLakeFlags fun s => { s with updateDeps := true }
+  | "--keep-toolchain" => modifyThe ParsedLakeFlags fun s => { s with updateToolchain := false }
+  | "--offline" => modifyThe ParsedLakeFlags fun s => { s with updateDeps := false, updateToolchain := false }
+  | "--no-cache" => modifyThe ParsedLakeFlags fun s => { s with noCache? := some true }
+  | "--try-cache" => modifyThe ParsedLakeFlags fun s => { s with noCache? := some false }
+  | "--old" => modifyThe ParsedLakeFlags fun s => { s with oldMode := true }
+  | "--rehash" => modifyThe ParsedLakeFlags fun s => { s with trustHash := false }
+  | "--wfail" => modifyThe ParsedLakeFlags fun s => { s with failLv := .warning }
+  | "--iofail" => modifyThe ParsedLakeFlags fun s => { s with failLv := .info }
+  | "--fail-level" => do
+    let raw ← takeLakeFlagArg "--fail-level"
+    let some lv := Lake.LogLevel.ofString? raw
+      | throw s!"invalid log level '{raw}' for '--fail-level' in lakeArgs"
+    modifyThe ParsedLakeFlags fun s => { s with failLv := lv }
+  | _ =>
+    if isCommonLakeArgLongOpt opt then do
+      let _ ← takeLakeFlagArg opt
+      pure ()
+    else if isCommonLakeFlagLongOpt opt then
+      pure ()
+    else
+      throw s!"unsupported Lake CLI argument '{opt}' in lakeArgs"
+
+private def parseLakeFlagOption (initWsDir : System.FilePath) : String → LakeFlagsM Unit :=
+  Lake.option {
+    short := parseLakeFlagShort
+    long := parseLakeFlagLong initWsDir
+    longShort := Lake.shortOptionWithArg parseLakeFlagShort
+  }
+
+private def parseLakeFlags (initWsDir : System.FilePath) (lakeArgs : Array String) :
+    Except String ParsedLakeFlags := do
+  let effectiveArgs := stripLeadingElanToolchain lakeArgs
+  let (((), rem), flags) ←
+    ((Lake.processLeadingOptions (parseLakeFlagOption initWsDir)).run effectiveArgs).run {}
+  match rem with
+  | [] => return flags
+  | arg :: _ => throw s!"unsupported Lake CLI argument '{arg}' in lakeArgs"
+
+private structure ResolvedWorkspaceLayout where
+  wsDir : System.FilePath
+  pkgDir : System.FilePath
+  configFile : System.FilePath
+  realCfg : System.FilePath
+
+private def ResolvedWorkspaceLayout.activeConfigInfo (layout : ResolvedWorkspaceLayout) :
+    Option String × Option String :=
+  if layout.realCfg.toString.isEmpty then
+    (none, none)
+  else
+    (some layout.realCfg.toString, some layout.pkgDir.toString)
+
+private def resolveWorkspaceLayout (initWsDir : System.FilePath) (flags : ParsedLakeFlags) :
+    IO ResolvedWorkspaceLayout := do
+  let rawWsDir ← match flags.rootDir? with
+    | some d =>
+      if d.isEmpty then
+        throw <| IO.userError "workspace directory does not exist: "
+      else
+        pure (resolveFromInitDir initWsDir d)
+    | none => pure initWsDir
+  let wsDir ← match ← Lake.resolvePath? rawWsDir with
+    | some p => pure p
+    | none => throw <| IO.userError s!"workspace directory does not exist: {rawWsDir}"
+  let pkgDir := Lake.joinRelative wsDir flags.relPkgDir
+  let configFile := Lake.joinRelative pkgDir flags.relConfigFile
+  let realCfg ← Lake.realConfigFile configFile
+  return { wsDir, pkgDir, configFile, realCfg }
+
+private def resolveSourceFile (rawAbs : System.FilePath) : IO System.FilePath := do
+  match ← Lake.resolvePath? rawAbs with
+  | some p => pure p
+  | none => pure rawAbs.normalize
+
+def queryWorkspaceEnv (selfExe : System.FilePath) (wsDir : System.FilePath)
+    (srcDirRel : String) (lakeArgs : Array String) : IO WorkspaceRuntimeEnv := do
+  let out ← IO.Process.output {
+    cmd := "lake"
+    args := lakeArgs ++ #["env", selfExe.toString, "--print-env"]
+    cwd := some wsDir
+  }
+  if out.exitCode != 0 then
+    throw <| IO.userError
+      s!"`lake {String.intercalate " " lakeArgs.toList} env` failed in {wsDir}: {out.stderr.trimAscii.toString}"
+  let json ← match Lean.Json.parse out.stdout with
+    | .ok j => pure j
+    | .error e => throw <| IO.userError s!"failed to parse environment JSON from {wsDir}: {e}"
+  let getField (k : String) : IO String := do
+    match json.getObjValAs? String k with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError s!"missing env field '{k}': {e}"
+  let leanPath ← getField "leanPath"
+  let leanSrcPath ← getField "leanSrcPath"
+  let leanSysroot ← getField "leanSysroot"
+  let rawShared ← getField "sharedLibPath"
+  let pathEnv ← getField "pathEnv"
+  let flags ← match parseLakeFlags wsDir lakeArgs with
+    | .ok f => pure f
+    | .error e => throw <| IO.userError e
+  let layout ← resolveWorkspaceLayout wsDir flags
+  let (activeConfigFile?, activeLakePkgDir?) := layout.activeConfigInfo
+  let srcDir := if srcDirRel == "." then wsDir else wsDir / srcDirRel
+  return {
+    wsDir := wsDir.toString
+    srcDir := srcDir.toString
+    lakeArgs
+    leanPath
+    leanSrcPath
+    leanSysroot
+    sharedLibPath := buildSharedLibPath leanSysroot rawShared
+    pathEnv
+    activeConfigFile?
+    activeLakePkgDir?
+  }
+
 private abbrev LakeRootOptM := Lake.ArgsT (StateT (Option String) Option)
 
 private def skipOptArg : LakeRootOptM Unit := do
@@ -307,75 +521,6 @@ private def parseRootDirOption : String → LakeRootOptM Unit :=
     long := parseRootDirLong
     longShort := Lake.shortOptionWithArg parseRootDirShort
   }
-
-private structure ParsedLakeConfigOpt where
-  rootDir? : Option String := none
-  configFile? : Option String := none
-
-private abbrev LakeConfigOptM := Lake.ArgsT (StateT ParsedLakeConfigOpt Option)
-
-private def skipConfigOptArg : LakeConfigOptM Unit := do
-  let some _ ← Lake.takeArg? | failure
-  pure ()
-
-private def parseLakeConfigShort : Char → LakeConfigOptM Unit
-  | 'd' => do
-    let some dir ← Lake.takeArg? | failure
-    modifyThe ParsedLakeConfigOpt fun s => { s with rootDir? := some dir }
-  | 'f' => do
-    let some cfg ← Lake.takeArg? | failure
-    modifyThe ParsedLakeConfigOpt fun s => { s with configFile? := some cfg }
-  | 'o' | 'K' => skipConfigOptArg
-  | 'q' | 'v' | 'U' | 'R' | 'h' | 'H' | 'J' => pure ()
-  | _ => failure
-
-private def parseLakeConfigLong (opt : String) : LakeConfigOptM Unit :=
-  match opt with
-  | "--dir" => do
-    let some dir ← Lake.takeArg? | failure
-    modifyThe ParsedLakeConfigOpt fun s => { s with rootDir? := some dir }
-  | "--file" => do
-    let some cfg ← Lake.takeArg? | failure
-    modifyThe ParsedLakeConfigOpt fun s => { s with configFile? := some cfg }
-  | "--packages" => skipConfigOptArg
-  | "--update" | "--help" => pure ()
-  | _ =>
-    if isCommonLakeArgLongOpt opt then skipConfigOptArg
-    else if isCommonLakeFlagLongOpt opt then pure ()
-    else failure
-
-private def parseLakeConfigOption : String → LakeConfigOptM Unit :=
-  Lake.option {
-    short := parseLakeConfigShort
-    long := parseLakeConfigLong
-    longShort := Lake.shortOptionWithArg parseLakeConfigShort
-  }
-
-private def resolveSourceFile (rawAbs : System.FilePath) : IO System.FilePath := do
-  match ← Lake.resolvePath? rawAbs with
-  | some p => pure p
-  | none => pure rawAbs.normalize
-
-private def resolveLakeConfigInfo? (initWsDir : System.FilePath) (lakeArgs : Array String) :
-    IO (Option (System.FilePath × System.FilePath)) := do
-  let parsed? :=
-    ((Lake.processLeadingOptions parseLakeConfigOption).run lakeArgs.toList).run {}
-  match parsed? with
-  | some (((), []), opts) =>
-    let effectiveDir? := match opts.rootDir? with
-      | some d => if d.isEmpty then none else some (resolveFromInitDir initWsDir d)
-      | none => some initWsDir
-    let some effectiveDir := effectiveDir?
-      | return none
-    let some realPkgDir ← Lake.resolvePath? effectiveDir
-      | return none
-    let relConfigFile : System.FilePath := match opts.configFile? with
-      | some c => System.FilePath.mk c
-      | none => Lake.defaultConfigFile
-    let configFile := Lake.joinRelative realPkgDir relConfigFile
-    let realCfg ← Lake.realConfigFile configFile
-    return some (realPkgDir, realCfg)
-  | _ => return none
 
 private def isAbsentPath (path : System.FilePath) : BaseIO Bool := do
   match ← path.symlinkMetadata.toBaseIO with
@@ -693,99 +838,6 @@ def resolveLakeLockKey? (repoRoot : System.FilePath) (w : Config.WorkspaceConfig
     return some realWsDir
   | _ => return none
 
-private def parseConfigOpt (kvPair : String) : Lean.Name × String :=
-  let pos := kvPair.find '='
-  if h : pos.IsAtEnd then
-    (kvPair.toName, "")
-  else
-    ((kvPair.extract kvPair.startPos pos).toName, kvPair.extract (pos.next h) kvPair.endPos)
-
-private def parseLakeFlags (initWsDir : System.FilePath) (lakeArgs : Array String) :
-    IO ParsedLakeFlags := do
-  let mut st : ParsedLakeFlags := { wsDir := initWsDir }
-  let mut i : Nat := 0
-  while h : i < lakeArgs.size do
-    let arg := lakeArgs[i]
-    if arg == "-f" || arg == "--file" then
-      let nextIdx := i + 1
-      if hNext : nextIdx < lakeArgs.size then
-        st := { st with relConfigFile := lakeArgs[nextIdx] }
-        i := nextIdx + 1
-      else
-        throw <| IO.userError s!"missing value after '{arg}' in lakeArgs"
-    else if arg.startsWith "--file=" then
-      st := { st with relConfigFile := (arg.drop 7).toString }
-      i := i + 1
-    else if arg == "-d" || arg == "--dir" then
-      let nextIdx := i + 1
-      if hNext : nextIdx < lakeArgs.size then
-        st := { st with wsDir := resolveFromInitDir initWsDir lakeArgs[nextIdx] }
-        i := nextIdx + 1
-      else
-        throw <| IO.userError s!"missing value after '{arg}' in lakeArgs"
-    else if arg.startsWith "--dir=" then
-      st := { st with wsDir := resolveFromInitDir initWsDir (arg.drop 6).toString }
-      i := i + 1
-    else if arg == "--packages" then
-      let nextIdx := i + 1
-      if hNext : nextIdx < lakeArgs.size then
-        let pkgPath := resolveFromInitDir initWsDir lakeArgs[nextIdx]
-        let entries ← Lake.Manifest.loadEntries pkgPath
-        st := { st with packageOverrides := st.packageOverrides ++ entries }
-        i := nextIdx + 1
-      else
-        throw <| IO.userError s!"missing value after '{arg}' in lakeArgs"
-    else if arg.startsWith "--packages=" then
-      let pkgPath := resolveFromInitDir initWsDir (arg.drop 11).toString
-      let entries ← Lake.Manifest.loadEntries pkgPath
-      st := { st with packageOverrides := st.packageOverrides ++ entries }
-      i := i + 1
-    else if arg == "-R" || arg == "--reconfigure" then
-      st := { st with reconfigure := true }
-      i := i + 1
-    else if arg == "--offline" then
-      st := { st with updateDeps := false, updateToolchain := false }
-      i := i + 1
-    else if arg == "--no-cache" then
-      st := { st with noCache? := some true }
-      i := i + 1
-    else if arg == "--try-cache" then
-      st := { st with noCache? := some false }
-      i := i + 1
-    else if arg == "--old" then
-      st := { st with oldMode := true }
-      i := i + 1
-    else if arg == "--rehash" then
-      st := { st with trustHash := false }
-      i := i + 1
-    else if arg == "--wfail" then
-      st := { st with failLv := .warning }
-      i := i + 1
-    else if arg == "--iofail" then
-      st := { st with failLv := .info }
-      i := i + 1
-    else if arg == "-q" || arg == "--quiet" || arg == "-v" || arg == "--verbose" then
-      i := i + 1
-    else if arg == "-K" then
-      let nextIdx := i + 1
-      if hNext : nextIdx < lakeArgs.size then
-        let (k, v) := parseConfigOpt lakeArgs[nextIdx]
-        st := { st with lakeOpts := st.lakeOpts.insert k v }
-        i := nextIdx + 1
-      else
-        throw <| IO.userError "missing key=value after '-K' in lakeArgs"
-    else if arg.startsWith "-K" && arg.length > 2 then
-      let kv :=
-        if arg.startsWith "-K=" then (arg.drop 3).toString
-        else if arg.startsWith "-K " then (arg.drop 2).trimAsciiStart.toString
-        else (arg.drop 2).toString
-      let (k, v) := parseConfigOpt kv
-      st := { st with lakeOpts := st.lakeOpts.insert k v }
-      i := i + 1
-    else
-      throw <| IO.userError s!"unsupported Lake CLI argument '{arg}' in lakeArgs"
-  return st
-
 def runWorkspaceSetupMode : IO Unit := do
   let stdin ← IO.getStdin
   let raw ← stdin.readToEnd
@@ -793,13 +845,21 @@ def runWorkspaceSetupMode : IO Unit := do
     | .ok r => pure r
     | .error e => throw <| IO.userError s!"invalid workspace setup request: {e}"
   let reqWsDir := System.FilePath.mk req.wsDir
-  let flags ← parseLakeFlags reqWsDir req.lakeArgs
-  let wsDir ← match ← Lake.resolvePath? flags.wsDir with
-    | some p => pure p
-    | none => throw <| IO.userError s!"workspace directory does not exist: {flags.wsDir}"
+  let flags ← match parseLakeFlags reqWsDir req.lakeArgs with
+    | .ok f => pure f
+    | .error e => throw <| IO.userError e
+  let layout ← resolveWorkspaceLayout reqWsDir flags
+  let wsDir := layout.wsDir
+  let pkgDir := layout.pkgDir
+  let configFile := layout.configFile
+  let realCfg := layout.realCfg
   let origWsDir ← match ← Lake.resolvePath? reqWsDir with
     | some p => pure p
     | none => pure wsDir
+  let mut packageOverrides : Array Lake.PackageEntry := #[]
+  for pkgPath in flags.packageOverrideFiles do
+    let entries ← Lake.Manifest.loadEntries pkgPath
+    packageOverrides := packageOverrides ++ entries
   let (elan?, lean?, lake?) ← Lake.findInstall?
   let some lean := lean?
     | throw <| IO.userError "failed to locate Lean installation inside Lake environment"
@@ -813,23 +873,20 @@ def runWorkspaceSetupMode : IO Unit := do
   let lakeEnv ← match ← (Lake.Env.compute lake lean elan? flags.noCache?).toBaseIO with
     | .ok env => pure env
     | .error e => throw <| IO.userError s!"Lake.Env.compute failed: {e}"
-  let pkgDir := Lake.joinRelative wsDir flags.relPkgDir
-  let configFile := Lake.joinRelative pkgDir flags.relConfigFile
   let loadCfg : Lake.LoadConfig := {
     lakeEnv
-    lakeArgs? := some req.lakeArgs
+    lakeArgs? := some (stripLeadingElanToolchain req.lakeArgs).toArray
     wsDir
     relPkgDir := flags.relPkgDir
     pkgDir
     relConfigFile := flags.relConfigFile
     configFile
-    packageOverrides := flags.packageOverrides
+    packageOverrides
     lakeOpts := flags.lakeOpts
     reconfigure := flags.reconfigure
     updateDeps := flags.updateDeps
     updateToolchain := flags.updateToolchain
   }
-  let realCfg ← Lake.realConfigFile loadCfg.configFile
   let mut nonConfigFiles : Array (Nat × String × System.FilePath) := #[]
   let mut results : Array (Option Lean.ModuleSetup) := Array.replicate req.files.size none
   let mut headersArr : Array (Option Lean.ModuleHeader) := Array.replicate req.files.size none
@@ -905,6 +962,7 @@ def runWorkspaceSetupMode : IO Unit := do
       setup? := results[i]!
       header? := headersArr[i]!
       lakePkgDir? := lakePkgDirsArr[i]! }
+  let (activeConfigFile?, activeLakePkgDir?) := layout.activeConfigInfo
   let resp : WorkspaceSetupResponse := {
     leanPath := (← IO.getEnv "LEAN_PATH").getD ""
     leanSrcPath := (← IO.getEnv "LEAN_SRC_PATH").getD ""
@@ -912,6 +970,8 @@ def runWorkspaceSetupMode : IO Unit := do
     sharedLibPath := (← IO.getEnv sharedLibEnvVar).getD ""
     pathEnv := (← IO.getEnv "PATH").getD ""
     files := outFiles
+    activeConfigFile?
+    activeLakePkgDir?
   }
   IO.println (Lean.toJson resp).compress
 
@@ -965,6 +1025,8 @@ private def runWorkspaceSetupBatch (selfExe : System.FilePath) (wsDir : System.F
     leanSysroot := parsed.leanSysroot
     sharedLibPath := buildSharedLibPath parsed.leanSysroot parsed.sharedLibPath
     pathEnv := parsed.pathEnv
+    activeConfigFile? := parsed.activeConfigFile?
+    activeLakePkgDir? := parsed.activeLakePkgDir?
   }
   let mut map : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader × Option String) := {}
   for item in parsed.files do
@@ -1110,6 +1172,19 @@ def prepareToolImports (wsEnv : WorkspaceRuntimeEnv) (wsRelPath : String)
   }
   return (headerSetup, outPath, header)
 
+private def activeLakePkgDirForFile (wsEnv : WorkspaceRuntimeEnv)
+    (resolvedFile : System.FilePath) (setup : Lean.ModuleSetup) : Option String :=
+  if setup.name == Lake.configModuleName then
+    match wsEnv.activeConfigFile?, wsEnv.activeLakePkgDir? with
+    | some cfgFile, some pkgDir =>
+      if !cfgFile.isEmpty && !pkgDir.isEmpty && resolvedFile.toString == cfgFile then
+        some pkgDir
+      else
+        none
+    | _, _ => none
+  else
+    none
+
 def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FilePath)
     (w : Config.WorkspaceConfig) (files : Array SetupFileRequest)
     (stageDir : System.FilePath) : IO (Array WorkerTargetSetup) := do
@@ -1124,7 +1199,6 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
       pure (env, ({} : Std.HashMap String (Lean.ModuleSetup × Option Lean.ModuleHeader × Option String)))
     else
       runWorkspaceSetupBatch selfExe wsDir w.srcDir w.lakeArgs nonToolReqs
-  let wsLakeConfig? ← resolveLakeConfigInfo? wsDir w.lakeArgs
   let mut targets := Array.emptyWithCapacity files.size
   for f in files do
     let resolvedFile ← resolveSourceFile (wsDir / f.wsRelPath)
@@ -1145,18 +1219,8 @@ def prepareWorkspaceTargets (selfExe : System.FilePath) (repoRoot : System.FileP
             throw <| IO.userError s!"failed to resolve Lake setup for '{f.relPath}' in {wsEnv.wsDir}: {err}"
     let lakePkgDir? :=
       match batchLakePkgDir? with
-      | some d => some d
-      | none =>
-        if setup.name == Lake.configModuleName then
-          match wsLakeConfig? with
-          | some (realPkgDir, realCfg) =>
-            if !realCfg.toString.isEmpty && resolvedFile == realCfg then
-              some realPkgDir.toString
-            else
-              none
-          | none => none
-        else
-          none
+      | some d => if !d.isEmpty then some d else activeLakePkgDirForFile wsEnv resolvedFile setup
+      | none => activeLakePkgDirForFile wsEnv resolvedFile setup
     targets := targets.push {
       relPath := f.relPath
       wsDir := wsEnv.wsDir
