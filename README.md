@@ -1,8 +1,20 @@
 # lean-no-comments
 
-Ratcheted, formally backed ban on comments in Lean 4 repositories (`v4.36.0`).
+Ratcheted, formally backed ban on comments in Lean 4 repositories (`leanprover/lean4:v4.36.0`).
 
-`no-comments` enforces a zero-growth comment policy across single- or multi-workspace Lean 4 codebases while letting teams drain legacy comments down safely over time. It parses and elaborates every tracked `.lean` file in native compiled workers, extracts every line, block, doc, and module-doc comment using a pure formally verified core (`NoComments.Core`), tracks per-file comment fingerprints and distinct line counts in a checked-in ratchet, and rejects any PR that introduces new comments, increases comment lines, drops tracked files from coverage, or weakens a merge-base ratchet.
+`no-comments` enforces a zero-growth comment policy across single- or multi-workspace Lean 4 codebases while letting teams drain legacy comments down safely over time. It elaborates every tracked `.lean` file in native compiled workers, extracts every line (`--`), block (`/- ... -/`), doc (`/-- ... -/`), and module-doc (`/-! ... -/`) comment using a pure formally verified core (`NoComments.Core`), tracks per-file comment fingerprints and distinct line counts in a checked-in ratchet, and rejects any PR that introduces new comments, increases comment lines, drops tracked files from coverage, or weakens a merge-base ratchet.
+
+## Quick Start & CLI Overview
+
+1. **Install or build `no-comments`:** Download a SHA-256-verified binary from the [latest GitHub Release](https://github.com/rbeauchamp/lean-no-comments/releases/latest) or build from source against `leanprover/lean4:v4.36.0` (see [Installation & Verification](#installation--verification)).
+2. **Configure workspaces (`.no-comments.json`):** Map every tracked `.lean` file in the repository to an explicit Lake workspace or explicit `exclude` prefix (see [Configuration: `.no-comments.json`](#configuration-no-commentsjson)).
+3. **Adopt with a 2-PR ratchet lifecycle:** Freeze baseline comments with `no-comments inventory --json > comment-ratchet.json`, verify PR 1 with `no-comments check --bootstrap --base-ref origin/main`, then drop `--bootstrap` on PR 2+ and drain legacy comments monotonically toward `[]` using [`/delete-comment`](skills/delete-comment/SKILL.md).
+
+| Command | Purpose | Key Flags |
+|---|---|---|
+| `no-comments inventory` | Audit tracked `.lean` files or emit canonical ratchet JSON | `[<file>]`, `--file <file>`, `--json`, `--repo <dir>`, `--config <path>`, `--jobs <n>` |
+| `no-comments check` | Enforce exact ratchet sync and merge-base monotonicity | `[--file <file>]`, `--base-ref <ref>`, `--bootstrap`, `--repo <dir>`, `--config <path>`, `--jobs <n>` |
+| `no-comments --version` / `--help` | Print binary version + compiled Lean version or CLI usage | `--version` (`-V`), `--help` (`-h`) |
 
 ## Mission
 
@@ -10,7 +22,11 @@ Comments in Lean 4 codebases tend to drift into three failure modes: restating w
 
 ## Trusted Computing Base (TCB)
 
-Every check separates a **pure, linted core** (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, and `NoComments.RatchetCore`—zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, checked under `regula` `standard-logical`, with kernel-checked proofs in `NoComments.Core` and `specification/`'s `NoCommentsSpecification` proving adequacy, blind second-model comparison, owner confirmation via `LeanIntent.Confirmation`, end-to-end refinement for all 17 pure contracts, required-theorem coverage, and IR reachability from `no-comments` via `LeanIntent.Execution`) from the **CLI and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`; see [specification/README.md](specification/README.md) and [specification/confirmation.md](specification/confirmation.md) for formal accounting and remaining trusted-base boundaries):
+`lean-no-comments` isolates a **pure, linted decision core** (`NoCommentsCore`, claimed by `lakefile.toml`'s `defaultTargets`) from an **unclaimed runtime and elaboration harness** (`NoCommentsCLI` and `NoComments.Main`):
+
+- **Pure, formally verified core (`NoCommentsCore`: `NoComments.Core`, `NoComments.Config`, `NoComments.RatchetCore`):** Zero `IO`, zero `Lake`, zero `partial`, zero `sorry`, audited under `regula` `standard-logical`.
+- **Isolated formal specification (`specification/` `NoCommentsSpecification`):** Proves adequacy, blind second-model comparison, owner confirmation via `LeanIntent.Confirmation`, end-to-end refinement for all 17 pure contracts, required-theorem coverage, and compiled IR reachability from `no-comments` via `LeanIntent.Execution` without adding `lean-intent` dependency weight to the shipped binary (see [specification/README.md](specification/README.md) and [specification/confirmation.md](specification/confirmation.md)).
+- **Runtime & elaboration harness (`NoCommentsCLI` and `NoComments.Main`):** Handles filesystem I/O, Git queries, Lake workspace loading, and parallel worker processes outside the proved core.
 
 ### Formally Verified Across `NoComments.Core` and `specification/`
 
@@ -24,10 +40,10 @@ Every theorem in `NoComments/Core.lean` and `specification/NoCommentsSpecificati
 
 ### Unproved Harness TCB (`NoCommentsCLI` and External Boundaries)
 
-- Unproved `NoCommentsCLI` and binary modules (`NoComments.ConfigIO`, `NoComments.Ratchet`, `NoComments.Runner`, `NoComments.LakeEnv`, `NoComments.Worker`, `NoComments.TestListing`, and `NoComments.Main`): filesystem reads/writes, subprocess execution, CLI flag parsing, multi-worker IPC, `lakefile.toml` / workspace discovery, and the exact-header persistent-worker isolation boundary (same-batch files share an OS process and assume elaborated commands and imported plugins/initializers do not depend on per-file isolation of process-global mutable state such as imported `IO.Ref`s, native plugin globals, or OS environment mutations).
-- Lean `v4.36.0` runtime, dynamic library loader (`Lean.loadDynlib`), opaque `Lean.Json.parse` / `Json.Parser.anyCore`, `Lean.Parser.parseHeader`, `Lean.importModules`, `Elab.checkDeprecatedImports`, `Elab.checkModuleNamePortability`, `Elab.Frontend.processCommand`, and `Parser.parseCommand` / `Parser.tokenFn` / `Parser.interpolatedStrFn` / `Parser.symbolFn`.
-- `Lake` workspace/environment evaluation (`lake env`, `Lake.loadWorkspace`, `Lake.setupServerModule`, `Lake.dirExt`, `lake setup-file --no-build`) and toolchain version checks (`lean --version` version + commit hash).
-- Git invocation (`git ls-files --full-name -z -- '*.lean'`, `git merge-base`, `git ls-tree`, `git show`) and operating-system filesystem behavior.
+- **Unproved `NoCommentsCLI` and binary modules (`NoComments.ConfigIO`, `NoComments.Ratchet`, `NoComments.Runner`, `NoComments.LakeEnv`, `NoComments.Worker`, `NoComments.TestListing`, and `NoComments.Main`):** Filesystem reads/writes, subprocess execution, CLI flag parsing, multi-worker IPC, `lakefile.toml` / workspace discovery, and the exact-header persistent-worker isolation boundary (same-batch files share an OS process and assume elaborated commands and imported plugins/initializers do not depend on per-file isolation of process-global mutable state such as imported `IO.Ref`s, native plugin globals, or OS environment mutations).
+- **Lean `v4.36.0` runtime and parser/elaboration internals:** Dynamic library loader (`Lean.loadDynlib`), opaque `Lean.Json.parse` / `Json.Parser.anyCore`, `Lean.Parser.parseHeader`, `Lean.importModules`, `Elab.checkDeprecatedImports`, `Elab.checkModuleNamePortability`, `Elab.Frontend.processCommand`, and `Parser.parseCommand` / `Parser.tokenFn` / `Parser.interpolatedStrFn` / `Parser.symbolFn`.
+- **Lake and toolchain checks:** Workspace/environment evaluation (`lake env`, `Lake.loadWorkspace`, `Lake.setupServerModule`, `Lake.dirExt`, `lake setup-file --no-build`) and toolchain version checks (`lean --version` version + commit hash).
+- **Git and operating-system behavior:** Git invocation (`git ls-files --full-name -z -- '*.lean'`, `git merge-base`, `git ls-tree`, `git show`) and operating-system filesystem behavior.
 
 ## Configuration: `.no-comments.json`
 
@@ -70,7 +86,10 @@ Place `.no-comments.json` at the repository root:
 - **Exhaustive, unambiguous file coverage:** Every tracked `.lean` file returned by `git ls-files --full-name -z -- '*.lean'` must match **at most one** top-level `exclude` rule and, if unexcluded, **exactly one** workspace in `workspaces` (respecting workspace-relative `excludePrefixes`). Any unowned or doubly owned file fails closed.
 - **`dir` and `ratchet`:** Repository-relative paths. Top-level `exclude[].prefix` is also repository-relative; `srcDir`, `toolPrefixes`, and `excludePrefixes` inside a workspace are relative to `workspaces[i].dir`. Trailing `/` matches directory trees (`tools/` matches `tools/Check.lean`); paths without `/` match exact files or subtrees (`lakefile.lean` matches only `lakefile.lean`; `docs` matches `docs` or `docs/...`).
 - **Toolchain lock:** Before inspecting any workspace, `no-comments` runs `lean` (`lean [<+toolchain>] --version`, forwarding any leading Elan `+toolchain` selector from `lakeArgs`) in that workspace and then verifies `<LEAN_SYSROOT>/bin/lean --version` returned by Lake, failing closed if `LEAN_SYSROOT` is empty or either the Lean version or commit githash disagrees with the compiled binary.
-- **Native worker isolation:** For each active workspace (prepared in parallel up to `--jobs` across distinct resolved TOML Lake workspaces without `-f`/`--file` or `--packages`, without `lakefile.lean`, with default `lakefile.toml` and `lake-manifest.json` storage paths, non-`lakefile.lean` local path dependencies, and verified isolated `.lake` storage, serializing workspaces that share a Lake root or whose storage disjointness cannot be established), `no-comments` captures workspace paths in a single `lake <lakeArgs> env` pass—using `--print-env` and `prepareToolImports` directly for tool-only invocations, or `Lake.loadWorkspace` (`mod.setup.fetch` with `mod.serverOptions`, `mod.header.fetch`, `Lake.setupServerModule`, and `Lake.realConfigFile` for `lakefile.lean`, falling back to `lake setup-file --no-build` and `prepareToolImports` for `toolPrefixes` scripts) whenever non-tool targets are present, propagating Lake's resolved package directory into `Lake.dirExt` in compiled workers for the active configuration file across batch, `toolPrefixes`, and fallback targets (leaving non-configuration modules named `lakefile` unset) so `Lake.DSL.__dir__` resolves identically to Lake while staged `lean --run` runners remain free of `Lake` imports. Files sharing an identical worker runtime environment and import header are grouped into exact-header batches and scheduled across persistent child workers (`--jobs N`) that load required `dynlibs` / `plugins` once via `Lean.loadDynlib` / `Lean.importModules`, bind permanently to their first actual import header/environment (failing closed on mismatch), resolve each target's real filesystem path in the worker for both `--worker-loop` and single-shot `--worker` modes and pass it to `Lean.Parser.mkInputContext` (so relative `include_str` paths resolve against the file's real directory while diagnostic locations and inventory, check, and ratchet reports retain canonical repository-relative paths), reuse the imported base `Environment` before `setMainModule` / `setModulePackage` with a fresh `Command.State`, restored workspace working directory (`IO.Process.setCurrentDir`), reset heartbeat counter, and loop-scoped Lean `stdin` isolation plus fail-closed `stdout` capture (refusing any unexpected stdout bytes emitted during elaboration) per file, exit immediately on error, isolate distinct import headers in fresh worker address spaces, and elaborate overriding **only** `Elab.async := false`, `debug.byAsSorry := true`, `warningAsError := false`, and `linter.all := false`. Because files in an exact-header batch share one OS process and its loaded module initializers/plugins, exact-header reuse assumes elaborated commands and imported plugins do not rely on per-file isolation of process-global mutable state (`IO.Ref`s, native plugin globals, or OS environment mutations).
+- **Native worker isolation — workspace preparation:** Each active workspace is prepared in parallel up to `--jobs` across distinct resolved TOML Lake workspaces that meet all of: no `-f`/`--file` or `--packages`, no `lakefile.lean`, default `lakefile.toml` and `lake-manifest.json` storage paths, non-`lakefile.lean` local path dependencies, and verified isolated `.lake` storage; workspaces sharing a Lake root or whose storage disjointness cannot be established are serialized.
+- **Native worker isolation — single `lake <lakeArgs> env` pass & `Lake.dirExt`:** Captures workspace paths once per active workspace using `--print-env` and `prepareToolImports` directly for tool-only invocations, or `Lake.loadWorkspace` (`mod.setup.fetch` with `mod.serverOptions`, `mod.header.fetch`, `Lake.setupServerModule`, and `Lake.realConfigFile` for `lakefile.lean`, falling back to `lake setup-file --no-build` and `prepareToolImports` for `toolPrefixes` scripts) whenever non-tool targets are present, propagating Lake's resolved package directory into `Lake.dirExt` in compiled workers for the active configuration file across batch, `toolPrefixes`, and fallback targets (leaving non-configuration modules named `lakefile` unset) so `Lake.DSL.__dir__` resolves identically to Lake while staged `lean --run` runners remain free of `Lake` imports.
+- **Native worker isolation — exact-header persistent worker batching:** Files sharing an identical worker runtime environment and import header are grouped into exact-header batches and scheduled across persistent child workers (`--jobs N`) that load required `dynlibs` / `plugins` once via `Lean.loadDynlib` / `Lean.importModules`, bind permanently to their first actual import header and environment (failing closed on mismatch), resolve each target's real filesystem path in the worker for both `--worker-loop` and single-shot `--worker` modes and pass it to `Lean.Parser.mkInputContext` (so relative `include_str` paths resolve against the file's real directory while diagnostic locations and inventory, check, and ratchet reports retain canonical repository-relative paths), and isolate distinct import headers in fresh worker address spaces.
+- **Native worker isolation — per-file execution & shared-process boundary:** Each file reuses the imported base `Environment` before `setMainModule` / `setModulePackage` with a fresh `Command.State`, restored workspace working directory (`IO.Process.setCurrentDir`), reset heartbeat counter, and loop-scoped Lean `stdin` isolation plus fail-closed `stdout` capture (refusing any unexpected stdout bytes emitted during elaboration), exits immediately on error, and elaborates overriding **only** `Elab.async := false`, `debug.byAsSorry := true`, `warningAsError := false`, and `linter.all := false`. Because files in an exact-header batch share one OS process and its loaded module initializers/plugins, exact-header reuse assumes elaborated commands and imported plugins do not rely on per-file isolation of process-global mutable state (`IO.Ref`s, native plugin globals, or OS environment mutations).
 
 ## CLI Reference
 
@@ -112,11 +131,12 @@ no-comments [--version | --help]
 
 ### Prebuilt Release Binaries (with SHA-256 Verification)
 
-Download the release binary and `.sha256` file matching your platform (`darwin-arm64` or `linux-x86_64`) from [GitHub Releases](https://github.com/rbeauchamp/lean-no-comments/releases):
+Download the release binary and `.sha256` file matching your platform (`darwin-arm64` or `linux-x86_64`) from the [latest GitHub Release](https://github.com/rbeauchamp/lean-no-comments/releases/latest) (all releases are listed on [GitHub Releases](https://github.com/rbeauchamp/lean-no-comments/releases)):
 
 ```bash
 TARGET="linux-x86_64" # or darwin-arm64
-VERSION="v0.1.1"
+# Copy the latest tag (e.g. vX.Y.Z) from https://github.com/rbeauchamp/lean-no-comments/releases/latest
+VERSION="<latest-release-tag>"
 BASE_URL="https://github.com/rbeauchamp/lean-no-comments/releases/download/${VERSION}"
 
 curl -fsSLO "${BASE_URL}/no-comments-${TARGET}"
@@ -130,7 +150,7 @@ chmod +x "no-comments-${TARGET}"
 
 ### Build from Source
 
-Requires Lean matching `lean-toolchain` (`leanprover/lean4:v4.36.0`):
+Requires Lean matching [`lean-toolchain`](lean-toolchain) (`leanprover/lean4:v4.36.0`):
 
 ```bash
 git clone https://github.com/rbeauchamp/lean-no-comments.git

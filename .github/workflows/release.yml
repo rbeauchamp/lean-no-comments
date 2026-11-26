@@ -38,6 +38,39 @@ jobs:
             exit 1
           fi
 
+      - name: Verify SemVer tag and NoComments/Main.lean toolVersion parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME:-}"
+          if [ "${GITHUB_REF_TYPE:-}" != "tag" ] || [ -z "$TAG" ]; then
+            echo "Expected tag push with GITHUB_REF_NAME set" >&2
+            exit 1
+          fi
+          TAG="$TAG" python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          tag = os.environ["TAG"]
+          if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag, re.ASCII):
+              raise SystemExit(f"Expected canonical SemVer tag v<MAJOR.MINOR.PATCH> (no leading zeros), got {tag!r}")
+          expected_version = tag[1:]
+          main_text = pathlib.Path("NoComments/Main.lean").read_text(encoding="utf-8")
+          matches = re.findall(
+              r'^(?:(?:private|protected|public)\s+)?def\s+toolVersion\s*:\s*String\s*:=\s*"([^"\r\n]+)"\s*$',
+              main_text,
+              re.MULTILINE,
+          )
+          if len(matches) != 1:
+              raise SystemExit(f"Expected unique private def toolVersion in NoComments/Main.lean, found {len(matches)}")
+          if matches[0] != expected_version:
+              raise SystemExit(
+                  f"Tag version {expected_version!r} does not match NoComments/Main.lean toolVersion {matches[0]!r}"
+              )
+          print(f"Verified tag {tag} matches NoComments/Main.lean toolVersion={matches[0]}")
+          PY
+
       - name: Verify runner architecture matches target
         shell: bash
         run: |
@@ -75,7 +108,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./.lake/build/bin/no-comments --version
+          EXPECTED_VERSION="${GITHUB_REF_NAME#v}"
+          VER_OUT="$(./.lake/build/bin/no-comments --version)"
+          echo "$VER_OUT"
+          case "$VER_OUT" in
+            "no-comments ${EXPECTED_VERSION} ("*)
+              ;;
+            *)
+              echo "Binary --version output '${VER_OUT}' does not match tag version '${EXPECTED_VERSION}'" >&2
+              exit 1
+              ;;
+          esac
           INV_OUT="$(./.lake/build/bin/no-comments inventory)"
           echo "$INV_OUT"
           ./.lake/build/bin/no-comments check --base-ref origin/main
@@ -116,6 +159,50 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository at tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: src
+          persist-credentials: false
+
+      - name: Verify SemVer tag and NoComments/Main.lean toolVersion parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME:-}"
+          HEAD_SHA="$(git -C src rev-parse HEAD)"
+          if [ "${GITHUB_REF_TYPE:-}" != "tag" ] || [ -z "$TAG" ] || [ -z "${GITHUB_SHA:-}" ]; then
+            echo "Expected tag push with GITHUB_REF_NAME and GITHUB_SHA set" >&2
+            exit 1
+          fi
+          if [ "$HEAD_SHA" != "${GITHUB_SHA}" ]; then
+            echo "Expected tag checkout at ${GITHUB_SHA}, got HEAD=${HEAD_SHA}" >&2
+            exit 1
+          fi
+          TAG="$TAG" python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          tag = os.environ["TAG"]
+          if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", tag, re.ASCII):
+              raise SystemExit(f"Expected canonical SemVer tag v<MAJOR.MINOR.PATCH> (no leading zeros), got {tag!r}")
+          expected_version = tag[1:]
+          main_text = pathlib.Path("src/NoComments/Main.lean").read_text(encoding="utf-8")
+          matches = re.findall(
+              r'^(?:(?:private|protected|public)\s+)?def\s+toolVersion\s*:\s*String\s*:=\s*"([^"\r\n]+)"\s*$',
+              main_text,
+              re.MULTILINE,
+          )
+          if len(matches) != 1:
+              raise SystemExit(f"Expected unique private def toolVersion in NoComments/Main.lean, found {len(matches)}")
+          if matches[0] != expected_version:
+              raise SystemExit(
+                  f"Tag version {expected_version!r} does not match NoComments/Main.lean toolVersion {matches[0]!r}"
+              )
+          print(f"Verified tag {tag} matches NoComments/Main.lean toolVersion={matches[0]}")
+          PY
+
       - name: Download build artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
