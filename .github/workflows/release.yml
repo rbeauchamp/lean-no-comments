@@ -56,56 +56,27 @@ jobs:
           text = pathlib.Path("NoComments/Main.lean").read_text(encoding="utf-8")
           lines = text.split("\n")
 
-          id_char_cls = r"A-Za-z0-9_'!?"
-          allowed_non_ascii = {"·", "×", "←", "⟨", "⟩"}
-          hex_digits = "0123456789abcdefABCDEF"
-          ident_tok_re = re.compile(
-              rf"[A-Za-z_][{id_char_cls}]*(?:\.[A-Za-z_][{id_char_cls}]*)*",
-              re.ASCII,
-          )
-          leading_dot_ident_re = re.compile(
-              rf"\.[A-Za-z_][{id_char_cls}]*(?:\.[A-Za-z_][{id_char_cls}]*)*",
-              re.ASCII,
-          )
-          num_tok_re = re.compile(
-              r"0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|[0-9][0-9_]*",
-              re.ASCII,
-          )
+          def is_id_char(c: str) -> bool:
+              return c.isalnum() or c in "_'!?"
 
           def strip_string_literals(src: str):
               out = []
               interp_spans = []
               n = len(src)
+              char_lit_re = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^'\\\n])'")
 
               def blank(segment: str) -> str:
                   return "".join("\n" if c == "\n" else " " for c in segment)
 
               def scan_string(start: int, interpolated: bool, track_spans: bool) -> int:
-                  simple_escapes = '\\"\'rnt{' if interpolated else '\\"\'rnt'
                   j = start + 1
                   while j < n:
                       c = src[j]
                       if c == "\\":
                           if j + 1 >= n:
                               raise SystemExit("Unclosed string literal in NoComments/Main.lean")
-                          esc = src[j + 1]
-                          if esc in simple_escapes:
-                              j += 2
-                          elif esc == "x" and j + 3 < n and all(h in hex_digits for h in src[j + 2 : j + 4]):
-                              j += 4
-                          elif esc == "u" and j + 5 < n and all(h in hex_digits for h in src[j + 2 : j + 6]):
-                              j += 6
-                          else:
-                              line_no = src.count("\n", 0, j) + 1
-                              raise SystemExit(
-                                  f"Unsupported string escape sequence at NoComments/Main.lean:{line_no}"
-                              )
-                      elif c == "{":
-                          if not interpolated:
-                              line_no = src.count("\n", 0, j) + 1
-                              raise SystemExit(
-                                  f"Unsupported '{{' in non-s! string literal at NoComments/Main.lean:{line_no}"
-                              )
+                          j += 2
+                      elif interpolated and c == "{":
                           out.append(blank(src[start:j]))
                           out.append("{")
                           hole_start = j + 1
@@ -122,24 +93,12 @@ jobs:
 
               def scan_segment(i: int, stop_on_rbrace: bool = False) -> int:
                   brace_depth = 0
-                  prev_token = None
                   while i < n:
                       ch = src[i]
-                      if not ((32 <= ord(ch) <= 126) or ch in ("\t", "\n") or ch in allowed_non_ascii):
-                          line_no = src.count("\n", 0, i) + 1
-                          raise SystemExit(
-                              f"Unsupported character {ch!r} outside string literal at NoComments/Main.lean:{line_no}"
-                          )
-                      if src.startswith("--", i) or src.startswith("/-", i):
-                          line_no = src.count("\n", 0, i) + 1
-                          raise SystemExit(
-                              f"Unexpected Lean comment syntax outside string literal at NoComments/Main.lean:{line_no}"
-                          )
                       if stop_on_rbrace:
                           if ch == "{":
                               brace_depth += 1
                               out.append(ch)
-                              prev_token = ch
                               i += 1
                               continue
                           if ch == "}":
@@ -147,75 +106,43 @@ jobs:
                               if brace_depth == 0:
                                   return i + 1
                               brace_depth -= 1
-                              prev_token = ch
                               i += 1
                               continue
-                      if ch in (" ", "\t", "\n"):
-                          out.append(ch)
-                          i += 1
-                          continue
-                      if ch == "`":
-                          line_no = src.count("\n", 0, i) + 1
-                          raise SystemExit(
-                              f"Unsupported backtick syntax outside string literal at NoComments/Main.lean:{line_no}"
-                          )
-                      if ch == "'":
-                          line_no = src.count("\n", 0, i) + 1
-                          raise SystemExit(
-                              f"Unsupported character literal outside string literal at NoComments/Main.lean:{line_no}"
-                          )
+                      if ch == "r" and (i == 0 or (not is_id_char(src[i - 1]) and src[i - 1] != ".")):
+                          j = i + 1
+                          while j < n and src[j] == "#":
+                              j += 1
+                          if j < n and src[j] == '"':
+                              end_delim = '"' + ("#" * (j - i - 1))
+                              end = src.find(end_delim, j + 1)
+                              if end == -1:
+                                  raise SystemExit("Unclosed raw string literal in NoComments/Main.lean")
+                              out.append(blank(src[i : end + len(end_delim)]))
+                              i = end + len(end_delim)
+                              continue
+                      if ch == "'" and (i == 0 or not is_id_char(src[i - 1])):
+                          cm = char_lit_re.match(src, i)
+                          if cm:
+                              out.append(blank(cm.group(0)))
+                              i = cm.end()
+                              continue
                       if ch == '"':
-                          is_s_interp = prev_token == "s!"
-                          i = scan_string(i, is_s_interp, track_spans=(is_s_interp and not stop_on_rbrace))
-                          prev_token = '"'
-                          continue
-                      if "0" <= ch <= "9":
-                          nm = num_tok_re.match(src, i)
-                          tok = nm.group(0)
-                          out.append(tok)
-                          prev_token = tok
-                          i = nm.end()
-                          continue
-                      if ch == ".":
-                          if src.startswith("..", i):
-                              j = i + 2
-                              while j < n and src[j] == ".":
-                                  j += 1
-                              tok = src[i:j]
-                              out.append(tok)
-                              prev_token = tok
-                              i = j
-                              continue
-                          dm = leading_dot_ident_re.match(src, i)
-                          if dm:
-                              tok = dm.group(0)
-                              out.append(tok)
-                              prev_token = tok
-                              i = dm.end()
-                              continue
-                      if ("A" <= ch <= "Z") or ("a" <= ch <= "z") or ch == "_":
-                          if ch == "r":
-                              j = i + 1
-                              while j < n and src[j] == "#":
-                                  j += 1
-                              if j < n and src[j] == '"':
-                                  line_no = src.count("\n", 0, i) + 1
-                                  raise SystemExit(
-                                      f"Unsupported raw string literal at NoComments/Main.lean:{line_no}"
-                                  )
-                          im = ident_tok_re.match(src, i)
-                          tok = im.group(0)
-                          if tok in ("m!", "f!"):
-                              line_no = src.count("\n", 0, i) + 1
+                          k = i
+                          while k > 0 and src[k - 1] in (" ", "\t", "\n"):
+                              k -= 1
+                          t_start = k
+                          while t_start > 0 and (is_id_char(src[t_start - 1]) or src[t_start - 1] == "."):
+                              t_start -= 1
+                          prefix_tok = src[t_start:k]
+                          if prefix_tok in ("m!", "f!", "dbg_trace"):
+                              line_no = src.count("\n", 0, t_start) + 1
                               raise SystemExit(
-                                  f"Unsupported Lean interpolation form {tok!r} at NoComments/Main.lean:{line_no}"
+                                  f"Unsupported interpolation form {prefix_tok!r} at NoComments/Main.lean:{line_no}"
                               )
-                          out.append(tok)
-                          prev_token = tok
-                          i = im.end()
+                          is_s_interp = prefix_tok == "s!"
+                          i = scan_string(i, is_s_interp, track_spans=(is_s_interp and not stop_on_rbrace))
                           continue
                       out.append(ch)
-                      prev_token = ch
                       i += 1
                   if stop_on_rbrace:
                       raise SystemExit("Unclosed interpolation in NoComments/Main.lean")
@@ -226,10 +153,20 @@ jobs:
 
           stripped, interp_spans = strip_string_literals(text)
 
+          allowed_non_ascii = {"·", "×", "←", "⟨", "⟩"}
+          for pos, ch in enumerate(stripped):
+              if not ((32 <= ord(ch) <= 126) or ch in ("\t", "\n") or ch in allowed_non_ascii):
+                  line_no = stripped.count("\n", 0, pos) + 1
+                  raise SystemExit(
+                      f"Unsupported character {ch!r} outside string literal at NoComments/Main.lean:{line_no}"
+                  )
+          if "--" in stripped or "/-" in stripped:
+              raise SystemExit("Unexpected Lean comment syntax outside string literal in NoComments/Main.lean")
+
+          id_char_cls = r"A-Za-z0-9_'!?"
           col0_allow_re = re.compile(
               r"^(?:"
-              r"(?:import|open|namespace|set_option|variable|def|abbrev|theorem|structure|inductive)\s"
-              r"|(?:section|end)(?:\s|$)"
+              r"(?:import|open|def|abbrev|theorem|structure|inductive)\s"
               r"|(?:private|protected|noncomputable|partial|unsafe)\s+(?:def|abbrev|theorem|structure|inductive)\s"
               r")",
               re.ASCII,
@@ -243,6 +180,8 @@ jobs:
                       f"Unsupported top-level syntax at NoComments/Main.lean:{idx + 1}: {lines[idx]!r}"
                   )
 
+          if "`(" in stripped or "`[" in stripped:
+              raise SystemExit("Unsupported syntax quotation outside string literal in NoComments/Main.lean")
           forbidden_tok_re = re.compile(
               rf"(?<![{id_char_cls}])(?:"
               r"binder_predicate|macro_rules|macro|syntax|elab_rules|elab|notation"
@@ -366,6 +305,19 @@ jobs:
           [ -e "$LIB" ] || LIB="$LIBDIR/libLake_shared.so"
           [ -e "$LIB" ] || { echo "missing libLake_shared under $LIBDIR" >&2; exit 1; }
           lake env lean -DwarningAsError=true --load-dynlib="$LIB" --run NoComments/TestListing.lean --check
+          lake env lean -DwarningAsError=true --load-dynlib="$LIB" --stdin <<'LEAN'
+          import Lean
+          import NoComments.Main
+          open Lean Elab Command in
+          run_cmd do
+            let env ← getEnv
+            let found := env.constants.fold (init := #[]) fun acc n _ =>
+              match n with
+              | .str _ "toolVersion" => acc.push n
+              | _ => acc
+            if found != #[Name.str (.num `_private.NoComments.Main 0) "toolVersion"] then
+              throwError "expected unique toolVersion constant in NoComments.Main, found {found}"
+          LEAN
 
       - name: Stage binary and SHA-256 checksum
         shell: bash
