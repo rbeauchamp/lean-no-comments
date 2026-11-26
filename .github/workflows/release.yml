@@ -108,7 +108,7 @@ jobs:
                               brace_depth -= 1
                               i += 1
                               continue
-                      if ch == "r" and (i == 0 or not is_id_char(src[i - 1])) and i + 1 < n and src[i + 1] == "#":
+                      if ch == "r" and (i == 0 or not is_id_char(src[i - 1])):
                           j = i + 1
                           while j < n and src[j] == "#":
                               j += 1
@@ -127,9 +127,13 @@ jobs:
                               i = cm.end()
                               continue
                       if ch == '"':
-                          is_s_interp = i >= 2 and src[i - 2 : i] == "s!" and (i == 2 or not is_id_char(src[i - 3]))
-                          interpolated = i > 0 and src[i - 1] == "!"
-                          i = scan_string(i, interpolated, track_spans=(is_s_interp and not stop_on_rbrace))
+                          has_interp_prefix = (
+                              i >= 2
+                              and src[i - 2 : i] in ("s!", "m!", "f!")
+                              and (i == 2 or not is_id_char(src[i - 3]))
+                          )
+                          is_s_interp = has_interp_prefix and src[i - 2] == "s"
+                          i = scan_string(i, has_interp_prefix, track_spans=(is_s_interp and not stop_on_rbrace))
                           continue
                       out.append(ch)
                       i += 1
@@ -189,7 +193,7 @@ jobs:
 
           ident_part = rf"[A-Za-z_][{id_char_cls}]*"
           tool_version_re = re.compile(
-              rf"(?<![{id_char_cls}])(?:{ident_part}\.)*toolVersion(?![{id_char_cls}]|\.(?!\{{))",
+              rf"(?<![{id_char_cls}])(?:{ident_part}\.)*toolVersion(?![{id_char_cls}])",
               re.ASCII,
           )
           outside_matches = []
