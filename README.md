@@ -139,12 +139,15 @@ TARGET="linux-x86_64" # or darwin-arm64
 VERSION="<latest-release-tag>"
 BASE_URL="https://github.com/rbeauchamp/lean-no-comments/releases/download/${VERSION}"
 
-curl -fsSLO "${BASE_URL}/no-comments-${TARGET}"
-curl -fsSLO "${BASE_URL}/no-comments-${TARGET}.sha256"
-
-# Verify integrity before executing:
-sha256sum -c "no-comments-${TARGET}.sha256" # on macOS: shasum -a 256 -c "no-comments-${TARGET}.sha256"
-chmod +x "no-comments-${TARGET}"
+# Download, verify SHA-256 integrity (Linux sha256sum / macOS shasum), and run:
+curl -fsSLO "${BASE_URL}/no-comments-${TARGET}" &&
+curl -fsSLO "${BASE_URL}/no-comments-${TARGET}.sha256" &&
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum -c "no-comments-${TARGET}.sha256"
+else
+  shasum -a 256 -c "no-comments-${TARGET}.sha256"
+fi &&
+chmod +x "no-comments-${TARGET}" &&
 ./"no-comments-${TARGET}" --version
 ```
 

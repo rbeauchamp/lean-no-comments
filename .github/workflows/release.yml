@@ -53,57 +53,40 @@ jobs:
                   f"Expected canonical SemVer tag v<MAJOR.MINOR.PATCH> (no leading zeros), got {tag!r}"
               )
           expected_version = tag[1:]
-          main_text = pathlib.Path("NoComments/Main.lean").read_text(encoding="utf-8").replace("\r\n", "\n")
-          if "\r" in main_text:
-              raise SystemExit("Unexpected CR character in NoComments/Main.lean")
-          lines = main_text.split("\n")
+          lines = pathlib.Path("NoComments/Main.lean").read_text(encoding="utf-8").split("\n")
 
-          preamble_re = re.compile(
-              r"^(?:module"
-              r"|(?:(?:public|private|meta) )*import (?:all )?[A-Za-z_][A-Za-z0-9_.]*"
-              r"|open (?:scoped )?(?!in\b)[A-Za-z_][A-Za-z0-9_.]*(?: (?!in\b)[A-Za-z_][A-Za-z0-9_.]*)*"
-              r")$",
-              re.ASCII,
-          )
-          def_re = re.compile(
-              r'^private def toolVersion : String := "([^"\\]+)"$',
-              re.ASCII,
-          )
-          next_cmd_re = re.compile(
-              r"^(?:(?:(?:private|protected|public) )?(?:def|inductive|structure|abbrev|theorem|opaque|axiom|class|instance)"
-              r"|namespace|section|variable|universe)(?: |$)",
-              re.ASCII,
-          )
-          tail_redecl_re = re.compile(
-              r"(?<![A-Za-z0-9_'])(?:def|abbrev|opaque|axiom|macro|let|have|attribute)(?![A-Za-z0-9_'])"
-              r"(?:\s+\[[^\]]*\])*\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)*«?toolVersion»?(?![A-Za-z0-9_'])"
-              r"|(?<![A-Za-z0-9_'])«?toolVersion»?(?![A-Za-z0-9_'])\s*(?::=|:)",
-              re.ASCII,
-          )
+          def_re = re.compile(r'^private def toolVersion : String := "([^"\\]+)"$', re.ASCII)
+          tool_version_tok_re = re.compile(r"(?<![A-Za-z0-9_'])toolVersion(?![A-Za-z0-9_'])", re.ASCII)
+          top_level_start_re = re.compile(r"^[A-Za-z_@#]", re.ASCII)
 
-          idx = 0
-          while idx < len(lines) and (lines[idx].strip(" ") == "" or preamble_re.fullmatch(lines[idx])):
-              idx += 1
-          if idx >= len(lines):
-              raise SystemExit("Missing canonical private def toolVersion in NoComments/Main.lean")
-          m = def_re.fullmatch(lines[idx])
+          top_level_matches = []
+          for idx, line in enumerate(lines):
+              if not line or line[0].isspace():
+                  continue
+              header = re.split(r"[:=({\[]", re.sub(r"@\[[^\]]*\]", "", line), maxsplit=1)[0]
+              if tool_version_tok_re.search(header):
+                  top_level_matches.append((idx, line))
+
+          if len(top_level_matches) != 1:
+              raise SystemExit(
+                  f"Expected exactly one top-level toolVersion declaration in NoComments/Main.lean, found {len(top_level_matches)}"
+              )
+
+          idx, decl_line = top_level_matches[0]
+          m = def_re.fullmatch(decl_line)
           if not m:
               raise SystemExit(
-                  f"Expected canonical top-level private def toolVersion at NoComments/Main.lean:{idx + 1}, got {lines[idx]!r}"
+                  f"Expected canonical top-level private def toolVersion at NoComments/Main.lean:{idx + 1}, got {decl_line!r}"
               )
           found_version = m.group(1)
 
           next_idx = idx + 1
-          while next_idx < len(lines) and lines[next_idx].strip(" ") == "":
+          while next_idx < len(lines) and lines[next_idx].strip(" \t") == "":
               next_idx += 1
-          if next_idx < len(lines) and not next_cmd_re.match(lines[next_idx]):
+          if next_idx < len(lines) and not top_level_start_re.match(lines[next_idx]):
               raise SystemExit(
                   f"Unexpected continuation after toolVersion at NoComments/Main.lean:{next_idx + 1}: {lines[next_idx]!r}"
               )
-
-          tail = "\n".join(lines[idx + 1 :])
-          if tail_redecl_re.search(tail):
-              raise SystemExit("Ambiguous or redeclared toolVersion in NoComments/Main.lean")
 
           if found_version != expected_version:
               raise SystemExit(
@@ -153,8 +136,9 @@ jobs:
           VER_OUT="$(./.lake/build/bin/no-comments --version)"
           echo "$VER_OUT"
           VER_PREFIX="no-comments ${EXPECTED_VERSION} (Lean "
-          VER_TAIL_RE='^[^[:space:]()]+ [0123456789abcdef]+\)$'
-          if [[ "$VER_OUT" != "${VER_PREFIX}"* ]] || ! [[ "${VER_OUT#"$VER_PREFIX"}" =~ $VER_TAIL_RE ]]; then
+          VER_TAIL="${VER_OUT#"$VER_PREFIX"}"
+          VER_META="${VER_TAIL%)}"
+          if [[ "$VER_OUT" != "${VER_PREFIX}"* ]] || [[ "$VER_TAIL" != *")" ]] || [[ -z "$VER_META" ]] || [[ "$VER_META" == *"("* ]] || [[ "$VER_META" == *")"* ]] || [[ "$VER_META" == *$'\n'* ]] || [[ "$VER_META" == *$'\r'* ]]; then
             echo "Binary --version output '${VER_OUT}' does not match tag version '${EXPECTED_VERSION}'" >&2
             exit 1
           fi
