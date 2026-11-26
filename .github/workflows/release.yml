@@ -61,6 +61,9 @@ jobs:
               n = len(src)
               char_lit_re = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^'\\\n])'")
 
+              def is_id_char(c: str) -> bool:
+                  return c.isalnum() or c in "_'!?"
+
               def blank(segment: str) -> str:
                   return "".join("\n" if c == "\n" else " " for c in segment)
 
@@ -78,8 +81,7 @@ jobs:
                           j = scan_segment(j + 1, stop_on_rbrace=True)
                           start = j
                       elif c == '"':
-                          seg = src[start : j + 1]
-                          out.append(seg if (not interpolated and seg == '"toolVersion"') else blank(seg))
+                          out.append(blank(src[start : j + 1]))
                           return j + 1
                       else:
                           j += 1
@@ -102,7 +104,7 @@ jobs:
                               brace_depth -= 1
                               i += 1
                               continue
-                      if ch == "r" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'")) and i + 1 < n and src[i + 1] == "#":
+                      if ch == "r" and (i == 0 or not is_id_char(src[i - 1])) and i + 1 < n and src[i + 1] == "#":
                           j = i + 1
                           while j < n and src[j] == "#":
                               j += 1
@@ -114,7 +116,7 @@ jobs:
                               out.append(blank(src[i : end + len(end_delim)]))
                               i = end + len(end_delim)
                               continue
-                      if ch == "'" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'")):
+                      if ch == "'" and (i == 0 or not is_id_char(src[i - 1])):
                           cm = char_lit_re.match(src, i)
                           if cm:
                               out.append(blank(cm.group(0)))
@@ -135,16 +137,27 @@ jobs:
 
           stripped = strip_string_literals(text)
 
-          ident_part = r"(?:«[^»\n]+»|[A-Za-z_][A-Za-z0-9_']*)"
-          target_ident = rf"(?<![A-Za-z0-9_'«])(?:{ident_part}\.)*(?:«toolVersion»|toolVersion)(?![A-Za-z0-9_'»]|\.(?!\{{))"
+          allowed_non_ascii = {"·", "×", "←", "⟨", "⟩"}
+          for pos, ch in enumerate(stripped):
+              if not ((32 <= ord(ch) <= 126) or ch in ("\t", "\n") or ch in allowed_non_ascii):
+                  line_no = stripped.count("\n", 0, pos) + 1
+                  raise SystemExit(
+                      f"Unsupported character {ch!r} outside string literal at NoComments/Main.lean:{line_no}"
+                  )
+          if "--" in stripped or "/-" in stripped:
+              raise SystemExit("Unexpected Lean comment syntax outside string literal in NoComments/Main.lean")
+
+          id_char_cls = r"A-Za-z0-9_'!?"
+          ident_part = rf"[A-Za-z_][{id_char_cls}]*"
+          target_ident = rf"(?<![{id_char_cls}])(?:{ident_part}\.)*toolVersion(?![{id_char_cls}]|\.(?!\{{))"
           named_decl_re = re.compile(
-              rf"(?<![A-Za-z0-9_'«])(?:(?:def|abbrev|opaque|axiom|theorem|inductive|structure|class)\s+|instance\s+(?:\([^)]*\)\s+)?){target_ident}",
+              rf"(?<![{id_char_cls}])(?:(?:def|abbrev|opaque|axiom|theorem|inductive|structure|class)\s+|instance\s+(?:\([^)]*\)\s+)?){target_ident}",
               re.ASCII,
           )
           syntax_decl_re = re.compile(
-              rf"(?<![A-Za-z0-9_'«])(?:macro|syntax|elab)(?::[^\s]+)?(?![A-Za-z0-9_'»])"
+              rf"(?<![{id_char_cls}])(?:macro|syntax|elab)(?::[A-Za-z0-9_]+)?(?![{id_char_cls}])"
               rf"(?:\((?!\s*name\s*:=\s*{target_ident}\s*\))[^)]*\)|[^:=(\n]|\n[ \t]+)*?"
-              rf"(?:{target_ident}|\"toolVersion\"|\(\s*name\s*:=\s*{target_ident}\s*\))",
+              rf"(?:{target_ident}|\(\s*name\s*:=\s*{target_ident}\s*\))",
               re.ASCII,
           )
           attr_kw_stop = (
@@ -154,7 +167,7 @@ jobs:
               r"|variable|universe|set_option|mutual|where|deriving"
           )
           attr_decl_re = re.compile(
-              rf"(?<![A-Za-z0-9_'«])attribute\s+\[[^\]]*\](?:\s+(?!(?:{attr_kw_stop})(?![A-Za-z0-9_'»])){ident_part}(?:\.{ident_part})*)*\s+{target_ident}",
+              rf"(?<![{id_char_cls}])attribute\s+\[[^\]]*\](?:\s+(?!(?:{attr_kw_stop})(?![{id_char_cls}])){ident_part}(?:\.{ident_part})*)*\s+{target_ident}",
               re.ASCII,
           )
 
