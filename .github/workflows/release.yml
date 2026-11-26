@@ -59,22 +59,17 @@ jobs:
           def is_id_char(c: str) -> bool:
               return c.isalnum() or c in "_'!?"
 
-          def strip_string_literals(src: str) -> str:
+          def strip_string_literals(src: str):
               out = []
+              interp_spans = []
               n = len(src)
               char_lit_re = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^'\\\n])'")
 
               def blank(segment: str) -> str:
                   return "".join("\n" if c == "\n" else " " for c in segment)
 
-              def blank_delimited(segment: str, quote: str) -> str:
-                  if len(segment) < 2:
-                      return blank(segment)
-                  return quote + blank(segment[1:-1]) + quote
-
-              def scan_string(start: int, interpolated: bool) -> int:
+              def scan_string(start: int, interpolated: bool, track_spans: bool) -> int:
                   j = start + 1
-                  first_chunk = True
                   while j < n:
                       c = src[j]
                       if c == "\\":
@@ -82,21 +77,15 @@ jobs:
                               raise SystemExit("Unclosed string literal in NoComments/Main.lean")
                           j += 2
                       elif interpolated and c == "{":
-                          seg = src[start:j]
-                          if first_chunk:
-                              out.append('"' + blank(seg[1:]))
-                              first_chunk = False
-                          else:
-                              out.append(blank(seg))
+                          out.append(blank(src[start:j]))
                           out.append("{")
-                          j = scan_segment(j + 1, stop_on_rbrace=True)
+                          hole_start = j + 1
+                          j = scan_segment(hole_start, stop_on_rbrace=True)
+                          if track_spans:
+                              interp_spans.append((hole_start, j - 1))
                           start = j
                       elif c == '"':
-                          seg = src[start : j + 1]
-                          if first_chunk:
-                              out.append(blank_delimited(seg, '"'))
-                          else:
-                              out.append(blank(seg[:-1]) + '"')
+                          out.append(blank(src[start : j + 1]))
                           return j + 1
                       else:
                           j += 1
@@ -128,18 +117,19 @@ jobs:
                               end = src.find(end_delim, j + 1)
                               if end == -1:
                                   raise SystemExit("Unclosed raw string literal in NoComments/Main.lean")
-                              out.append(blank_delimited(src[i : end + len(end_delim)], '"'))
+                              out.append(blank(src[i : end + len(end_delim)]))
                               i = end + len(end_delim)
                               continue
                       if ch == "'" and (i == 0 or not is_id_char(src[i - 1])):
                           cm = char_lit_re.match(src, i)
                           if cm:
-                              out.append(blank_delimited(cm.group(0), "'"))
+                              out.append(blank(cm.group(0)))
                               i = cm.end()
                               continue
                       if ch == '"':
+                          is_s_interp = i >= 2 and src[i - 2 : i] == "s!" and (i == 2 or not is_id_char(src[i - 3]))
                           interpolated = i > 0 and src[i - 1] == "!"
-                          i = scan_string(i, interpolated)
+                          i = scan_string(i, interpolated, track_spans=(is_s_interp and not stop_on_rbrace))
                           continue
                       out.append(ch)
                       i += 1
@@ -148,9 +138,9 @@ jobs:
                   return i
 
               scan_segment(0)
-              return "".join(out)
+              return "".join(out), interp_spans
 
-          stripped = strip_string_literals(text)
+          stripped, interp_spans = strip_string_literals(text)
 
           allowed_non_ascii = {"·", "×", "←", "⟨", "⟩"}
           for pos, ch in enumerate(stripped):
@@ -163,312 +153,68 @@ jobs:
               raise SystemExit("Unexpected Lean comment syntax outside string literal in NoComments/Main.lean")
 
           id_char_cls = r"A-Za-z0-9_'!?"
+          col0_allow_re = re.compile(
+              r"^(?:"
+              r"(?:import|open|namespace|set_option|variable|def|abbrev|theorem|structure|inductive)\s"
+              r"|(?:section|end)(?:\s|$)"
+              r"|(?:private|protected|noncomputable|partial|unsafe)\s+(?:def|abbrev|theorem|structure|inductive)\s"
+              r")",
+              re.ASCII,
+          )
+          stripped_lines = stripped.split("\n")
+          for idx, sline in enumerate(stripped_lines):
+              if sline.strip(" \t") == "" or sline[0] in (" ", "\t"):
+                  continue
+              if not col0_allow_re.match(sline):
+                  raise SystemExit(
+                      f"Unsupported top-level syntax at NoComments/Main.lean:{idx + 1}: {lines[idx]!r}"
+                  )
+
+          if "`(" in stripped or "`[" in stripped:
+              raise SystemExit("Unsupported syntax quotation outside string literal in NoComments/Main.lean")
+          forbidden_tok_re = re.compile(
+              rf"(?<![{id_char_cls}])(?:"
+              r"binder_predicate|macro_rules|macro|syntax|elab_rules|elab|notation"
+              r"|infixl|infixr|infix|prefix|postfix|declare_syntax_cat|attribute"
+              r"|builtin_initialize|initialize|export|opaque|axiom|instance|class"
+              rf")(?![{id_char_cls}])",
+              re.ASCII,
+          )
+          fm = forbidden_tok_re.search(stripped)
+          if fm:
+              line_no = stripped.count("\n", 0, fm.start()) + 1
+              raise SystemExit(
+                  f"Unsupported Lean construct {fm.group(0)!r} at NoComments/Main.lean:{line_no}"
+              )
+
           ident_part = rf"[A-Za-z_][{id_char_cls}]*"
-          qual_ident_re = re.compile(rf"{ident_part}(?:\.{ident_part})*", re.ASCII)
-          prec_atoms = {"max", "arg", "lead", "min", "min1"}
-          prio_atoms = {"high", "mid", "low", "default"}
-          prec_atom_re = re.compile(rf"(?:[0-9]+|[A-Za-z_][{id_char_cls}]*)(?![{id_char_cls}])", re.ASCII)
-          expr_tok_re = re.compile(rf"\s+|([0-9]+|[A-Za-z_][{id_char_cls}]*|[()+-])", re.ASCII)
-          target_ident_re = re.compile(
+          tool_version_re = re.compile(
               rf"(?<![{id_char_cls}])(?:{ident_part}\.)*toolVersion(?![{id_char_cls}]|\.(?!\{{))",
               re.ASCII,
           )
-          attr_kw_stop_re = re.compile(
-              r"^(?:private|protected|public|noncomputable|partial|unsafe|local|scoped"
-              r"|def|abbrev|opaque|axiom|theorem|inductive|structure|class|instance"
-              r"|macro|macro_rules|syntax|elab|elab_rules|attribute|notation|infix|infixl|infixr|prefix|postfix"
-              r"|initialize|builtin_initialize|declare_syntax_cat"
-              r"|namespace|section|end|open|import|module"
-              r"|variable|universe|set_option|mutual|where|deriving)$",
-              re.ASCII,
-          )
-          delim_pairs = {"(": ")", "[": "]", "{": "}"}
-
-          def skip_ws(src: str, pos: int) -> int:
-              n = len(src)
-              while pos < n and src[pos] in " \t\n":
-                  pos += 1
-              return pos
-
-          def skip_balanced(src: str, pos: int, open_ch: str, what: str) -> int:
-              start_line = src.count("\n", 0, pos) + 1
-              if pos >= len(src) or src[pos] != open_ch:
-                  raise SystemExit(f"Expected {open_ch!r} in {what} at NoComments/Main.lean:{start_line}")
-              stack = [delim_pairs[open_ch]]
-              i = pos + 1
-              n = len(src)
-              while i < n:
-                  c = src[i]
-                  if c in delim_pairs:
-                      stack.append(delim_pairs[c])
-                  elif c in ")]}":
-                      if not stack or c != stack[-1]:
-                          raise SystemExit(
-                              f"Mismatched {c!r} in {what} at NoComments/Main.lean:{src.count(chr(10), 0, i) + 1}"
-                          )
-                      stack.pop()
-                      if not stack:
-                          return i + 1
-                  i += 1
-              raise SystemExit(f"Unclosed {open_ch!r} in {what} at NoComments/Main.lean:{start_line}")
-
-          def validate_closed_expr(expr: str, allowed_atoms: set, what: str, line_no: int) -> None:
-              i = 0
-              n = len(expr)
-              depth = 0
-              saw_atom = False
-              while i < n:
-                  tm = expr_tok_re.match(expr, i)
-                  if not tm:
-                      raise SystemExit(f"Unsupported {what} at NoComments/Main.lean:{line_no}")
-                  tok = tm.group(1)
-                  if tok is not None:
-                      if tok == "(":
-                          depth += 1
-                      elif tok == ")":
-                          depth -= 1
-                          if depth < 0:
-                              raise SystemExit(f"Unsupported {what} at NoComments/Main.lean:{line_no}")
-                      elif tok in ("+", "-"):
-                          pass
-                      elif tok.isdigit() or tok in allowed_atoms:
-                          saw_atom = True
-                      else:
-                          raise SystemExit(f"Unsupported {what} token {tok!r} at NoComments/Main.lean:{line_no}")
-                  i = tm.end()
-              if depth != 0 or not saw_atom:
-                  raise SystemExit(f"Unsupported {what} at NoComments/Main.lean:{line_no}")
-
-          def read_qual_ident(src: str, pos: int):
-              qm = qual_ident_re.match(src, pos)
-              if not qm:
-                  return None, pos
-              end = qm.end()
-              if end < len(src) and src[end] == "." and src[end : end + 2] != ".{":
+          outside_matches = []
+          for tm in tool_version_re.finditer(stripped):
+              tok = tm.group(0)
+              line_no = stripped.count("\n", 0, tm.start()) + 1
+              if "." in tok:
                   raise SystemExit(
-                      f"Unsupported dotted identifier at NoComments/Main.lean:{src.count(chr(10), 0, pos) + 1}"
+                      f"Unexpected qualified toolVersion reference {tok!r} at NoComments/Main.lean:{line_no}"
                   )
-              return qm.group(0), end
+              containing = next(((s, e) for s, e in interp_spans if s <= tm.start() and tm.end() <= e), None)
+              if containing is not None:
+                  if stripped[containing[0] : containing[1]].strip() != "toolVersion":
+                      raise SystemExit(
+                          f"Unsupported interpolation containing toolVersion at NoComments/Main.lean:{line_no}"
+                      )
+              else:
+                  outside_matches.append(tm.start())
 
-          def is_tool_version_target(name: str) -> bool:
-              return name.split(".")[-1] == "toolVersion"
-
-          named_kws = {
-              "def", "abbrev", "opaque", "axiom", "theorem",
-              "inductive", "structure", "class", "declare_syntax_cat",
-          }
-          arrow_only_kws = {"notation", "infix", "infixl", "infixr", "prefix", "postfix"}
-          syntax_kws = {"macro", "syntax", "elab"} | arrow_only_kws
-          ext_kws = {"macro_rules", "elab_rules"}
-          init_kws = {"initialize", "builtin_initialize"}
-          all_kws = sorted(
-              named_kws | syntax_kws | ext_kws | init_kws | {"instance", "attribute"},
-              key=len,
-              reverse=True,
-          )
-          decl_kw_re = re.compile(
-              rf"(?<![{id_char_cls}.])({'|'.join(all_kws)})(?![{id_char_cls}])",
-              re.ASCII,
-          )
-          class_next_re = re.compile(rf"(?:inductive|abbrev)(?![{id_char_cls}])", re.ASCII)
-
-          decl_matches = []
-          for km in decl_kw_re.finditer(stripped):
-              kw = km.group(1)
-              line_no = stripped.count("\n", 0, km.start()) + 1
-              if kw in ext_kws:
-                  raise SystemExit(f"Unsupported {kw} declaration at NoComments/Main.lean:{line_no}")
-              if kw in named_kws:
-                  pos = skip_ws(stripped, km.end())
-                  if pos == km.end() or pos >= len(stripped):
-                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
-                  if kw == "class" and class_next_re.match(stripped, pos):
-                      continue
-                  name, _ = read_qual_ident(stripped, pos)
-                  if name is None:
-                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
-                  if is_tool_version_target(name):
-                      decl_matches.append(km.start())
-              elif kw == "instance":
-                  pos = skip_ws(stripped, km.end())
-                  if pos >= len(stripped) or (pos == km.end() and stripped[pos] not in "({[:"):
-                      raise SystemExit(f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}")
-                  if stripped[pos] == "(":
-                      end = skip_balanced(stripped, pos, "(", "instance header")
-                      inner = stripped[pos + 1 : end - 1].strip()
-                      mp = re.match(r"priority\s*:=\s*(.*)$", inner, re.S)
-                      if mp:
-                          validate_closed_expr(mp.group(1), prio_atoms, "instance priority", line_no)
-                          pos = skip_ws(stripped, end)
-                          if pos >= len(stripped):
-                              raise SystemExit(
-                                  f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}"
-                              )
-                  if stripped[pos] in "({[":
-                      while pos < len(stripped) and stripped[pos] in "({[":
-                          pos = skip_ws(stripped, skip_balanced(stripped, pos, stripped[pos], "instance header"))
-                      if pos >= len(stripped) or stripped[pos] != ":":
-                          raise SystemExit(
-                              f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}"
-                          )
-                  elif stripped[pos] == ":":
-                      pass
-                  else:
-                      name, _ = read_qual_ident(stripped, pos)
-                      if name is None:
-                          raise SystemExit(
-                              f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}"
-                          )
-                      if is_tool_version_target(name):
-                          decl_matches.append(km.start())
-              elif kw in syntax_kws:
-                  pos = skip_ws(stripped, km.end())
-                  if pos >= len(stripped):
-                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
-                  if stripped[pos] == ":":
-                      pos = skip_ws(stripped, pos + 1)
-                      if pos < len(stripped) and stripped[pos] == "(":
-                          end = skip_balanced(stripped, pos, "(", f"{kw} precedence")
-                          validate_closed_expr(stripped[pos + 1 : end - 1], prec_atoms, f"{kw} precedence", line_no)
-                          pos = end
-                      else:
-                          pm = prec_atom_re.match(stripped, pos)
-                          if not pm or (not pm.group(0).isdigit() and pm.group(0) not in prec_atoms):
-                              raise SystemExit(f"Unsupported {kw} precedence at NoComments/Main.lean:{line_no}")
-                          pos = pm.end()
-                      pos = skip_ws(stripped, pos)
-                  elif pos == km.end() and stripped[pos] not in '("\'':
-                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
-                  matched_this = False
-                  while pos < len(stripped) and stripped[pos] == "(":
-                      end = skip_balanced(stripped, pos, "(", f"{kw} header")
-                      inner = stripped[pos + 1 : end - 1].strip()
-                      mn = re.match(r"name\s*:=\s*(.*)$", inner, re.S)
-                      if mn:
-                          rhs = mn.group(1).strip()
-                          if not qual_ident_re.fullmatch(rhs):
-                              raise SystemExit(f"Unsupported {kw} name option at NoComments/Main.lean:{line_no}")
-                          if is_tool_version_target(rhs):
-                              matched_this = True
-                          pos = skip_ws(stripped, end)
-                          continue
-                      mp = re.match(r"priority\s*:=\s*(.*)$", inner, re.S)
-                      if mp:
-                          validate_closed_expr(mp.group(1), prio_atoms, f"{kw} priority", line_no)
-                          pos = skip_ws(stripped, end)
-                          continue
-                      break
-                  i = pos
-                  stack = []
-                  n = len(stripped)
-                  term_kind = None
-                  while i < n:
-                      c = stripped[i]
-                      if c in delim_pairs:
-                          stack.append(delim_pairs[c])
-                      elif c in ")]}":
-                          if not stack or c != stack[-1]:
-                              raise SystemExit(
-                                  f"Mismatched {c!r} in {kw} header at NoComments/Main.lean:{stripped.count(chr(10), 0, i) + 1}"
-                              )
-                          stack.pop()
-                      elif not stack:
-                          if kw in arrow_only_kws:
-                              if stripped[i : i + 2] == "=>":
-                                  term_kind = "=>"
-                                  break
-                          elif kw == "syntax":
-                              if c == ":" and i > km.end() and not is_id_char(stripped[i - 1]):
-                                  term_kind = ":"
-                                  break
-                          else:
-                              if kw == "macro" and stripped[i : i + 2] == "=>":
-                                  term_kind = "=>"
-                                  break
-                              if c == ":" and i > km.end() and not is_id_char(stripped[i - 1]):
-                                  term_kind = ":"
-                                  break
-                          if c == "\n" and i + 1 < n and stripped[i + 1] not in " \t\n":
-                              break
-                      i += 1
-                  if term_kind is None or stack or not stripped[pos:i].strip():
-                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
-                  if term_kind == ":":
-                      cat_pos = skip_ws(stripped, i + 1)
-                      cat, cat_end = read_qual_ident(stripped, cat_pos)
-                      if cat is None:
-                          raise SystemExit(f"Unsupported {kw} category at NoComments/Main.lean:{line_no}")
-                      if cat in {"prec", "prio", "attr", "declModifiers"} or (
-                          kw in {"macro", "elab"} and cat == "command"
-                      ):
-                          raise SystemExit(
-                              f"Unsupported grammar extension for category {cat!r} at NoComments/Main.lean:{line_no}"
-                          )
-                      if kw == "syntax":
-                          tail_pos = cat_end
-                          while tail_pos < n and stripped[tail_pos] in " \t":
-                              tail_pos += 1
-                          if tail_pos < n and stripped[tail_pos] != "\n":
-                              raise SystemExit(f"Unexpected trailing syntax tokens at NoComments/Main.lean:{line_no}")
-                          next_pos = skip_ws(stripped, tail_pos)
-                          if next_pos < n:
-                              line_start = stripped.rfind("\n", 0, km.start()) + 1
-                              kw_indent = line_start
-                              while kw_indent < km.start() and stripped[kw_indent] in " \t":
-                                  kw_indent += 1
-                              next_line_start = stripped.rfind("\n", 0, next_pos) + 1
-                              if (next_pos - next_line_start) > (kw_indent - line_start) or stripped[next_pos] in '("\':':
-                                  raise SystemExit(
-                                      f"Unexpected continuation after syntax category at NoComments/Main.lean:{line_no}"
-                                  )
-                      elif kw == "macro":
-                          arrow_pos = skip_ws(stripped, cat_end)
-                          if stripped[arrow_pos : arrow_pos + 2] != "=>":
-                              raise SystemExit(f"Unsupported macro declaration header at NoComments/Main.lean:{line_no}")
-                      elif kw == "elab":
-                          after_cat = skip_ws(stripped, cat_end)
-                          if stripped[after_cat : after_cat + 2] not in ("=>", "<="):
-                              raise SystemExit(f"Unsupported elab declaration header at NoComments/Main.lean:{line_no}")
-                  if not matched_this and target_ident_re.search(stripped[pos:i]):
-                      matched_this = True
-                  if matched_this:
-                      decl_matches.append(km.start())
-              elif kw == "attribute":
-                  pos = skip_ws(stripped, km.end())
-                  if pos >= len(stripped) or stripped[pos] != "[":
-                      raise SystemExit(f"Unsupported attribute declaration header at NoComments/Main.lean:{line_no}")
-                  pos = skip_balanced(stripped, pos, "[", "attribute header")
-                  target_count = 0
-                  while True:
-                      next_pos = skip_ws(stripped, pos)
-                      if (next_pos == pos and target_count > 0) or next_pos >= len(stripped):
-                          break
-                      name, end = read_qual_ident(stripped, next_pos)
-                      if name is None or attr_kw_stop_re.fullmatch(name):
-                          break
-                      target_count += 1
-                      if is_tool_version_target(name):
-                          decl_matches.append(km.start())
-                      pos = end
-                  if target_count == 0:
-                      raise SystemExit(f"Unsupported attribute declaration header at NoComments/Main.lean:{line_no}")
-              elif kw in init_kws:
-                  pos = skip_ws(stripped, km.end())
-                  if pos >= len(stripped) or (pos == km.end() and stripped[pos] not in "({["):
-                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
-                  name, end = read_qual_ident(stripped, pos)
-                  if name is not None and name != "do":
-                      after = skip_ws(stripped, end)
-                      if stripped[after : after + 1] in (":", "←") or stripped[after : after + 2] == "<-":
-                          if is_tool_version_target(name):
-                              decl_matches.append(km.start())
-
-          if len(decl_matches) != 1:
+          if len(outside_matches) != 1:
               raise SystemExit(
-                  f"Expected exactly one toolVersion declaration in NoComments/Main.lean, found {len(decl_matches)}"
+                  f"Expected exactly one non-interpolated toolVersion in NoComments/Main.lean, found {len(outside_matches)}"
               )
 
-          decl_line_idx = stripped.count("\n", 0, decl_matches[0])
+          decl_line_idx = stripped.count("\n", 0, outside_matches[0])
           decl_line = lines[decl_line_idx]
           def_re = re.compile(r'^private def toolVersion : String := "([^"\\]+)"$', re.ASCII)
           m = def_re.fullmatch(decl_line)
@@ -478,18 +224,10 @@ jobs:
               )
           found_version = m.group(1)
 
-          next_cmd_re = re.compile(
-              r"^(?:@\[|(?:private|protected|public|noncomputable|partial|unsafe|meta|local|scoped"
-              r"|def|abbrev|opaque|axiom|theorem|inductive|structure|class|instance"
-              r"|macro|macro_rules|syntax|elab|attribute|mutual|initialize|builtin_initialize"
-              r"|notation|infix|infixl|infixr|prefix|postfix|declare_syntax_cat"
-              r"|module|import|open|namespace|section|end|export|variable|universe|set_option)(?: |:|$))",
-              re.ASCII,
-          )
           next_idx = decl_line_idx + 1
           while next_idx < len(lines) and lines[next_idx].strip(" \t") == "":
               next_idx += 1
-          if next_idx < len(lines) and not next_cmd_re.match(lines[next_idx]):
+          if next_idx < len(lines) and not col0_allow_re.match(stripped_lines[next_idx]):
               raise SystemExit(
                   f"Unexpected continuation after toolVersion at NoComments/Main.lean:{next_idx + 1}: {lines[next_idx]!r}"
               )
