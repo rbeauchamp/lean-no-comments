@@ -149,39 +149,225 @@ jobs:
 
           id_char_cls = r"A-Za-z0-9_'!?"
           ident_part = rf"[A-Za-z_][{id_char_cls}]*"
-          target_ident = rf"(?<![{id_char_cls}])(?:{ident_part}\.)*toolVersion(?![{id_char_cls}]|\.(?!\{{))"
-          named_decl_re = re.compile(
-              rf"(?<![{id_char_cls}])(?:(?:def|abbrev|opaque|axiom|theorem|inductive|structure|class)\s+|instance\s+(?:\([^)]*\)\s+)?){target_ident}",
+          qual_ident_re = re.compile(rf"{ident_part}(?:\.{ident_part})*", re.ASCII)
+          prec_atom_re = re.compile(r"[A-Za-z0-9_]+", re.ASCII)
+          target_ident_re = re.compile(
+              rf"(?<![{id_char_cls}])(?:{ident_part}\.)*toolVersion(?![{id_char_cls}]|\.(?!\{{))",
               re.ASCII,
           )
-          syntax_decl_re = re.compile(
-              rf"(?<![{id_char_cls}])(?:macro|syntax|elab)(?::[A-Za-z0-9_]+)?(?![{id_char_cls}])"
-              rf"(?:\((?!\s*name\s*:=\s*{target_ident}\s*\))[^)]*\)|[^:=(\n]|\n[ \t]+)*?"
-              rf"(?:{target_ident}|\(\s*name\s*:=\s*{target_ident}\s*\))",
-              re.ASCII,
-          )
-          attr_kw_stop = (
-              r"private|protected|public|noncomputable|partial|unsafe|local|scoped"
+          attr_kw_stop_re = re.compile(
+              r"^(?:private|protected|public|noncomputable|partial|unsafe|local|scoped"
               r"|def|abbrev|opaque|axiom|theorem|inductive|structure|class|instance"
-              r"|macro|syntax|elab|attribute|namespace|section|end|open|import|module"
-              r"|variable|universe|set_option|mutual|where|deriving"
-          )
-          attr_decl_re = re.compile(
-              rf"(?<![{id_char_cls}])attribute\s+\[[^\]]*\](?:\s+(?!(?:{attr_kw_stop})(?![{id_char_cls}])){ident_part}(?:\.{ident_part})*)*\s+{target_ident}",
+              r"|macro|syntax|elab|attribute|notation|infix|infixl|infixr|prefix|postfix"
+              r"|initialize|builtin_initialize|declare_syntax_cat"
+              r"|namespace|section|end|open|import|module"
+              r"|variable|universe|set_option|mutual|where|deriving)$",
               re.ASCII,
           )
+          delim_pairs = {"(": ")", "[": "]", "{": "}"}
 
-          decl_matches = (
-              list(named_decl_re.finditer(stripped))
-              + list(syntax_decl_re.finditer(stripped))
-              + list(attr_decl_re.finditer(stripped))
+          def skip_ws(src: str, pos: int) -> int:
+              n = len(src)
+              while pos < n and src[pos] in " \t\n":
+                  pos += 1
+              return pos
+
+          def skip_balanced(src: str, pos: int, open_ch: str, what: str) -> int:
+              start_line = src.count("\n", 0, pos) + 1
+              if pos >= len(src) or src[pos] != open_ch:
+                  raise SystemExit(f"Expected {open_ch!r} in {what} at NoComments/Main.lean:{start_line}")
+              stack = [delim_pairs[open_ch]]
+              i = pos + 1
+              n = len(src)
+              while i < n:
+                  c = src[i]
+                  if c in delim_pairs:
+                      stack.append(delim_pairs[c])
+                  elif c in ")]}":
+                      if not stack or c != stack[-1]:
+                          raise SystemExit(
+                              f"Mismatched {c!r} in {what} at NoComments/Main.lean:{src.count(chr(10), 0, i) + 1}"
+                          )
+                      stack.pop()
+                      if not stack:
+                          return i + 1
+                  i += 1
+              raise SystemExit(f"Unclosed {open_ch!r} in {what} at NoComments/Main.lean:{start_line}")
+
+          def read_qual_ident(src: str, pos: int):
+              qm = qual_ident_re.match(src, pos)
+              if not qm:
+                  return None, pos
+              end = qm.end()
+              if end < len(src) and src[end] == "." and src[end : end + 2] != ".{":
+                  raise SystemExit(
+                      f"Unsupported dotted identifier at NoComments/Main.lean:{src.count(chr(10), 0, pos) + 1}"
+                  )
+              return qm.group(0), end
+
+          def is_tool_version_target(name: str) -> bool:
+              return name.split(".")[-1] == "toolVersion"
+
+          named_kws = {
+              "def", "abbrev", "opaque", "axiom", "theorem",
+              "inductive", "structure", "class", "declare_syntax_cat",
+          }
+          syntax_kws = {
+              "macro", "syntax", "elab", "notation",
+              "infix", "infixl", "infixr", "prefix", "postfix",
+          }
+          init_kws = {"initialize", "builtin_initialize"}
+          all_kws = sorted(named_kws | syntax_kws | init_kws | {"instance", "attribute"}, key=len, reverse=True)
+          decl_kw_re = re.compile(
+              rf"(?<![{id_char_cls}.])({'|'.join(all_kws)})(?![{id_char_cls}])",
+              re.ASCII,
           )
+          class_next_re = re.compile(rf"(?:inductive|abbrev)(?![{id_char_cls}])", re.ASCII)
+
+          decl_matches = []
+          for km in decl_kw_re.finditer(stripped):
+              kw = km.group(1)
+              line_no = stripped.count("\n", 0, km.start()) + 1
+              if kw in named_kws:
+                  pos = skip_ws(stripped, km.end())
+                  if pos == km.end() or pos >= len(stripped):
+                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
+                  if kw == "class" and class_next_re.match(stripped, pos):
+                      continue
+                  name, _ = read_qual_ident(stripped, pos)
+                  if name is None:
+                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
+                  if is_tool_version_target(name):
+                      decl_matches.append(km.start())
+              elif kw == "instance":
+                  pos = skip_ws(stripped, km.end())
+                  if pos == km.end() or pos >= len(stripped):
+                      raise SystemExit(f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}")
+                  if stripped[pos] == "(":
+                      end = skip_balanced(stripped, pos, "(", "instance header")
+                      inner = stripped[pos + 1 : end - 1].strip()
+                      if re.match(r"priority\s*:=", inner, re.ASCII):
+                          pos = skip_ws(stripped, end)
+                          if pos >= len(stripped):
+                              raise SystemExit(
+                                  f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}"
+                              )
+                  if stripped[pos] in "({[":
+                      while pos < len(stripped) and stripped[pos] in "({[":
+                          pos = skip_ws(stripped, skip_balanced(stripped, pos, stripped[pos], "instance header"))
+                      if pos >= len(stripped) or stripped[pos] != ":":
+                          raise SystemExit(
+                              f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}"
+                          )
+                  elif stripped[pos] == ":":
+                      pass
+                  else:
+                      name, _ = read_qual_ident(stripped, pos)
+                      if name is None:
+                          raise SystemExit(
+                              f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}"
+                          )
+                      if is_tool_version_target(name):
+                          decl_matches.append(km.start())
+              elif kw in syntax_kws:
+                  pos = km.end()
+                  if pos < len(stripped) and stripped[pos] == ":":
+                      pos += 1
+                      if pos < len(stripped) and stripped[pos] == "(":
+                          pos = skip_balanced(stripped, pos, "(", f"{kw} precedence")
+                      else:
+                          pm = prec_atom_re.match(stripped, pos)
+                          if not pm:
+                              raise SystemExit(f"Unsupported {kw} precedence at NoComments/Main.lean:{line_no}")
+                          pos = pm.end()
+                  else:
+                      next_pos = skip_ws(stripped, pos)
+                      if next_pos == pos:
+                          raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
+                      pos = next_pos
+                  pos = skip_ws(stripped, pos)
+                  matched_this = False
+                  while pos < len(stripped) and stripped[pos] == "(":
+                      end = skip_balanced(stripped, pos, "(", f"{kw} header")
+                      inner = stripped[pos + 1 : end - 1].strip()
+                      mn = re.match(r"name\s*:=\s*(.*)$", inner, re.S)
+                      if mn:
+                          rhs = mn.group(1).strip()
+                          if not qual_ident_re.fullmatch(rhs):
+                              raise SystemExit(f"Unsupported {kw} name option at NoComments/Main.lean:{line_no}")
+                          if is_tool_version_target(rhs):
+                              matched_this = True
+                          pos = skip_ws(stripped, end)
+                          continue
+                      if re.match(r"priority\s*:=", inner, re.ASCII):
+                          pos = skip_ws(stripped, end)
+                          continue
+                      break
+                  i = pos
+                  stack = []
+                  n = len(stripped)
+                  found_term = False
+                  while i < n:
+                      c = stripped[i]
+                      if c in delim_pairs:
+                          stack.append(delim_pairs[c])
+                      elif c in ")]}":
+                          if not stack or c != stack[-1]:
+                              raise SystemExit(
+                                  f"Mismatched {c!r} in {kw} header at NoComments/Main.lean:{stripped.count(chr(10), 0, i) + 1}"
+                              )
+                          stack.pop()
+                      elif not stack:
+                          if stripped[i : i + 2] == "=>" or (
+                              c == ":" and i > km.end() and stripped[i - 1] in " \t\n"
+                          ):
+                              found_term = True
+                              break
+                          if c == "\n" and i + 1 < n and stripped[i + 1] not in " \t\n":
+                              break
+                      i += 1
+                  if not found_term or stack:
+                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
+                  if not matched_this and target_ident_re.search(stripped[pos:i]):
+                      matched_this = True
+                  if matched_this:
+                      decl_matches.append(km.start())
+              elif kw == "attribute":
+                  pos = skip_ws(stripped, km.end())
+                  if pos == km.end() or pos >= len(stripped) or stripped[pos] != "[":
+                      raise SystemExit(f"Unsupported attribute declaration header at NoComments/Main.lean:{line_no}")
+                  pos = skip_balanced(stripped, pos, "[", "attribute header")
+                  target_count = 0
+                  while True:
+                      next_pos = skip_ws(stripped, pos)
+                      if (next_pos == pos and target_count > 0) or next_pos >= len(stripped):
+                          break
+                      name, end = read_qual_ident(stripped, next_pos)
+                      if name is None or attr_kw_stop_re.fullmatch(name):
+                          break
+                      target_count += 1
+                      if is_tool_version_target(name):
+                          decl_matches.append(km.start())
+                      pos = end
+                  if target_count == 0:
+                      raise SystemExit(f"Unsupported attribute declaration header at NoComments/Main.lean:{line_no}")
+              elif kw in init_kws:
+                  pos = skip_ws(stripped, km.end())
+                  if pos == km.end() or pos >= len(stripped):
+                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
+                  name, end = read_qual_ident(stripped, pos)
+                  if name is not None and name != "do":
+                      after = skip_ws(stripped, end)
+                      if stripped[after : after + 1] in (":", "←") or stripped[after : after + 2] == "<-":
+                          if is_tool_version_target(name):
+                              decl_matches.append(km.start())
+
           if len(decl_matches) != 1:
               raise SystemExit(
                   f"Expected exactly one toolVersion declaration in NoComments/Main.lean, found {len(decl_matches)}"
               )
 
-          decl_line_idx = stripped.count("\n", 0, decl_matches[0].start())
+          decl_line_idx = stripped.count("\n", 0, decl_matches[0])
           decl_line = lines[decl_line_idx]
           def_re = re.compile(r'^private def toolVersion : String := "([^"\\]+)"$', re.ASCII)
           m = def_re.fullmatch(decl_line)
