@@ -139,13 +139,18 @@ TARGET="linux-x86_64" # or darwin-arm64
 VERSION="<latest-release-tag>"
 BASE_URL="https://github.com/rbeauchamp/lean-no-comments/releases/download/${VERSION}"
 
-# Download, verify SHA-256 integrity (Linux sha256sum / macOS shasum), and run:
+# Download, validate sidecar matches exact target binary, verify SHA-256, and run:
 curl -fsSLO "${BASE_URL}/no-comments-${TARGET}" &&
 curl -fsSLO "${BASE_URL}/no-comments-${TARGET}.sha256" &&
+SUM_LINE="$(LC_ALL=C awk -v f="no-comments-${TARGET}" '
+  NR == 1 && length($0) == 66 + length(f) && substr($0, 65) == "  " f && substr($0, 1, 64) ~ /^[0-9a-f]+$/ { line = $0; next }
+  { bad = 1 }
+  END { if (NR != 1 || bad) exit 1; print line }
+' "no-comments-${TARGET}.sha256")" &&
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum -c "no-comments-${TARGET}.sha256"
+  printf '%s\n' "${SUM_LINE}" | sha256sum -c -
 else
-  shasum -a 256 -c "no-comments-${TARGET}.sha256"
+  printf '%s\n' "${SUM_LINE}" | shasum -a 256 -c -
 fi &&
 chmod +x "no-comments-${TARGET}" &&
 ./"no-comments-${TARGET}" --version

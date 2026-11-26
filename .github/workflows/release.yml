@@ -53,37 +53,143 @@ jobs:
                   f"Expected canonical SemVer tag v<MAJOR.MINOR.PATCH> (no leading zeros), got {tag!r}"
               )
           expected_version = tag[1:]
-          lines = pathlib.Path("NoComments/Main.lean").read_text(encoding="utf-8").split("\n")
+          text = pathlib.Path("NoComments/Main.lean").read_text(encoding="utf-8")
+          lines = text.split("\n")
 
-          def_re = re.compile(r'^private def toolVersion : String := "([^"\\]+)"$', re.ASCII)
-          tool_version_tok_re = re.compile(r"(?<![A-Za-z0-9_'])toolVersion(?![A-Za-z0-9_'])", re.ASCII)
-          top_level_start_re = re.compile(r"^[A-Za-z_@#]", re.ASCII)
+          def strip_string_literals(src: str) -> str:
+              out = []
+              n = len(src)
+              char_lit_re = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^'\\\n])'")
 
-          top_level_matches = []
-          for idx, line in enumerate(lines):
-              if not line or line[0].isspace():
-                  continue
-              header = re.split(r"[:=({\[]", re.sub(r"@\[[^\]]*\]", "", line), maxsplit=1)[0]
-              if tool_version_tok_re.search(header):
-                  top_level_matches.append((idx, line))
+              def blank(segment: str) -> str:
+                  return "".join("\n" if c == "\n" else " " for c in segment)
 
-          if len(top_level_matches) != 1:
+              def scan_string(start: int, interpolated: bool) -> int:
+                  j = start + 1
+                  while j < n:
+                      c = src[j]
+                      if c == "\\":
+                          if j + 1 >= n:
+                              raise SystemExit("Unclosed string literal in NoComments/Main.lean")
+                          j += 2
+                      elif interpolated and c == "{":
+                          out.append(blank(src[start:j]))
+                          out.append("{")
+                          j = scan_segment(j + 1, stop_on_rbrace=True)
+                          start = j
+                      elif c == '"':
+                          seg = src[start : j + 1]
+                          out.append(seg if (not interpolated and seg == '"toolVersion"') else blank(seg))
+                          return j + 1
+                      else:
+                          j += 1
+                  raise SystemExit("Unclosed string literal in NoComments/Main.lean")
+
+              def scan_segment(i: int, stop_on_rbrace: bool = False) -> int:
+                  brace_depth = 0
+                  while i < n:
+                      ch = src[i]
+                      if stop_on_rbrace:
+                          if ch == "{":
+                              brace_depth += 1
+                              out.append(ch)
+                              i += 1
+                              continue
+                          if ch == "}":
+                              out.append(ch)
+                              if brace_depth == 0:
+                                  return i + 1
+                              brace_depth -= 1
+                              i += 1
+                              continue
+                      if ch == "r" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'")) and i + 1 < n and src[i + 1] == "#":
+                          j = i + 1
+                          while j < n and src[j] == "#":
+                              j += 1
+                          if j < n and src[j] == '"':
+                              end_delim = '"' + ("#" * (j - i - 1))
+                              end = src.find(end_delim, j + 1)
+                              if end == -1:
+                                  raise SystemExit("Unclosed raw string literal in NoComments/Main.lean")
+                              out.append(blank(src[i : end + len(end_delim)]))
+                              i = end + len(end_delim)
+                              continue
+                      if ch == "'" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'")):
+                          cm = char_lit_re.match(src, i)
+                          if cm:
+                              out.append(blank(cm.group(0)))
+                              i = cm.end()
+                              continue
+                      if ch == '"':
+                          interpolated = i > 0 and src[i - 1] == "!"
+                          i = scan_string(i, interpolated)
+                          continue
+                      out.append(ch)
+                      i += 1
+                  if stop_on_rbrace:
+                      raise SystemExit("Unclosed interpolation in NoComments/Main.lean")
+                  return i
+
+              scan_segment(0)
+              return "".join(out)
+
+          stripped = strip_string_literals(text)
+
+          ident_part = r"(?:«[^»\n]+»|[A-Za-z_][A-Za-z0-9_']*)"
+          target_ident = rf"(?<![A-Za-z0-9_'«])(?:{ident_part}\.)*(?:«toolVersion»|toolVersion)(?![A-Za-z0-9_'»]|\.(?!\{{))"
+          named_decl_re = re.compile(
+              rf"(?<![A-Za-z0-9_'«])(?:(?:def|abbrev|opaque|axiom|theorem|inductive|structure|class)\s+|instance\s+(?:\([^)]*\)\s+)?){target_ident}",
+              re.ASCII,
+          )
+          syntax_decl_re = re.compile(
+              rf"(?<![A-Za-z0-9_'«])(?:macro|syntax|elab)(?::[^\s]+)?(?![A-Za-z0-9_'»])"
+              rf"(?:\((?!\s*name\s*:=\s*{target_ident}\s*\))[^)]*\)|[^:=(\n]|\n[ \t]+)*?"
+              rf"(?:{target_ident}|\"toolVersion\"|\(\s*name\s*:=\s*{target_ident}\s*\))",
+              re.ASCII,
+          )
+          attr_kw_stop = (
+              r"private|protected|public|noncomputable|partial|unsafe|local|scoped"
+              r"|def|abbrev|opaque|axiom|theorem|inductive|structure|class|instance"
+              r"|macro|syntax|elab|attribute|namespace|section|end|open|import|module"
+              r"|variable|universe|set_option|mutual|where|deriving"
+          )
+          attr_decl_re = re.compile(
+              rf"(?<![A-Za-z0-9_'«])attribute\s+\[[^\]]*\](?:\s+(?!(?:{attr_kw_stop})(?![A-Za-z0-9_'»])){ident_part}(?:\.{ident_part})*)*\s+{target_ident}",
+              re.ASCII,
+          )
+
+          decl_matches = (
+              list(named_decl_re.finditer(stripped))
+              + list(syntax_decl_re.finditer(stripped))
+              + list(attr_decl_re.finditer(stripped))
+          )
+          if len(decl_matches) != 1:
               raise SystemExit(
-                  f"Expected exactly one top-level toolVersion declaration in NoComments/Main.lean, found {len(top_level_matches)}"
+                  f"Expected exactly one toolVersion declaration in NoComments/Main.lean, found {len(decl_matches)}"
               )
 
-          idx, decl_line = top_level_matches[0]
+          decl_line_idx = stripped.count("\n", 0, decl_matches[0].start())
+          decl_line = lines[decl_line_idx]
+          def_re = re.compile(r'^private def toolVersion : String := "([^"\\]+)"$', re.ASCII)
           m = def_re.fullmatch(decl_line)
           if not m:
               raise SystemExit(
-                  f"Expected canonical top-level private def toolVersion at NoComments/Main.lean:{idx + 1}, got {decl_line!r}"
+                  f"Expected canonical column-0 private def toolVersion at NoComments/Main.lean:{decl_line_idx + 1}, got {decl_line!r}"
               )
           found_version = m.group(1)
 
-          next_idx = idx + 1
+          next_cmd_re = re.compile(
+              r"^(?:@\[|(?:private|protected|public|noncomputable|partial|unsafe|meta|local|scoped"
+              r"|def|abbrev|opaque|axiom|theorem|inductive|structure|class|instance"
+              r"|macro|macro_rules|syntax|elab|attribute|mutual|initialize|builtin_initialize"
+              r"|notation|infix|infixl|infixr|prefix|postfix|declare_syntax_cat"
+              r"|module|import|open|namespace|section|end|export|variable|universe|set_option)(?: |:|$))",
+              re.ASCII,
+          )
+          next_idx = decl_line_idx + 1
           while next_idx < len(lines) and lines[next_idx].strip(" \t") == "":
               next_idx += 1
-          if next_idx < len(lines) and not top_level_start_re.match(lines[next_idx]):
+          if next_idx < len(lines) and not next_cmd_re.match(lines[next_idx]):
               raise SystemExit(
                   f"Unexpected continuation after toolVersion at NoComments/Main.lean:{next_idx + 1}: {lines[next_idx]!r}"
               )
