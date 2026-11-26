@@ -56,19 +56,25 @@ jobs:
           text = pathlib.Path("NoComments/Main.lean").read_text(encoding="utf-8")
           lines = text.split("\n")
 
+          def is_id_char(c: str) -> bool:
+              return c.isalnum() or c in "_'!?"
+
           def strip_string_literals(src: str) -> str:
               out = []
               n = len(src)
               char_lit_re = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^'\\\n])'")
 
-              def is_id_char(c: str) -> bool:
-                  return c.isalnum() or c in "_'!?"
-
               def blank(segment: str) -> str:
                   return "".join("\n" if c == "\n" else " " for c in segment)
 
+              def blank_delimited(segment: str, quote: str) -> str:
+                  if len(segment) < 2:
+                      return blank(segment)
+                  return quote + blank(segment[1:-1]) + quote
+
               def scan_string(start: int, interpolated: bool) -> int:
                   j = start + 1
+                  first_chunk = True
                   while j < n:
                       c = src[j]
                       if c == "\\":
@@ -76,12 +82,21 @@ jobs:
                               raise SystemExit("Unclosed string literal in NoComments/Main.lean")
                           j += 2
                       elif interpolated and c == "{":
-                          out.append(blank(src[start:j]))
+                          seg = src[start:j]
+                          if first_chunk:
+                              out.append('"' + blank(seg[1:]))
+                              first_chunk = False
+                          else:
+                              out.append(blank(seg))
                           out.append("{")
                           j = scan_segment(j + 1, stop_on_rbrace=True)
                           start = j
                       elif c == '"':
-                          out.append(blank(src[start : j + 1]))
+                          seg = src[start : j + 1]
+                          if first_chunk:
+                              out.append(blank_delimited(seg, '"'))
+                          else:
+                              out.append(blank(seg[:-1]) + '"')
                           return j + 1
                       else:
                           j += 1
@@ -113,13 +128,13 @@ jobs:
                               end = src.find(end_delim, j + 1)
                               if end == -1:
                                   raise SystemExit("Unclosed raw string literal in NoComments/Main.lean")
-                              out.append(blank(src[i : end + len(end_delim)]))
+                              out.append(blank_delimited(src[i : end + len(end_delim)], '"'))
                               i = end + len(end_delim)
                               continue
                       if ch == "'" and (i == 0 or not is_id_char(src[i - 1])):
                           cm = char_lit_re.match(src, i)
                           if cm:
-                              out.append(blank(cm.group(0)))
+                              out.append(blank_delimited(cm.group(0), "'"))
                               i = cm.end()
                               continue
                       if ch == '"':
@@ -241,7 +256,7 @@ jobs:
                       decl_matches.append(km.start())
               elif kw == "instance":
                   pos = skip_ws(stripped, km.end())
-                  if pos == km.end() or pos >= len(stripped):
+                  if pos >= len(stripped) or (pos == km.end() and stripped[pos] not in "({[:"):
                       raise SystemExit(f"Unsupported instance declaration header at NoComments/Main.lean:{line_no}")
                   if stripped[pos] == "(":
                       end = skip_balanced(stripped, pos, "(", "instance header")
@@ -270,9 +285,11 @@ jobs:
                       if is_tool_version_target(name):
                           decl_matches.append(km.start())
               elif kw in syntax_kws:
-                  pos = km.end()
-                  if pos < len(stripped) and stripped[pos] == ":":
-                      pos += 1
+                  pos = skip_ws(stripped, km.end())
+                  if pos >= len(stripped):
+                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
+                  if stripped[pos] == ":":
+                      pos = skip_ws(stripped, pos + 1)
                       if pos < len(stripped) and stripped[pos] == "(":
                           pos = skip_balanced(stripped, pos, "(", f"{kw} precedence")
                       else:
@@ -280,12 +297,9 @@ jobs:
                           if not pm:
                               raise SystemExit(f"Unsupported {kw} precedence at NoComments/Main.lean:{line_no}")
                           pos = pm.end()
-                  else:
-                      next_pos = skip_ws(stripped, pos)
-                      if next_pos == pos:
-                          raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
-                      pos = next_pos
-                  pos = skip_ws(stripped, pos)
+                      pos = skip_ws(stripped, pos)
+                  elif pos == km.end() and stripped[pos] not in '("\'':
+                      raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
                   matched_this = False
                   while pos < len(stripped) and stripped[pos] == "(":
                       end = skip_balanced(stripped, pos, "(", f"{kw} header")
@@ -319,7 +333,7 @@ jobs:
                           stack.pop()
                       elif not stack:
                           if stripped[i : i + 2] == "=>" or (
-                              c == ":" and i > km.end() and stripped[i - 1] in " \t\n"
+                              c == ":" and i > km.end() and not is_id_char(stripped[i - 1])
                           ):
                               found_term = True
                               break
@@ -334,7 +348,7 @@ jobs:
                       decl_matches.append(km.start())
               elif kw == "attribute":
                   pos = skip_ws(stripped, km.end())
-                  if pos == km.end() or pos >= len(stripped) or stripped[pos] != "[":
+                  if pos >= len(stripped) or stripped[pos] != "[":
                       raise SystemExit(f"Unsupported attribute declaration header at NoComments/Main.lean:{line_no}")
                   pos = skip_balanced(stripped, pos, "[", "attribute header")
                   target_count = 0
@@ -353,7 +367,7 @@ jobs:
                       raise SystemExit(f"Unsupported attribute declaration header at NoComments/Main.lean:{line_no}")
               elif kw in init_kws:
                   pos = skip_ws(stripped, km.end())
-                  if pos == km.end() or pos >= len(stripped):
+                  if pos >= len(stripped) or (pos == km.end() and stripped[pos] not in "({["):
                       raise SystemExit(f"Unsupported {kw} declaration header at NoComments/Main.lean:{line_no}")
                   name, end = read_qual_ident(stripped, pos)
                   if name is not None and name != "do":
