@@ -1,4 +1,0 @@
-interface:
-  display_name: "Delete Comment"
-  short_description: "Audit and drain Lean code comments under a NO-COMMENTS ratchet"
-  default_prompt: "Use $delete-comment to audit and drain Lean code comments in this repository under its NO-COMMENTS ratchet and verification gate."

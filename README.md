@@ -172,7 +172,7 @@ lake build no-comments
 
 ## Skill Integration
 
-Copy or link [`skills/delete-comment/`](skills/delete-comment/) (`SKILL.md` and `agents/openai.yaml`) into your project or global skills directory so `/delete-comment` automatically discovers `.no-comments.json`, applies the four-category comment audit, migrates true decision records into project documentation, and drains the ratchet cleanly.
+Copy or link [`skills/delete-comment/`](skills/delete-comment/) (`SKILL.md`) into your project or global skills directory so `/delete-comment` automatically discovers `.no-comments.json`, applies the four-category comment audit, migrates true decision records into project documentation, and drains the ratchet cleanly.
 
 ## Acknowledgments
 
