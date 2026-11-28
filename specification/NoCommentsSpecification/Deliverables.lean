@@ -99,8 +99,8 @@ def missingFromDeliverable : Deliverable MissingFromFn where
   keeps := singleKeeps missingFrom_allows_unsorted_output
 
 def parseConfigAnswers : List (Attributed ParseConfigFn) :=
-  [ ⟨⟨⟨"leaves refusal error wording free on malformed JSON", .possibility,
-      fun f => (∀ j, Json.parse "" ≠ .ok j) → f "" = .error "denied"⟩, .confirmed⟩, agentAnswerer⟩ ]
+  [ ⟨⟨⟨"leaves refusal error wording free on invalid config JSON", .possibility,
+      fun f => f Json.null = .error "denied"⟩, .confirmed⟩, agentAnswerer⟩ ]
 
 def parseConfigDeliverable : Deliverable ParseConfigFn where
   record := parseConfigRecord
@@ -135,8 +135,8 @@ def analyzeCommentsDeliverable : Deliverable AnalyzeCommentsFn where
   keeps := emptyKeeps _
 
 def parseRatchetAnswers : List (Attributed ParseRatchetFn) :=
-  [ ⟨⟨⟨"leaves refusal message string free on unparseable JSON", .possibility,
-      fun f => (∀ j, Json.parse "" ≠ .ok j) → f "" = .error "denied"⟩, .confirmed⟩, agentAnswerer⟩ ]
+  [ ⟨⟨⟨"leaves refusal message string free on invalid ratchet JSON", .possibility,
+      fun f => f Json.null = .error "denied"⟩, .confirmed⟩, agentAnswerer⟩ ]
 
 def parseRatchetDeliverable : Deliverable ParseRatchetFn where
   record := parseRatchetRecord

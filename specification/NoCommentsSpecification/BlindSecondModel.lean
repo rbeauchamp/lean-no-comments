@@ -253,8 +253,8 @@ def ExcludeValue (j : Json) (rule : Config.ExcludeRule) : Prop :=
     ∃ reason : String, Field j "reason" (.str reason) ∧
       rule.reason = reason.trimAscii.toString ∧ rule.reason ≠ ""
 
-def ConfigText (text : String) (cfg : Config.RepoConfig) : Prop :=
-  ∃ j ws, Json.parse text = .ok j ∧ Fields j ["workspaces", "exclude", "ratchet"] ∧
+def ConfigJson (j : Json) (cfg : Config.RepoConfig) : Prop :=
+  ∃ ws, Fields j ["workspaces", "exclude", "ratchet"] ∧
     Field j "workspaces" ws ∧ ArrayOf WorkspaceValue ws cfg.workspaces ∧
     0 < cfg.workspaces.size ∧ (cfg.workspaces.toList.map (·.dir)).Nodup ∧
     OptionalField j "exclude" (ArrayOf ExcludeValue) #[] cfg.exclude ∧
@@ -302,9 +302,9 @@ def RatchetValue (j : Json) (e : RatchetCore.RatchetEntry) : Prop :=
       ArrayOf (StringValue FingerprintText) fps e.fingerprints.values) ∧
     e.fingerprints.values.size = e.comments ∧ e.fingerprints.values.toList.Pairwise (· ≤ ·)
 
-def RatchetText (text : String) (out : RatchetMap) : Prop :=
-  ∃ (j : Json) (entries : Array RatchetCore.RatchetEntry),
-    Json.parse text = .ok j ∧ ArrayOf RatchetValue j entries ∧
+def RatchetJson (j : Json) (out : RatchetMap) : Prop :=
+  ∃ (entries : Array RatchetCore.RatchetEntry),
+    ArrayOf RatchetValue j entries ∧
     (entries.toList.map (·.file)).Nodup ∧
     ∀ file e, out[file]? = some e ↔ e ∈ entries.toList ∧ e.file = file
 
@@ -406,9 +406,9 @@ def missingFromRecord : IntentRecord MissingFromFn where
 def parseConfigRecord : IntentRecord ParseConfigFn where
   shape := .function _ _
   dom := []
-  props := [⟨"parsesConfig", fun f => ∀ text, Outcome (ConfigText text) (f text)⟩]
+  props := [⟨"parsesConfig", fun f => ∀ j, Outcome (ConfigJson j) (f j)⟩]
   vocab := [
-    ⟨"ConfigText", String × Config.RepoConfig, fun (text, cfg) => ConfigText text cfg⟩,
+    ⟨"ConfigJson", Json × Config.RepoConfig, fun (j, cfg) => ConfigJson j cfg⟩,
     ⟨"Outcome", (Config.RepoConfig → Prop) × Except String Config.RepoConfig,
       fun (p, r) => Outcome p r⟩]
 
@@ -444,9 +444,9 @@ def analyzeCommentsRecord : IntentRecord AnalyzeCommentsFn where
 def parseRatchetRecord : IntentRecord ParseRatchetFn where
   shape := .function _ _
   dom := []
-  props := [⟨"parsesRatchet", fun f => ∀ text, Outcome (RatchetText text) (f text)⟩]
+  props := [⟨"parsesRatchet", fun f => ∀ j, Outcome (RatchetJson j) (f j)⟩]
   vocab := [
-    ⟨"RatchetText", String × RatchetMap, fun (text, out) => RatchetText text out⟩,
+    ⟨"RatchetJson", Json × RatchetMap, fun (j, out) => RatchetJson j out⟩,
     ⟨"Outcome", (RatchetMap → Prop) × Except String RatchetMap, fun (p, r) => Outcome p r⟩]
 
 def checkExactSyncRecord : IntentRecord CheckExactSyncFn where

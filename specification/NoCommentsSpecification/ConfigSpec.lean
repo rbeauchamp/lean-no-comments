@@ -97,9 +97,9 @@ def ValidExcludeJson (j : Json) (r : Config.ExcludeRule) : Prop :=
     reasonRaw.trimAscii.toString = r.reason ∧
     r.reason ≠ ""
 
-def ValidConfigJson (text : String) (cfg : Config.RepoConfig) : Prop :=
+def ValidConfigJson (json : Json) (cfg : Config.RepoConfig) : Prop :=
   ∃ obj wsArr ratchetRaw,
-    Json.parse text = .ok (Json.obj obj) ∧
+    json = Json.obj obj ∧
     (∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"]) ∧
     obj.get? "workspaces" = some (Json.arr wsArr) ∧
     wsArr.size > 0 ∧
@@ -117,45 +117,44 @@ def ValidConfigJson (text : String) (cfg : Config.RepoConfig) : Prop :=
     obj.get? "ratchet" = some (Json.str ratchetRaw) ∧
     NormRelFile ratchetRaw cfg.ratchet
 
-inductive ConfigRefusal (text : String) : Prop where
-  | badJson : (∀ j, Json.parse text ≠ .ok j) → ConfigRefusal text
-  | notObject {j} : Json.parse text = .ok j → (∀ obj, j ≠ Json.obj obj) → ConfigRefusal text
+inductive ConfigRefusal (json : Json) : Prop where
+  | notObject : (∀ obj, json ≠ Json.obj obj) → ConfigRefusal json
   | unknownRootKey {obj k v} :
-      Json.parse text = .ok (Json.obj obj) →
+      json = Json.obj obj →
       (k, v) ∈ obj.toList →
       k ∉ ["workspaces", "exclude", "ratchet"] →
-      ConfigRefusal text
+      ConfigRefusal json
   | badWorkspacesField {obj} :
-      Json.parse text = .ok (Json.obj obj) →
+      json = Json.obj obj →
       (∀ wsArr, obj.get? "workspaces" = some (Json.arr wsArr) → wsArr.size = 0) →
-      ConfigRefusal text
+      ConfigRefusal json
   | invalidWorkspace {obj wsArr i} (hi : i < wsArr.size) :
-      Json.parse text = .ok (Json.obj obj) →
+      json = Json.obj obj →
       obj.get? "workspaces" = some (Json.arr wsArr) →
       (∀ ws, ¬ ValidWorkspaceJson wsArr[i] ws) →
-      ConfigRefusal text
+      ConfigRefusal json
   | duplicateWorkspaceDir {obj wsArr i j ws1 ws2} (hi : i < wsArr.size) (hj : j < wsArr.size) :
-      Json.parse text = .ok (Json.obj obj) →
+      json = Json.obj obj →
       obj.get? "workspaces" = some (Json.arr wsArr) →
       i ≠ j →
       ValidWorkspaceJson wsArr[i] ws1 →
       ValidWorkspaceJson wsArr[j] ws2 →
       ws1.dir = ws2.dir →
-      ConfigRefusal text
+      ConfigRefusal json
   | badExcludeField {obj v} :
-      Json.parse text = .ok (Json.obj obj) →
+      json = Json.obj obj →
       obj.get? "exclude" = some v →
       (∀ exclArr, v ≠ Json.arr exclArr) →
-      ConfigRefusal text
+      ConfigRefusal json
   | invalidExcludeRule {obj exclArr i} (hi : i < exclArr.size) :
-      Json.parse text = .ok (Json.obj obj) →
+      json = Json.obj obj →
       obj.get? "exclude" = some (Json.arr exclArr) →
       (∀ r, ¬ ValidExcludeJson exclArr[i] r) →
-      ConfigRefusal text
+      ConfigRefusal json
   | badRatchetField {obj} :
-      Json.parse text = .ok (Json.obj obj) →
+      json = Json.obj obj →
       (∀ raw out, obj.get? "ratchet" = some (Json.str raw) → ¬ NormRelFile raw out) →
-      ConfigRefusal text
+      ConfigRefusal json
 
 def MatchWorkspace (w : Config.WorkspaceConfig) (relPath : String) : Option String := do
   let wsRel ←

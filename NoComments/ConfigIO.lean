@@ -9,7 +9,7 @@ def loadConfig (configPath : System.FilePath) : IO Config.RepoConfig := do
   unless exists_ do
     throw <| IO.userError s!"config file not found: {configPath}"
   let content ← IO.FS.readFile configPath
-  match Config.parseConfigJson content with
+  match Lean.Json.parse content >>= Config.parseConfigJson with
   | .ok cfg => return cfg
   | .error e => throw <| IO.userError s!"invalid config {configPath}: {e}"
 

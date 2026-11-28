@@ -555,12 +555,13 @@ r###"lean-intent statement 1
 kind answer
 project lean-no-comments
 id restatement-parseRatchet
-date 2026-11-22
-reference https://github.com/rbeauchamp/lean-no-comments/issues/2#issuecomment-7079657185
+date 2026-11-28
+words 1
+| Owner @rbeauchamp confirmed Option A on rbeauchamp/lean-no-comments#12: parseRatchetRecord is a pure total function Lean.Json -> Except String (Std.HashMap String RatchetCore.RatchetEntry) with ValidRatchetJson/RatchetRefusal and ParseRatchetFreedom preserved, JsonRatchetOracle removed, and Lean.Json.parse plus .badJson moved to NoCommentsCLI (Ratchet.loadCurrentRatchet and Ratchet.resolveBaseRatchet) with zero net TCB expansion.
 by rbeauchamp
 as owner
 record NoCommentsSpecification.RatchetRecords.parseRatchetRecord
-revision 825
+revision 819
 | # The intent record NoCommentsSpecification.RatchetRecords.parseRatchetRecord
 | 
 | Each statement is printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened. The plain words after it are written by a model and are trusted, not proved.
@@ -570,10 +571,10 @@ revision 825
 | ### The subject
 | 
 | ```lean
-| LeanIntent.Shape.function.{0} String (fun (a : String) => Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString))
+| LeanIntent.Shape.function.{0} Lean.Json (fun (a : Lean.Json) => Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString))
 | ```
 | 
-| - **Requires:** parseRatchetJson is a total pure function from String to Except String (HashMap String RatchetEntry).
+| - **Requires:** parseRatchetJson is a total pure function from Json to Except String (HashMap String RatchetEntry).
 | - **Rules out:** Any subject with external side effects, partiality, or another signature.
 | - **Still allows:** Every pure function of that signature until restricted by properties.
 | - **Freedom O5 leaves:** Only fixes the pure function signature.
@@ -587,7 +588,7 @@ revision 825
 | ### ok_valid_ratchet_map
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (text : String), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f text) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m) → NoCommentsSpecification.RatchetSpec.ValidRatchetJson text m
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (json : Lean.Json), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f json) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m) → NoCommentsSpecification.RatchetSpec.ValidRatchetJson json m
 | ```
 | 
 | - **Requires:** Accepts only JSON arrays of distinct normalized file entries with positive counts and sorted valid fingerprints.
@@ -598,7 +599,7 @@ revision 825
 | ### refusal_sound
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (text : String), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f text) (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) msg) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (json : Lean.Json), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f json) (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) msg) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
 | - **Requires:** Returns .error only when RatchetRefusal holds.
@@ -608,10 +609,10 @@ revision 825
 | 
 | ## Vocabulary
 | 
-| ### ValidRatchetJson, a predicate over `Prod.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)`
+| ### ValidRatchetJson, a predicate over `Prod.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)`
 | 
 | ```lean
-| fun (p : Prod.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) => NoCommentsSpecification.RatchetSpec.ValidRatchetJson (@Prod.fst.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p) (@Prod.snd.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p)
+| fun (p : Prod.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) => NoCommentsSpecification.RatchetSpec.ValidRatchetJson (@Prod.fst.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p) (@Prod.snd.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p)
 | ```
 | 
 | - **Requires:** ValidRatchetJson enforces schema, normalized paths, positive counts, sorted valid hex digests, and unique files.
@@ -619,7 +620,7 @@ revision 825
 | - **Still allows:** Valid ratchet maps.
 | - **Freedom O5 leaves:** Exact map lookup equivalence.
 | 
-| ### RatchetRefusal, a predicate over `String`
+| ### RatchetRefusal, a predicate over `Lean.Json`
 | 
 | ```lean
 | NoCommentsSpecification.RatchetSpec.RatchetRefusal
@@ -632,24 +633,24 @@ revision 825
 | 
 | ## Consequences
 | 
-| ### succeeds on every healthy ratchet manifest, an entailment: every subject that meets the record satisfies it
+| ### succeeds on every healthy ratchet JSON manifest, an entailment: every subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (text : String), NoCommentsSpecification.Healthy.RatchetText text → @Exists.{1} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f text) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m))
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (json : Lean.Json), NoCommentsSpecification.Healthy.RatchetJson json → @Exists.{1} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f json) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m))
 | ```
 | 
-| - **Requires:** Every healthy ratchet JSON text parses to .ok m.
+| - **Requires:** Every healthy ratchet JSON value decodes to .ok m.
 | - **Rules out:** Spurious rejections on valid ratchets.
-| - **Still allows:** Any compliant ratchet parser.
+| - **Still allows:** Any compliant ratchet decoder.
 | - **Freedom O5 leaves:** Success guaranteed on healthy ratchet manifests.
 | 
-| ### leaves refusal message string free on unparseable JSON, a possibility: some subject that meets the record satisfies it
+| ### leaves refusal message string free on invalid ratchet JSON, a possibility: some subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse "") (@Except.ok.{0, 0} String Lean.Json j)) → @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f "") (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) "denied")
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f Lean.Json.null) (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) "denied")
 | ```
 | 
-| - **Requires:** Some conforming ratchet parser returns "denied" on empty text.
+| - **Requires:** Some conforming ratchet decoder returns "denied" on non-array JSON null.
 | - **Rules out:** Nothing; documents diagnostic message freedom.
 | - **Still allows:** Custom error messages.
 | - **Freedom O5 leaves:** Error text decided below owner level (O5 ParseRatchetFreedom).
@@ -769,7 +770,7 @@ revision 825
 | Its value:
 | 
 | ```lean
-| String → Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)
+| Lean.Json → Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)
 | ```
 | 
 | ### NoCommentsSpecification.RatchetSpec.ValidRatchetJson
@@ -777,13 +778,13 @@ revision 825
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), Prop
+| ∀ (json : Lean.Json), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} NoComments.RatchetCore.RatchetEntry) (fun (entries : List.{0} NoComments.RatchetCore.RatchetEntry) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr))) (And (@Eq.{1} Nat (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries) (@Array.size.{0} Lean.Json arr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) (fun (_he : @LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) => NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i _h) (@GetElem.getElem.{0, 0, 0} (List.{0} NoComments.RatchetCore.RatchetEntry) Nat NoComments.RatchetCore.RatchetEntry (fun (as : List.{0} NoComments.RatchetCore.RatchetEntry) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} NoComments.RatchetCore.RatchetEntry as)) (@List.instGetElemNatLtLength.{0} NoComments.RatchetCore.RatchetEntry) entries i _he))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.RatchetCore.RatchetEntry String (fun (x : NoComments.RatchetCore.RatchetEntry) => NoComments.RatchetCore.RatchetEntry.file x) entries)) (∀ (k : String), @Eq.{1} (Option.{0} NoComments.RatchetCore.RatchetEntry) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) String NoComments.RatchetCore.RatchetEntry (fun (x : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => fun (a : String) => @Membership.mem.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (@Std.HashMap.instMembership.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) x a) (@Std.HashMap.instGetElem?Mem.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m k) (@List.find?.{0} NoComments.RatchetCore.RatchetEntry (fun (x : NoComments.RatchetCore.RatchetEntry) => @BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) (NoComments.RatchetCore.RatchetEntry.file x) k) entries)))))))
+| fun (json : Lean.Json) => fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} NoComments.RatchetCore.RatchetEntry) (fun (entries : List.{0} NoComments.RatchetCore.RatchetEntry) => And (@Eq.{1} Lean.Json json (Lean.Json.arr arr)) (And (@Eq.{1} Nat (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries) (@Array.size.{0} Lean.Json arr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) (fun (_he : @LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) => NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i _h) (@GetElem.getElem.{0, 0, 0} (List.{0} NoComments.RatchetCore.RatchetEntry) Nat NoComments.RatchetCore.RatchetEntry (fun (as : List.{0} NoComments.RatchetCore.RatchetEntry) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} NoComments.RatchetCore.RatchetEntry as)) (@List.instGetElemNatLtLength.{0} NoComments.RatchetCore.RatchetEntry) entries i _he))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.RatchetCore.RatchetEntry String (fun (x : NoComments.RatchetCore.RatchetEntry) => NoComments.RatchetCore.RatchetEntry.file x) entries)) (∀ (k : String), @Eq.{1} (Option.{0} NoComments.RatchetCore.RatchetEntry) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) String NoComments.RatchetCore.RatchetEntry (fun (x : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => fun (a : String) => @Membership.mem.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (@Std.HashMap.instMembership.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) x a) (@Std.HashMap.instGetElem?Mem.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m k) (@List.find?.{0} NoComments.RatchetCore.RatchetEntry (fun (x : NoComments.RatchetCore.RatchetEntry) => @BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) (NoComments.RatchetCore.RatchetEntry.file x) k) entries)))))))
 | ```
 | 
 | ### NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson
@@ -973,47 +974,41 @@ revision 825
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Of the arguments its type takes, the first 1 are parameters and the other 0 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
-| #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.badJson
-| 
-| ```lean
-| ∀ {text : String}, (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
-| ```
-| 
 | #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.notArray
 | 
 | ```lean
-| ∀ {text : String}, ∀ {j : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j) → (∀ (arr : Array.{0} Lean.Json), @Ne.{1} Lean.Json j (Lean.Json.arr arr)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| ∀ {json : Lean.Json}, (∀ (arr : Array.{0} Lean.Json), @Ne.{1} Lean.Json json (Lean.Json.arr arr)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.invalidEntry
 | 
 | ```lean
-| ∀ {text : String}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr)) → (∀ (e : NoComments.RatchetCore.RatchetEntry), Not (NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| ∀ {json : Lean.Json}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Eq.{1} Lean.Json json (Lean.Json.arr arr) → (∀ (e : NoComments.RatchetCore.RatchetEntry), Not (NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.duplicateFile
 | 
 | ```lean
-| ∀ {text : String}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {e1 : NoComments.RatchetCore.RatchetEntry}, ∀ {e2 : NoComments.RatchetCore.RatchetEntry}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json arr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr)) → @Ne.{1} Nat i j → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e1 → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr j hj) e2 → @Eq.{1} String (NoComments.RatchetCore.RatchetEntry.file e1) (NoComments.RatchetCore.RatchetEntry.file e2) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| ∀ {json : Lean.Json}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {e1 : NoComments.RatchetCore.RatchetEntry}, ∀ {e2 : NoComments.RatchetCore.RatchetEntry}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json arr)), @Eq.{1} Lean.Json json (Lean.Json.arr arr) → @Ne.{1} Nat i j → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e1 → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr j hj) e2 → @Eq.{1} String (NoComments.RatchetCore.RatchetEntry.file e1) (NoComments.RatchetCore.RatchetEntry.file e2) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.RatchetText
+| ### NoCommentsSpecification.Healthy.RatchetJson
 | 
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (files : List.{0} String) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr))) (And (@Eq.{1} Nat (@List.length.{0} String files) (@Array.size.{0} Lean.Json arr)) (And (@List.Nodup.{0} String files) (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) (fun (hf : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) => NoCommentsSpecification.Healthy.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) files i hf)))))))
+| fun (json : Lean.Json) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (files : List.{0} String) => And (@Eq.{1} Lean.Json json (Lean.Json.arr arr)) (And (@Eq.{1} Nat (@List.length.{0} String files) (@Array.size.{0} Lean.Json arr)) (And (@List.Nodup.{0} String files) (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) (fun (hf : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) => NoCommentsSpecification.Healthy.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) files i hf)))))))
 | ```
 | 
 | ### NoCommentsSpecification.Healthy.ValidRatchetEntryJson
@@ -1398,13 +1393,13 @@ r###"lean-intent statement 1
 kind answer
 project lean-no-comments
 id delegated-parseRatchet
-date 2026-11-22
+date 2026-11-28
 words 1
 | Decided below owner level under agent delegation and confirmed against the system contract on 2026-11-22.
 by antigravity
 under agent-delegation
 record NoCommentsSpecification.RatchetRecords.parseRatchetRecord
-revision 825
+revision 819
 | # The intent record NoCommentsSpecification.RatchetRecords.parseRatchetRecord
 | 
 | Each statement is printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened. The plain words after it are written by a model and are trusted, not proved.
@@ -1414,10 +1409,10 @@ revision 825
 | ### The subject
 | 
 | ```lean
-| LeanIntent.Shape.function.{0} String (fun (a : String) => Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString))
+| LeanIntent.Shape.function.{0} Lean.Json (fun (a : Lean.Json) => Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString))
 | ```
 | 
-| - **Requires:** parseRatchetJson is a total pure function from String to Except String (HashMap String RatchetEntry).
+| - **Requires:** parseRatchetJson is a total pure function from Json to Except String (HashMap String RatchetEntry).
 | - **Rules out:** Any subject with external side effects, partiality, or another signature.
 | - **Still allows:** Every pure function of that signature until restricted by properties.
 | - **Freedom O5 leaves:** Only fixes the pure function signature.
@@ -1431,7 +1426,7 @@ revision 825
 | ### ok_valid_ratchet_map
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (text : String), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f text) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m) → NoCommentsSpecification.RatchetSpec.ValidRatchetJson text m
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (json : Lean.Json), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f json) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m) → NoCommentsSpecification.RatchetSpec.ValidRatchetJson json m
 | ```
 | 
 | - **Requires:** Accepts only JSON arrays of distinct normalized file entries with positive counts and sorted valid fingerprints.
@@ -1442,7 +1437,7 @@ revision 825
 | ### refusal_sound
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (text : String), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f text) (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) msg) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (json : Lean.Json), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f json) (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) msg) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
 | - **Requires:** Returns .error only when RatchetRefusal holds.
@@ -1452,10 +1447,10 @@ revision 825
 | 
 | ## Vocabulary
 | 
-| ### ValidRatchetJson, a predicate over `Prod.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)`
+| ### ValidRatchetJson, a predicate over `Prod.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)`
 | 
 | ```lean
-| fun (p : Prod.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) => NoCommentsSpecification.RatchetSpec.ValidRatchetJson (@Prod.fst.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p) (@Prod.snd.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p)
+| fun (p : Prod.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) => NoCommentsSpecification.RatchetSpec.ValidRatchetJson (@Prod.fst.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p) (@Prod.snd.{0, 0} Lean.Json (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) p)
 | ```
 | 
 | - **Requires:** ValidRatchetJson enforces schema, normalized paths, positive counts, sorted valid hex digests, and unique files.
@@ -1463,7 +1458,7 @@ revision 825
 | - **Still allows:** Valid ratchet maps.
 | - **Freedom O5 leaves:** Exact map lookup equivalence.
 | 
-| ### RatchetRefusal, a predicate over `String`
+| ### RatchetRefusal, a predicate over `Lean.Json`
 | 
 | ```lean
 | NoCommentsSpecification.RatchetSpec.RatchetRefusal
@@ -1476,24 +1471,24 @@ revision 825
 | 
 | ## Consequences
 | 
-| ### succeeds on every healthy ratchet manifest, an entailment: every subject that meets the record satisfies it
+| ### succeeds on every healthy ratchet JSON manifest, an entailment: every subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (text : String), NoCommentsSpecification.Healthy.RatchetText text → @Exists.{1} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f text) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m))
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => ∀ (json : Lean.Json), NoCommentsSpecification.Healthy.RatchetJson json → @Exists.{1} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f json) (@Except.ok.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m))
 | ```
 | 
-| - **Requires:** Every healthy ratchet JSON text parses to .ok m.
+| - **Requires:** Every healthy ratchet JSON value decodes to .ok m.
 | - **Rules out:** Spurious rejections on valid ratchets.
-| - **Still allows:** Any compliant ratchet parser.
+| - **Still allows:** Any compliant ratchet decoder.
 | - **Freedom O5 leaves:** Success guaranteed on healthy ratchet manifests.
 | 
-| ### leaves refusal message string free on unparseable JSON, a possibility: some subject that meets the record satisfies it
+| ### leaves refusal message string free on invalid ratchet JSON, a possibility: some subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse "") (@Except.ok.{0, 0} String Lean.Json j)) → @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f "") (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) "denied")
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f Lean.Json.null) (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) "denied")
 | ```
 | 
-| - **Requires:** Some conforming ratchet parser returns "denied" on empty text.
+| - **Requires:** Some conforming ratchet decoder returns "denied" on non-array JSON null.
 | - **Rules out:** Nothing; documents diagnostic message freedom.
 | - **Still allows:** Custom error messages.
 | - **Freedom O5 leaves:** Error text decided below owner level (O5 ParseRatchetFreedom).
@@ -1613,7 +1608,7 @@ revision 825
 | Its value:
 | 
 | ```lean
-| String → Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)
+| Lean.Json → Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)
 | ```
 | 
 | ### NoCommentsSpecification.RatchetSpec.ValidRatchetJson
@@ -1621,13 +1616,13 @@ revision 825
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), Prop
+| ∀ (json : Lean.Json), ∀ (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} NoComments.RatchetCore.RatchetEntry) (fun (entries : List.{0} NoComments.RatchetCore.RatchetEntry) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr))) (And (@Eq.{1} Nat (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries) (@Array.size.{0} Lean.Json arr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) (fun (_he : @LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) => NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i _h) (@GetElem.getElem.{0, 0, 0} (List.{0} NoComments.RatchetCore.RatchetEntry) Nat NoComments.RatchetCore.RatchetEntry (fun (as : List.{0} NoComments.RatchetCore.RatchetEntry) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} NoComments.RatchetCore.RatchetEntry as)) (@List.instGetElemNatLtLength.{0} NoComments.RatchetCore.RatchetEntry) entries i _he))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.RatchetCore.RatchetEntry String (fun (x : NoComments.RatchetCore.RatchetEntry) => NoComments.RatchetCore.RatchetEntry.file x) entries)) (∀ (k : String), @Eq.{1} (Option.{0} NoComments.RatchetCore.RatchetEntry) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) String NoComments.RatchetCore.RatchetEntry (fun (x : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => fun (a : String) => @Membership.mem.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (@Std.HashMap.instMembership.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) x a) (@Std.HashMap.instGetElem?Mem.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m k) (@List.find?.{0} NoComments.RatchetCore.RatchetEntry (fun (x : NoComments.RatchetCore.RatchetEntry) => @BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) (NoComments.RatchetCore.RatchetEntry.file x) k) entries)))))))
+| fun (json : Lean.Json) => fun (m : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} NoComments.RatchetCore.RatchetEntry) (fun (entries : List.{0} NoComments.RatchetCore.RatchetEntry) => And (@Eq.{1} Lean.Json json (Lean.Json.arr arr)) (And (@Eq.{1} Nat (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries) (@Array.size.{0} Lean.Json arr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) (fun (_he : @LT.lt.{0} Nat instLTNat i (@List.length.{0} NoComments.RatchetCore.RatchetEntry entries)) => NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i _h) (@GetElem.getElem.{0, 0, 0} (List.{0} NoComments.RatchetCore.RatchetEntry) Nat NoComments.RatchetCore.RatchetEntry (fun (as : List.{0} NoComments.RatchetCore.RatchetEntry) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} NoComments.RatchetCore.RatchetEntry as)) (@List.instGetElemNatLtLength.{0} NoComments.RatchetCore.RatchetEntry) entries i _he))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.RatchetCore.RatchetEntry String (fun (x : NoComments.RatchetCore.RatchetEntry) => NoComments.RatchetCore.RatchetEntry.file x) entries)) (∀ (k : String), @Eq.{1} (Option.{0} NoComments.RatchetCore.RatchetEntry) (@GetElem?.getElem?.{0, 0, 0} (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) String NoComments.RatchetCore.RatchetEntry (fun (x : @Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) => fun (a : String) => @Membership.mem.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) (@Std.HashMap.instMembership.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) x a) (@Std.HashMap.instGetElem?Mem.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) m k) (@List.find?.{0} NoComments.RatchetCore.RatchetEntry (fun (x : NoComments.RatchetCore.RatchetEntry) => @BEq.beq.{0} String (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) (NoComments.RatchetCore.RatchetEntry.file x) k) entries)))))))
 | ```
 | 
 | ### NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson
@@ -1817,47 +1812,41 @@ revision 825
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Of the arguments its type takes, the first 1 are parameters and the other 0 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
-| #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.badJson
-| 
-| ```lean
-| ∀ {text : String}, (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
-| ```
-| 
 | #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.notArray
 | 
 | ```lean
-| ∀ {text : String}, ∀ {j : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j) → (∀ (arr : Array.{0} Lean.Json), @Ne.{1} Lean.Json j (Lean.Json.arr arr)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| ∀ {json : Lean.Json}, (∀ (arr : Array.{0} Lean.Json), @Ne.{1} Lean.Json json (Lean.Json.arr arr)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.invalidEntry
 | 
 | ```lean
-| ∀ {text : String}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr)) → (∀ (e : NoComments.RatchetCore.RatchetEntry), Not (NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| ∀ {json : Lean.Json}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Eq.{1} Lean.Json json (Lean.Json.arr arr) → (∀ (e : NoComments.RatchetCore.RatchetEntry), Not (NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e)) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.RatchetSpec.RatchetRefusal.duplicateFile
 | 
 | ```lean
-| ∀ {text : String}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {e1 : NoComments.RatchetCore.RatchetEntry}, ∀ {e2 : NoComments.RatchetCore.RatchetEntry}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json arr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr)) → @Ne.{1} Nat i j → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e1 → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr j hj) e2 → @Eq.{1} String (NoComments.RatchetCore.RatchetEntry.file e1) (NoComments.RatchetCore.RatchetEntry.file e2) → NoCommentsSpecification.RatchetSpec.RatchetRefusal text
+| ∀ {json : Lean.Json}, ∀ {arr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {e1 : NoComments.RatchetCore.RatchetEntry}, ∀ {e2 : NoComments.RatchetCore.RatchetEntry}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json arr)), @Eq.{1} Lean.Json json (Lean.Json.arr arr) → @Ne.{1} Nat i j → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i hi) e1 → NoCommentsSpecification.RatchetSpec.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr j hj) e2 → @Eq.{1} String (NoComments.RatchetCore.RatchetEntry.file e1) (NoComments.RatchetCore.RatchetEntry.file e2) → NoCommentsSpecification.RatchetSpec.RatchetRefusal json
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.RatchetText
+| ### NoCommentsSpecification.Healthy.RatchetJson
 | 
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (files : List.{0} String) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.arr arr))) (And (@Eq.{1} Nat (@List.length.{0} String files) (@Array.size.{0} Lean.Json arr)) (And (@List.Nodup.{0} String files) (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) (fun (hf : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) => NoCommentsSpecification.Healthy.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) files i hf)))))))
+| fun (json : Lean.Json) => @Exists.{1} (Array.{0} Lean.Json) (fun (arr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (files : List.{0} String) => And (@Eq.{1} Lean.Json json (Lean.Json.arr arr)) (And (@Eq.{1} Nat (@List.length.{0} String files) (@Array.size.{0} Lean.Json arr)) (And (@List.Nodup.{0} String files) (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json arr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) (fun (hf : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String files)) => NoCommentsSpecification.Healthy.ValidRatchetEntryJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) arr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) files i hf)))))))
 | ```
 | 
 | ### NoCommentsSpecification.Healthy.ValidRatchetEntryJson
@@ -2230,7 +2219,7 @@ revision 825
 | 
 | The declarations of Lean's own libraries (Init, Std, Lean and Lake) are not printed: they are those of Lean 4.36.0, commit 611c117bfaf7b7ae1cfcf246ce6fba31e8f509e9, which made this text. A declaration is counted as Lean's own when Lean found the module that declares it in that release's library directory.
 | 
-consequence leaves refusal message string free on unparseable JSON
+consequence leaves refusal message string free on invalid ratchet JSON
 shown as possibility
 predicate 422
 | # A consequence's predicate
@@ -2238,7 +2227,7 @@ predicate 422
 | Printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened.
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseRatchetFn) => (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse "") (@Except.ok.{0, 0} String Lean.Json j)) → @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f "") (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) "denied")
+| fun (f : NoCommentsSpecification.ParseRatchetFn) => @Eq.{1} (Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)) (f Lean.Json.null) (@Except.error.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString) "denied")
 | ```
 | 
 | ## Definitions the predicate reaches
@@ -2256,7 +2245,7 @@ predicate 422
 | Its value:
 | 
 | ```lean
-| String → Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)
+| Lean.Json → Except.{0, 0} String (@Std.HashMap.{0, 0} String NoComments.RatchetCore.RatchetEntry (@Std.PreorderPackage.toBEq.{0} String (@Std.LinearPreorderPackage.toPreorderPackage.{0} String (@Std.LinearOrderPackage.toLinearPreorderPackage.{0} String String.instLinearOrderPackage))) instHashableString)
 | ```
 | 
 | ### NoComments.RatchetCore.RatchetEntry

@@ -1,5 +1,7 @@
 module
 
+import all Init.Data.String.Legacy
+import all Init.Data.String.Basic
 public import LeanIntent.Obligations
 public import LeanIntent.Pairs
 public import LeanIntent.Progress
@@ -153,109 +155,105 @@ theorem list_not_nodup_iff_dup_idx {α : Type} [DecidableEq α] (xs : List α) :
           exact (ih.mpr ⟨i', j', Nat.lt_of_succ_lt_succ hi, Nat.lt_of_succ_lt_succ hj,
             by omega, by simpa using heq⟩) hnd.2
 
-theorem validConfigJson_total (text : String) :
-    (∃ cfg, ValidConfigJson text cfg) ∨ ConfigRefusal text := by
-  cases hp : Json.parse text with
-  | error _ => exact .inr (.badJson fun j h => by rw [hp] at h; cases h)
-  | ok j =>
-    cases j with
-    | obj obj =>
-      by_cases hkeys : ∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"]
-      · by_cases hwsf : ∃ wsArr, obj.get? "workspaces" = some (Json.arr wsArr) ∧ wsArr.size > 0
-        · rcases hwsf with ⟨wsArr, hwsEq, hwsPos⟩
-          by_cases hwsElts : ∀ (i : Nat) (_ : i < wsArr.size), ∃ ws, ValidWorkspaceJson wsArr[i] ws
-          · let wss : Array Config.WorkspaceConfig :=
-              Array.ofFn fun (idx : Fin wsArr.size) =>
-                Classical.choose (hwsElts idx.1 idx.2)
-            have hwssSize : wss.size = wsArr.size := Array.size_ofFn
-            have hwssValid : ∀ (i : Nat) (h : i < wsArr.size),
-                ∃ (hc : i < wss.size), ValidWorkspaceJson wsArr[i] wss[i] := by
-              intro i hi
-              refine ⟨by omega, ?_⟩
-              simpa [wss] using Classical.choose_spec (hwsElts i hi)
-            by_cases hnodup : (wss.toList.map (·.dir)).Nodup
-            · have hexclCase :
-                (∃ excl : Array Config.ExcludeRule,
-                  match obj.get? "exclude" with
-                  | some (Json.arr exclArr) =>
-                    excl.size = exclArr.size ∧
-                      ∀ (i : Nat) (_h : i < exclArr.size),
-                        ∃ (_hc : i < excl.size), ValidExcludeJson exclArr[i] excl[i]
-                  | some _ => False
-                  | none => excl = #[]) ∨ ConfigRefusal text := by
-                cases hexcl : obj.get? "exclude" with
-                | none => exact .inl ⟨#[], rfl⟩
-                | some ev =>
-                  cases ev with
-                  | arr exclArr =>
-                    by_cases hexElts : ∀ (i : Nat) (_ : i < exclArr.size), ∃ r, ValidExcludeJson exclArr[i] r
-                    · let excl : Array Config.ExcludeRule :=
-                        Array.ofFn fun (idx : Fin exclArr.size) =>
-                          Classical.choose (hexElts idx.1 idx.2)
-                      refine .inl ⟨excl, Array.size_ofFn, fun i hi => ⟨by simp [excl]; exact hi, ?_⟩⟩
-                      simpa [excl] using Classical.choose_spec (hexElts i hi)
-                    · have hexNot : ∃ i, ∃ (_ : i < exclArr.size), ∀ r, ¬ ValidExcludeJson exclArr[i] r := by
-                        obtain ⟨i, hni⟩ := Classical.not_forall.mp hexElts
-                        obtain ⟨hi, hnr⟩ := Classical.not_forall.mp hni
-                        exact ⟨i, hi, fun r hr => hnr ⟨r, hr⟩⟩
-                      obtain ⟨i, hi, hnr⟩ := hexNot
-                      exact .inr (.invalidExcludeRule hi hp hexcl hnr)
-                  | _ =>
-                    refine .inr (.badExcludeField hp hexcl fun _ h => by cases h)
-              rcases hexclCase with ⟨excl, hexclOk⟩ | href
-              · by_cases hrat : ∃ rRaw rOut, obj.get? "ratchet" = some (Json.str rRaw) ∧ NormRelFile rRaw rOut
-                · rcases hrat with ⟨rRaw, rOut, hrEq, hrNorm⟩
-                  exact .inl ⟨{ workspaces := wss, exclude := excl, ratchet := rOut },
-                    obj, wsArr, rRaw, hp, hkeys, hwsEq, hwsPos, hwssSize, hwssValid, hnodup,
-                    hexclOk, hrEq, hrNorm⟩
-                · refine .inr (.badRatchetField hp fun raw out hget hnorm => hrat ⟨raw, out, hget, hnorm⟩)
-              · exact .inr href
-            · obtain ⟨i, j, hi, hj, hne, heq⟩ := (list_not_nodup_iff_dup_idx (wss.toList.map (·.dir))).mp hnodup
-              simp only [List.length_map, Array.length_toList, hwssSize] at hi hj
-              have hiw : i < wss.size := by omega
-              have hjw : j < wss.size := by omega
-              have hv1 : ValidWorkspaceJson wsArr[i] wss[i] := (hwssValid i hi).2
-              have hv2 : ValidWorkspaceJson wsArr[j] wss[j] := (hwssValid j hj).2
-              have hdirEq : wss[i].dir = wss[j].dir := by
-                simpa [List.getElem_map] using heq
-              exact .inr (.duplicateWorkspaceDir hi hj hp hwsEq hne hv1 hv2 hdirEq)
-          · have hnot : ∃ i, ∃ (_ : i < wsArr.size), ∀ ws, ¬ ValidWorkspaceJson wsArr[i] ws := by
-              obtain ⟨i, hni⟩ := Classical.not_forall.mp hwsElts
-              obtain ⟨hi, hnw⟩ := Classical.not_forall.mp hni
-              exact ⟨i, hi, fun ws hw => hnw ⟨ws, hw⟩⟩
-            obtain ⟨i, hi, hnw⟩ := hnot
-            exact .inr (.invalidWorkspace hi hp hwsEq hnw)
-        · refine .inr (.badWorkspacesField hp fun wsArr hget => Classical.byContradiction fun hnz => ?_)
-          exact hwsf ⟨wsArr, hget, Nat.pos_of_ne_zero hnz⟩
-      · have hbad : ∃ kv ∈ obj.toList, kv.1 ∉ ["workspaces", "exclude", "ratchet"] := by
-          obtain ⟨⟨k, v⟩, hnk⟩ := Classical.not_forall.mp hkeys
-          have ⟨hm, hk⟩ := Classical.not_imp.mp hnk
-          exact ⟨(k, v), hm, hk⟩
-        obtain ⟨⟨k, v⟩, hmem, hk⟩ := hbad
-        exact .inr (.unknownRootKey hp hmem hk)
-    | _ => exact .inr (.notObject hp fun _ h => by cases h)
+theorem validConfigJson_total (json : Json) :
+    (∃ cfg, ValidConfigJson json cfg) ∨ ConfigRefusal json := by
+  cases json with
+  | obj obj =>
+    by_cases hkeys : ∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"]
+    · by_cases hwsf : ∃ wsArr, obj.get? "workspaces" = some (Json.arr wsArr) ∧ wsArr.size > 0
+      · rcases hwsf with ⟨wsArr, hwsEq, hwsPos⟩
+        by_cases hwsElts : ∀ (i : Nat) (_ : i < wsArr.size), ∃ ws, ValidWorkspaceJson wsArr[i] ws
+        · let wss : Array Config.WorkspaceConfig :=
+            Array.ofFn fun (idx : Fin wsArr.size) =>
+              Classical.choose (hwsElts idx.1 idx.2)
+          have hwssSize : wss.size = wsArr.size := Array.size_ofFn
+          have hwssValid : ∀ (i : Nat) (h : i < wsArr.size),
+              ∃ (hc : i < wss.size), ValidWorkspaceJson wsArr[i] wss[i] := by
+            intro i hi
+            refine ⟨by omega, ?_⟩
+            simpa [wss] using Classical.choose_spec (hwsElts i hi)
+          by_cases hnodup : (wss.toList.map (·.dir)).Nodup
+          · have hexclCase :
+              (∃ excl : Array Config.ExcludeRule,
+                match obj.get? "exclude" with
+                | some (Json.arr exclArr) =>
+                  excl.size = exclArr.size ∧
+                    ∀ (i : Nat) (_h : i < exclArr.size),
+                      ∃ (_hc : i < excl.size), ValidExcludeJson exclArr[i] excl[i]
+                | some _ => False
+                | none => excl = #[]) ∨ ConfigRefusal (Json.obj obj) := by
+              cases hexcl : obj.get? "exclude" with
+              | none => exact .inl ⟨#[], rfl⟩
+              | some ev =>
+                cases ev with
+                | arr exclArr =>
+                  by_cases hexElts : ∀ (i : Nat) (_ : i < exclArr.size), ∃ r, ValidExcludeJson exclArr[i] r
+                  · let excl : Array Config.ExcludeRule :=
+                      Array.ofFn fun (idx : Fin exclArr.size) =>
+                        Classical.choose (hexElts idx.1 idx.2)
+                    refine .inl ⟨excl, Array.size_ofFn, fun i hi => ⟨by simp [excl]; exact hi, ?_⟩⟩
+                    simpa [excl] using Classical.choose_spec (hexElts i hi)
+                  · have hexNot : ∃ i, ∃ (_ : i < exclArr.size), ∀ r, ¬ ValidExcludeJson exclArr[i] r := by
+                      obtain ⟨i, hni⟩ := Classical.not_forall.mp hexElts
+                      obtain ⟨hi, hnr⟩ := Classical.not_forall.mp hni
+                      exact ⟨i, hi, fun r hr => hnr ⟨r, hr⟩⟩
+                    obtain ⟨i, hi, hnr⟩ := hexNot
+                    exact .inr (.invalidExcludeRule hi rfl hexcl hnr)
+                | _ =>
+                  refine .inr (.badExcludeField rfl hexcl fun _ h => by cases h)
+            rcases hexclCase with ⟨excl, hexclOk⟩ | href
+            · by_cases hrat : ∃ rRaw rOut, obj.get? "ratchet" = some (Json.str rRaw) ∧ NormRelFile rRaw rOut
+              · rcases hrat with ⟨rRaw, rOut, hrEq, hrNorm⟩
+                exact .inl ⟨{ workspaces := wss, exclude := excl, ratchet := rOut },
+                  obj, wsArr, rRaw, rfl, hkeys, hwsEq, hwsPos, hwssSize, hwssValid, hnodup,
+                  hexclOk, hrEq, hrNorm⟩
+              · refine .inr (.badRatchetField rfl fun raw out hget hnorm => hrat ⟨raw, out, hget, hnorm⟩)
+            · exact .inr href
+          · obtain ⟨i, j, hi, hj, hne, heq⟩ := (list_not_nodup_iff_dup_idx (wss.toList.map (·.dir))).mp hnodup
+            simp only [List.length_map, Array.length_toList, hwssSize] at hi hj
+            have hiw : i < wss.size := by omega
+            have hjw : j < wss.size := by omega
+            have hv1 : ValidWorkspaceJson wsArr[i] wss[i] := (hwssValid i hi).2
+            have hv2 : ValidWorkspaceJson wsArr[j] wss[j] := (hwssValid j hj).2
+            have hdirEq : wss[i].dir = wss[j].dir := by
+              simpa [List.getElem_map] using heq
+            exact .inr (.duplicateWorkspaceDir hi hj rfl hwsEq hne hv1 hv2 hdirEq)
+        · have hnot : ∃ i, ∃ (_ : i < wsArr.size), ∀ ws, ¬ ValidWorkspaceJson wsArr[i] ws := by
+            obtain ⟨i, hni⟩ := Classical.not_forall.mp hwsElts
+            obtain ⟨hi, hnw⟩ := Classical.not_forall.mp hni
+            exact ⟨i, hi, fun ws hw => hnw ⟨ws, hw⟩⟩
+          obtain ⟨i, hi, hnw⟩ := hnot
+          exact .inr (.invalidWorkspace hi rfl hwsEq hnw)
+      · refine .inr (.badWorkspacesField rfl fun wsArr hget => Classical.byContradiction fun hnz => ?_)
+        exact hwsf ⟨wsArr, hget, Nat.pos_of_ne_zero hnz⟩
+    · have hbad : ∃ kv ∈ obj.toList, kv.1 ∉ ["workspaces", "exclude", "ratchet"] := by
+        obtain ⟨⟨k, v⟩, hnk⟩ := Classical.not_forall.mp hkeys
+        have ⟨hm, hk⟩ := Classical.not_imp.mp hnk
+        exact ⟨(k, v), hm, hk⟩
+      obtain ⟨⟨k, v⟩, hmem, hk⟩ := hbad
+      exact .inr (.unknownRootKey rfl hmem hk)
+  | _ => exact .inr (.notObject fun _ h => by cases h)
 
-theorem validConfigJson_and_refusal_disjoint {text : String} {cfg : Config.RepoConfig}
-    (hv : ValidConfigJson text cfg) (hr : ConfigRefusal text) : False := by
-  rcases hv with ⟨obj, wsArr, rRaw, hp, hkeys, hwsEq, hwsPos, hwssSize, hwssValid, hnodup,
+theorem validConfigJson_and_refusal_disjoint {json : Json} {cfg : Config.RepoConfig}
+    (hv : ValidConfigJson json cfg) (hr : ConfigRefusal json) : False := by
+  rcases hv with ⟨obj, wsArr, rRaw, rfl, hkeys, hwsEq, hwsPos, hwssSize, hwssValid, hnodup,
     hexcl, hrEq, hrNorm⟩
   cases hr with
-  | badJson hbad => exact hbad _ hp
-  | notObject hp2 hno => rw [hp] at hp2; cases hp2; exact hno obj rfl
-  | unknownRootKey hp2 hget hnin =>
-    rw [hp] at hp2; cases hp2
+  | notObject hno => exact hno obj rfl
+  | unknownRootKey heq hget hnin =>
+    cases heq
     exact hnin (hkeys _ hget)
-  | badWorkspacesField hp2 hbad =>
-    rw [hp] at hp2; cases hp2
+  | badWorkspacesField heq hbad =>
+    cases heq
     have := hbad wsArr hwsEq
     omega
-  | @invalidWorkspace _ _ i hi hp2 hws2 hnw =>
-    rw [hp] at hp2; cases hp2
+  | @invalidWorkspace _ _ i hi heq hws2 hnw =>
+    cases heq
     rw [hwsEq] at hws2; cases hws2
     obtain ⟨_, hvw⟩ := hwssValid i hi
     exact hnw _ hvw
-  | @duplicateWorkspaceDir _ _ i j ws1 ws2 hi hj hp2 hws2 hne hv1 hv2 hdirEq =>
-    rw [hp] at hp2; cases hp2
+  | @duplicateWorkspaceDir _ _ i j ws1 ws2 hi hj heq hws2 hne hv1 hv2 hdirEq =>
+    cases heq
     rw [hwsEq] at hws2; cases hws2
     obtain ⟨hci, hvi⟩ := hwssValid i hi
     obtain ⟨hcj, hvj⟩ := hwssValid j hj
@@ -265,19 +263,19 @@ theorem validConfigJson_and_refusal_disjoint {text : String} {cfg : Config.RepoC
       ⟨i, j, by simpa [hwssSize] using hi, by simpa [hwssSize] using hj, hne,
         by simp [List.getElem_map, ← hd1, ← hd2, hdirEq]⟩
     exact hdup hnodup
-  | badExcludeField hp2 hget hnot =>
-    rw [hp] at hp2; cases hp2
+  | badExcludeField heq hget hnot =>
+    cases heq
     rw [hget] at hexcl
     cases ‹Json› with
     | arr exclArr => exact hnot exclArr rfl
     | _ => exact hexcl.elim
-  | @invalidExcludeRule _ exclArr i hi hp2 hex2 hnr =>
-    rw [hp] at hp2; cases hp2
+  | @invalidExcludeRule _ exclArr i hi heq hex2 hnr =>
+    cases heq
     rw [hex2] at hexcl
     obtain ⟨_, hve⟩ := hexcl.2 i hi
     exact hnr _ hve
-  | badRatchetField hp2 hbad =>
-    rw [hp] at hp2; cases hp2
+  | badRatchetField heq hbad =>
+    cases heq
     exact hbad rRaw cfg.ratchet hrEq hrNorm
 
 theorem healthy_cleanStringList_of_valid {j : Json} {out : Array String}
@@ -410,8 +408,8 @@ theorem validExclude_iff_healthy (j : Json) :
     exact ⟨{ prefix_ := pfxOut, reason := reasonRaw.trimAscii.toString },
       obj, pfxRaw, reasonRaw, rfl, hkeys, hp, (healthy_validPrefix_iff _ _).mp hnp, hr, rfl, hne⟩
 
-theorem validConfigJson_iff_healthy {text : String} :
-    (∃ cfg, ValidConfigJson text cfg) ↔ Healthy.ConfigText text := by
+theorem validConfigJson_iff_healthy {json : Json} :
+    (∃ cfg, ValidConfigJson json cfg) ↔ Healthy.ConfigJson json := by
   constructor
   · rintro ⟨cfg, obj, wsArr, rRaw, hp, hkeys, hws, hwsPos, hsz, helts, hnd, hexcl, hr, hnr⟩
     refine ⟨obj, wsArr, cfg.workspaces.toList.map (·.dir), rRaw, cfg.ratchet, hp, hkeys, hws,
@@ -478,8 +476,8 @@ theorem validConfigJson_iff_healthy {text : String} :
 
 noncomputable def parseConfigModelWith (errMsg : String) : ParseConfigFn :=
   open Classical in
-  fun text =>
-    if h : ∃ cfg, ValidConfigJson text cfg then .ok (Classical.choose h)
+  fun json =>
+    if h : ∃ cfg, ValidConfigJson json cfg then .ok (Classical.choose h)
     else .error errMsg
 
 noncomputable def parseConfigModel : ParseConfigFn :=
@@ -489,7 +487,7 @@ theorem parseConfigModelWith_meets (errMsg : String) :
     parseConfigRecord.Meets (parseConfigModelWith errMsg) := by
   refine ⟨(fun _ h => nomatch h), fun p hp => ?_⟩
   rcases List.mem_cons.mp hp with rfl | hp
-  · intro text cfg hok
+  · intro json cfg hok
     dsimp [parseConfigModelWith] at hok
     split at hok
     · rename_i h
@@ -497,12 +495,12 @@ theorem parseConfigModelWith_meets (errMsg : String) :
       exact Classical.choose_spec h
     · contradiction
   rcases List.mem_cons.mp hp with rfl | hp
-  · intro text msg herr
+  · intro json msg herr
     dsimp [parseConfigModelWith] at herr
     split at herr
     · contradiction
     · rename_i hnv
-      rcases validConfigJson_total text with hv | href
+      rcases validConfigJson_total json with hv | href
       · exact absurd hv hnv
       · exact href
   exact nomatch hp
@@ -510,80 +508,172 @@ theorem parseConfigModelWith_meets (errMsg : String) :
 theorem parseConfigModel_meets : parseConfigRecord.Meets parseConfigModel :=
   parseConfigModelWith_meets "invalid config"
 
-def JsonConfigOracle : Prop :=
-  (∀ j, Json.parse "" ≠ .ok j) ∧ ∃ text cfg, ValidConfigJson text cfg
+def sampleWorkspaceObj : Std.TreeMap.Raw String Json compare :=
+  (Std.TreeMap.Raw.empty : Std.TreeMap.Raw String Json compare).insert "dir" (Json.str ".")
 
-theorem parseConfig_o2_of_oracle (ho : JsonConfigOracle) : O2 parseConfigRecord := by
+def sampleWorkspaceJson : Json := Json.obj sampleWorkspaceObj
+
+def sampleConfigObj : Std.TreeMap.Raw String Json compare :=
+  ((Std.TreeMap.Raw.empty : Std.TreeMap.Raw String Json compare).insert "workspaces"
+    (Json.arr #[sampleWorkspaceJson])).insert "ratchet" (Json.str "a")
+
+def sampleConfigJson : Json := Json.obj sampleConfigObj
+
+def sampleParsedWorkspace : Config.WorkspaceConfig where
+  dir := "."
+  srcDir := "."
+  lakeArgs := #[]
+  toolPrefixes := #[]
+  excludePrefixes := #[]
+
+def sampleParsedConfig : Config.RepoConfig where
+  workspaces := #[sampleParsedWorkspace]
+  exclude := #[]
+  ratchet := "a"
+
+theorem stripDotSlash_eq_self {s : String} (h : stripDotSlashChars s.toList = s.toList) :
+    stripDotSlash s = s := by
+  unfold stripDotSlash
+  rw [h]
+  exact String.ofList_toList
+
+theorem stripTrailingSlashes_eq_self {s : String}
+    (h : (stripTrailingSlashRev s.toList.reverse).reverse = s.toList) :
+    stripTrailingSlashes s = s := by
+  unfold stripTrailingSlashes
+  rw [h]
+  exact String.ofList_toList
+
+theorem splitOn_slash_single_byte (s : String)
+    (h0 : String.Pos.Raw.atEnd s 0 = false)
+    (hget : (String.Pos.Raw.get s 0 == String.Pos.Raw.get "/" 0) = false)
+    (hnext : String.Pos.Raw.next s 0 = ⟨1⟩)
+    (h1 : String.Pos.Raw.atEnd s ⟨1⟩ = true)
+    (hext : String.Pos.Raw.extract s 0 ⟨1⟩ = s) :
+    s.splitOn "/" = [s] := by
+  unfold String.splitOn
+  have hsep : ("/" == "") = false := by decide
+  rw [hsep]
+  simp only [Bool.false_eq_true, ↓reduceIte]
+  rw [String.splitOnAux, h0]
+  simp only [Bool.false_eq_true, ↓reduceIte, hget]
+  have hu : String.Pos.Raw.unoffsetBy 0 0 = 0 := rfl
+  rw [hu, hnext, String.splitOnAux, h1]
+  simp [hext]
+
+theorem sampleWorkspaceJson_valid :
+    ValidWorkspaceJson sampleWorkspaceJson sampleParsedWorkspace := by
+  refine ⟨sampleWorkspaceObj, ".", rfl, ?_, rfl, ?_, rfl, rfl, rfl, rfl⟩
+  · intro kv hmem
+    have hkv : kv ∈ [("dir", Json.str ".")] := hmem
+    rcases List.mem_singleton.mp hkv with rfl
+    decide
+  · have h1 : stripDotSlash "." = "." := stripDotSlash_eq_self (by simp only [String.reduceToList]; decide)
+    have h2 : stripTrailingSlashes "." = "." := stripTrailingSlashes_eq_self (by
+      simp only [String.reduceToList, List.reverse_cons, List.reverse_nil, List.nil_append]
+      rw [stripTrailingSlashRev]
+      · rfl
+      · intro _ _ h; cases h)
+    refine ⟨by decide, by decide, by decide, .inl ⟨?_, rfl⟩⟩
+    rw [h1, h2]
+    decide
+
+theorem sampleConfigJson_valid :
+    ValidConfigJson sampleConfigJson sampleParsedConfig := by
+  refine ⟨sampleConfigObj, #[sampleWorkspaceJson], "a", rfl, ?_, rfl,
+    by decide, rfl, ?_, by decide, rfl, rfl, ?_⟩
+  · intro kv hmem
+    have hkv : kv ∈ [("ratchet", Json.str "a"),
+        ("workspaces", Json.arr #[sampleWorkspaceJson])] := hmem
+    rcases List.mem_cons.mp hkv with rfl | hkv
+    · decide
+    · rcases List.mem_singleton.mp hkv with rfl
+      decide
+  · intro i hi
+    have hi0 : i = 0 := by simp at hi; omega
+    subst hi0
+    exact ⟨by decide, sampleWorkspaceJson_valid⟩
+  · have h1 : stripDotSlash "a" = "a" :=
+      stripDotSlash_eq_self (by simp only [String.reduceToList]; decide)
+    have hsp : "a".splitOn "/" = ["a"] :=
+      splitOn_slash_single_byte "a" (by decide) (by decide) (by decide) (by decide) (by decide)
+    refine ⟨by decide, by decide, by decide, by decide, ?_, ?_, ?_, h1⟩
+    · rw [h1]; decide
+    · rw [h1]; decide
+    · rw [h1, validSegmentsBool, hsp]; decide
+
+theorem null_config_refusal : ConfigRefusal Json.null :=
+  .notObject fun _ h => by cases h
+
+theorem parseConfig_o2 : O2 parseConfigRecord := by
   refine (o2_correct _).mpr ⟨⟨parseConfigModel, (fun _ h => nomatch h)⟩, ?_⟩
   intro p hp
   rcases List.mem_cons.mp hp with rfl | hp
-  · rcases ho.2 with ⟨text, cfg, hv⟩
-    exact ⟨(text, cfg), hv⟩
+  · exact ⟨(sampleConfigJson, sampleParsedConfig), sampleConfigJson_valid⟩
   rcases List.mem_cons.mp hp with rfl | hp
-  · exact ⟨"", .badJson ho.1⟩
+  · exact ⟨Json.null, null_config_refusal⟩
   exact nomatch hp
 
 theorem parseConfig_o2Run : O2Run parseConfigRecord :=
   o2Run_of_meets parseConfigModel_meets
 
-theorem parseConfig_o3_of_oracle (ho : JsonConfigOracle) : O3 parseConfigRecord := by
+theorem parseConfig_o3 : O3 parseConfigRecord := by
   refine (o3_correct _).mpr fun c hc => ?_
-  rcases ho with ⟨hempty, text, cfg, hv⟩
   rcases List.mem_cons.mp hc with rfl | hc
-  · refine ⟨fun _ => .ok cfg, fun h => ?_⟩
-    exact validConfigJson_and_refusal_disjoint (h "" cfg rfl) (.badJson hempty)
+  · refine ⟨fun _ => .ok sampleParsedConfig, fun h => ?_⟩
+    exact validConfigJson_and_refusal_disjoint (h Json.null sampleParsedConfig rfl) null_config_refusal
   rcases List.mem_cons.mp hc with rfl | hc
   · refine ⟨fun _ => .error "always", fun h => ?_⟩
-    exact validConfigJson_and_refusal_disjoint hv (h text "always" rfl)
+    exact validConfigJson_and_refusal_disjoint sampleConfigJson_valid
+      (h sampleConfigJson "always" rfl)
   exact nomatch hc
 
 theorem parseConfig_o4 : O4 parseConfigRecord := o4_function _ rfl
 
 def ParseConfigFreedom : Freedom ParseConfigFn :=
-  .rel fun f g => ∀ text,
-    ((f text).isOk = (g text).isOk) ∧
-    (∀ cfg1 cfg2, f text = .ok cfg1 → g text = .ok cfg2 → ValidConfigJson text cfg1 ∧ ValidConfigJson text cfg2)
+  .rel fun f g => ∀ json,
+    ((f json).isOk = (g json).isOk) ∧
+    (∀ cfg1 cfg2, f json = .ok cfg1 → g json = .ok cfg2 → ValidConfigJson json cfg1 ∧ ValidConfigJson json cfg2)
 
 theorem parseConfig_healthy_owed :
-    ∀ f text, parseConfigRecord.Meets f →
-      Healthy.ConfigText text → ∃ cfg, f text = .ok cfg := by
-  intro f text hf hh
-  cases hfv : f text with
+    ∀ f json, parseConfigRecord.Meets f →
+      Healthy.ConfigJson json → ∃ cfg, f json = .ok cfg := by
+  intro f json hf hh
+  cases hfv : f json with
   | ok cfg => exact ⟨cfg, rfl⟩
   | error msg =>
     exfalso
-    have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text msg hfv
+    have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json msg hfv
     obtain ⟨cfg, hv⟩ := validConfigJson_iff_healthy.mpr hh
     exact validConfigJson_and_refusal_disjoint hv href
 
 theorem parseConfig_o5 : O5 parseConfigRecord ParseConfigFreedom := by
-  refine ⟨fun f g hf hg text => ?_, trivial⟩
-  have hfok := hf.2 _ List.mem_cons_self text
-  have hferr := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text
-  have hgok := hg.2 _ List.mem_cons_self text
-  have hgerr := hg.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text
+  refine ⟨fun f g hf hg json => ?_, trivial⟩
+  have hfok := hf.2 _ List.mem_cons_self json
+  have hferr := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json
+  have hgok := hg.2 _ List.mem_cons_self json
+  have hgerr := hg.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json
   refine ⟨?_, fun cfg1 cfg2 h1 h2 => ⟨hfok cfg1 h1, hgok cfg2 h2⟩⟩
-  cases h1 : f text with
+  cases h1 : f json with
   | ok cfg1 =>
-    cases h2 : g text with
+    cases h2 : g json with
     | ok _ => rfl
     | error msg =>
       exfalso
       exact validConfigJson_and_refusal_disjoint (hfok cfg1 h1) (hgerr msg h2)
   | error msg =>
-    cases h2 : g text with
+    cases h2 : g json with
     | error _ => rfl
     | ok cfg2 =>
       exfalso
       exact validConfigJson_and_refusal_disjoint (hgok cfg2 h2) (hferr msg h1)
 
-theorem parseConfig_not_o5_eq_of_oracle (ho : JsonConfigOracle) :
-    ¬ O5 parseConfigRecord .eq := by
+theorem parseConfig_not_o5_eq : ¬ O5 parseConfigRecord .eq := by
   refine not_o5_eq parseConfigModel_meets (parseConfigModelWith_meets "denied") fun heq => ?_
-  have hdiff := congrFun heq ""
-  have hna : ¬ ∃ cfg, ValidConfigJson "" cfg := by
+  have hdiff := congrFun heq Json.null
+  have hna : ¬ ∃ cfg, ValidConfigJson Json.null cfg := by
     rintro ⟨cfg, hv⟩
-    exact validConfigJson_and_refusal_disjoint hv (.badJson ho.1)
+    exact validConfigJson_and_refusal_disjoint hv null_config_refusal
   dsimp [parseConfigModel, parseConfigModelWith] at hdiff
   simp [hna] at hdiff
 
@@ -593,7 +683,7 @@ theorem parseConfig_oPair_whole :
     ⟨parseConfigModel, parseConfigModel_meets, fun _ => parseConfigModel_meets.2 c hc⟩
 
 def parseConfigPerInputPair : Pair ParseConfigFn where
-  Input := String
+  Input := Json
   pre := fun _ => True
   post := fun i f => ∀ cfg, f i = .ok cfg → ValidConfigJson i cfg
 
@@ -610,42 +700,39 @@ theorem parseConfig_perInput_pairOf :
 
 theorem parseConfig_perInput_table_attack :
     ∀ i : parseConfigPerInputPair.Input, parseConfigPerInputPair.pre i →
-      ∃ f : ParseConfigFn, (∀ s, f s = f "") ∧ parseConfigPerInputPair.post i f := by
+      ∃ f : ParseConfigFn, (∀ j, f j = f Json.null) ∧ parseConfigPerInputPair.post i f := by
   intro _ _
   refine ⟨fun _ => .error "table", fun _ => rfl, ?_⟩
   intro _ h; contradiction
 
-theorem parseConfig_interim_const_fails_of_oracle (ho : JsonConfigOracle) :
+theorem parseConfig_interim_const_fails :
     ∀ c, ¬ parseConfigRecord.Meets (fun _ => c) := by
-  rcases ho with ⟨hempty, text, _, hv⟩
   intro c hm
   cases c with
   | ok cfg =>
-    have hbad := hm.2 _ List.mem_cons_self "" cfg rfl
-    exact validConfigJson_and_refusal_disjoint hbad (.badJson hempty)
+    have hbad := hm.2 _ List.mem_cons_self Json.null cfg rfl
+    exact validConfigJson_and_refusal_disjoint hbad null_config_refusal
   | error msg =>
-    have href := hm.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text msg rfl
-    exact validConfigJson_and_refusal_disjoint hv href
+    have href := hm.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) sampleConfigJson msg rfl
+    exact validConfigJson_and_refusal_disjoint sampleConfigJson_valid href
 
-theorem parseConfig_healthy_nonempty_of_oracle (ho : JsonConfigOracle) :
-    ∃ text, Healthy.ConfigText text :=
-  let ⟨text, cfg, hv⟩ := ho.2
-  ⟨text, validConfigJson_iff_healthy.mp ⟨cfg, hv⟩⟩
+theorem parseConfig_healthy_nonempty : ∃ json, Healthy.ConfigJson json :=
+  ⟨sampleConfigJson, validConfigJson_iff_healthy.mp ⟨sampleParsedConfig, sampleConfigJson_valid⟩⟩
 
-theorem parseConfig_negative_external_model_of_oracle (ho : JsonConfigOracle) :
-    ∃ (f : ParseConfigFn), ∃ text,
-      (∀ s cfg, f s = .ok cfg → ValidConfigJson s cfg) ∧
-      Healthy.ConfigText text ∧
-      ¬ ∃ cfg, f text = .ok cfg := by
-  rcases ho.2 with ⟨text, cfg, hv⟩
-  refine ⟨fun _ => .error "denied", text, (fun _ _ h => nomatch h),
-    validConfigJson_iff_healthy.mp ⟨cfg, hv⟩, fun ⟨_, h⟩ => nomatch h⟩
+theorem parseConfig_negative_external_model :
+    ∃ (f : ParseConfigFn), ∃ json,
+      (∀ j cfg, f j = .ok cfg → ValidConfigJson j cfg) ∧
+      Healthy.ConfigJson json ∧
+      ¬ ∃ cfg, f json = .ok cfg :=
+  ⟨fun _ => .error "denied", sampleConfigJson, (fun _ _ h => nomatch h),
+    validConfigJson_iff_healthy.mp ⟨sampleParsedConfig, sampleConfigJson_valid⟩,
+    fun ⟨_, h⟩ => nomatch h⟩
 
 theorem parseConfig_reason_classified :
-    ∀ f text msg, parseConfigRecord.Meets f → f text = .error msg →
-      ConfigRefusal text ∧ ¬ Healthy.ConfigText text := by
-  intro f text msg hf herr
-  have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text msg herr
+    ∀ f json msg, parseConfigRecord.Meets f → f json = .error msg →
+      ConfigRefusal json ∧ ¬ Healthy.ConfigJson json := by
+  intro f json msg hf herr
+  have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json msg herr
   exact ⟨href, fun hh =>
     let ⟨_, hv⟩ := validConfigJson_iff_healthy.mpr hh
     validConfigJson_and_refusal_disjoint hv href⟩

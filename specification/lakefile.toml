@@ -6,7 +6,7 @@ lintDriverArgs = ["standard-logical"]
 [[require]]
 name = "lean-intent"
 git = "https://github.com/rbeauchamp/lean-intent"
-rev = "v0.1.0"
+rev = "v0.3.0"
 
 [[require]]
 name = "regula"

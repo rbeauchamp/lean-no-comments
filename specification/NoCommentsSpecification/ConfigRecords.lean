@@ -16,11 +16,11 @@ def parseConfigRecord : IntentRecord ParseConfigFn where
   shape := .function _ _
   dom := []
   props :=
-    [ ⟨"ok_valid_repo_config", fun f => ∀ text cfg, f text = .ok cfg → ValidConfigJson text cfg⟩
-    , ⟨"refusal_sound", fun f => ∀ text msg, f text = .error msg → ConfigRefusal text⟩ ]
+    [ ⟨"ok_valid_repo_config", fun f => ∀ json cfg, f json = .ok cfg → ValidConfigJson json cfg⟩
+    , ⟨"refusal_sound", fun f => ∀ json msg, f json = .error msg → ConfigRefusal json⟩ ]
   vocab :=
-    [ ⟨"ValidConfigJson", String × Config.RepoConfig, fun p => ValidConfigJson p.1 p.2⟩
-    , ⟨"ConfigRefusal", String, ConfigRefusal⟩ ]
+    [ ⟨"ValidConfigJson", Lean.Json × Config.RepoConfig, fun p => ValidConfigJson p.1 p.2⟩
+    , ⟨"ConfigRefusal", Lean.Json, ConfigRefusal⟩ ]
 
 def classifyFileRecord : IntentRecord ClassifyFileFn where
   shape := .function _ _
