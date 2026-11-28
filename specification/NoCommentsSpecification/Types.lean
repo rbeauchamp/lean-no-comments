@@ -41,7 +41,7 @@ abbrev MissingFromFn : Type :=
   Core.SortedFingerprints → Core.SortedFingerprints → Array String
 
 abbrev ParseConfigFn : Type :=
-  String → Except String Config.RepoConfig
+  Json → Except String Config.RepoConfig
 
 abbrev ClassifyFileFn : Type :=
   Config.RepoConfig → String → Except String Config.ClassifiedFile
@@ -53,7 +53,7 @@ abbrev AnalyzeCommentsFn : Type :=
   String → Array Core.Comment → RatchetCore.FileAnalysis
 
 abbrev ParseRatchetFn : Type :=
-  String → Except String (Std.HashMap String RatchetCore.RatchetEntry)
+  Json → Except String (Std.HashMap String RatchetCore.RatchetEntry)
 
 abbrev CheckExactSyncFn : Type :=
   RatchetCore.FileAnalysis → Option RatchetCore.RatchetEntry → Array String

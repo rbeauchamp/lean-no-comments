@@ -151,8 +151,7 @@ private def parseExcludeRule (idx : Nat) (j : Lean.Json) : Except String Exclude
     throw s!"{ctx}.reason must not be empty"
   return { prefix_, reason }
 
-def parseConfigJson (text : String) : Except String RepoConfig := do
-  let json ← Lean.Json.parse text
+def parseConfigJson (json : Lean.Json) : Except String RepoConfig := do
   let obj ← json.getObj?
   checkAllowedKeys "config" obj #["workspaces", "exclude", "ratchet"]
   let wsArr ← (← getRequiredField "config" obj "workspaces").getArr?

@@ -1515,11 +1515,10 @@ private theorem parseConfigRatchetSuffix_ok (obj : Std.TreeMap.Raw String Json c
         exact ⟨ratchetRaw, hratReq, hnorm, rfl, rfl⟩
     | _ => simp [Lean.Json.getStr?, throw, throwThe, MonadExceptOf.throw] at hok
 
-private theorem parseConfigRatchetSuffix_err (text msg : String)
+private theorem parseConfigRatchetSuffix_err (msg : String)
     (obj : Std.TreeMap.Raw String Json compare)
     (workspaces : Array NoComments.Config.WorkspaceConfig)
     (exclude : Array NoComments.Config.ExcludeRule)
-    (hparse : Json.parse text = .ok (Json.obj obj))
     (herr :
       (do
         let __do_lift ← NoComments.Config.getRequiredField "config" obj "ratchet"
@@ -1527,11 +1526,11 @@ private theorem parseConfigRatchetSuffix_err (text msg : String)
         let ratchet ← NoComments.Config.normalizeRelFile "config.ratchet" ratchetRaw
         pure ({ workspaces := workspaces, exclude := exclude, ratchet := ratchet } :
           NoComments.Config.RepoConfig)) = .error msg) :
-    ConfigSpec.ConfigRefusal text := by
+    ConfigSpec.ConfigRefusal (Json.obj obj) := by
   dsimp only [bind, Except.bind] at herr
   cases hratReq : NoComments.Config.getRequiredField "config" obj "ratchet" with
   | error e =>
-    exact ConfigRefusal.badRatchetField hparse fun raw out h _ => by
+    exact ConfigRefusal.badRatchetField rfl fun raw out h _ => by
       have hok := (getRequiredField_iff "config" obj "ratchet" (.str raw)).mpr h
       rw [hratReq] at hok
       cases hok
@@ -1545,7 +1544,7 @@ private theorem parseConfigRatchetSuffix_err (text msg : String)
       cases hnorm : NoComments.Config.normalizeRelFile "config.ratchet" ratRaw with
       | ok rat => rw [hnorm] at herr; cases herr
       | error e =>
-        exact ConfigRefusal.badRatchetField hparse fun raw out h hno => by
+        exact ConfigRefusal.badRatchetField rfl fun raw out h hno => by
           rw [hratReq] at h
           injection h with hs
           injection hs with hr
@@ -1554,177 +1553,171 @@ private theorem parseConfigRatchetSuffix_err (text msg : String)
           rw [hnorm] at hok
           cases hok
     | _ =>
-      exact ConfigRefusal.badRatchetField hparse fun raw out h _ => by
+      exact ConfigRefusal.badRatchetField rfl fun raw out h _ => by
         rw [hratReq] at h
         cases h
 
-theorem parseConfigJson_ok (text : String) (cfg : NoComments.Config.RepoConfig)
-    (hok : NoComments.Config.parseConfigJson text = .ok cfg) :
-    ConfigSpec.ValidConfigJson text cfg := by
+theorem parseConfigJson_ok (json : Json) (cfg : NoComments.Config.RepoConfig)
+    (hok : NoComments.Config.parseConfigJson json = .ok cfg) :
+    ConfigSpec.ValidConfigJson json cfg := by
   unfold NoComments.Config.parseConfigJson at hok
-  cases hparse : Json.parse text with
-  | error e =>
-    rw [hparse, except_bind_err] at hok
-    cases hok
-  | ok json =>
-    rw [hparse, except_bind_ok] at hok
-    cases json with
-    | obj obj =>
-      rw [show (Json.obj obj).getObj? = .ok obj from rfl, except_bind_ok] at hok
-      cases hkeys : NoComments.Config.checkAllowedKeys "config" obj #["workspaces", "exclude", "ratchet"] with
+  cases json with
+  | obj obj =>
+    rw [show (Json.obj obj).getObj? = .ok obj from rfl, except_bind_ok] at hok
+    cases hkeys : NoComments.Config.checkAllowedKeys "config" obj #["workspaces", "exclude", "ratchet"] with
+    | error e =>
+      rw [hkeys, except_bind_err] at hok
+      cases hok
+    | ok u =>
+      cases u
+      rw [hkeys, except_bind_ok] at hok
+      rw [checkAllowedKeys_iff] at hkeys
+      cases hwsReq : NoComments.Config.getRequiredField "config" obj "workspaces" with
       | error e =>
-        rw [hkeys, except_bind_err] at hok
+        rw [hwsReq, except_bind_err] at hok
         cases hok
-      | ok u =>
-        cases u
-        rw [hkeys, except_bind_ok] at hok
-        rw [checkAllowedKeys_iff] at hkeys
-        cases hwsReq : NoComments.Config.getRequiredField "config" obj "workspaces" with
-        | error e =>
-          rw [hwsReq, except_bind_err] at hok
-          cases hok
-        | ok wsJson =>
-          rw [hwsReq, except_bind_ok] at hok
-          rw [getRequiredField_iff] at hwsReq
-          cases wsJson with
-          | arr wsArr =>
-            rw [show (Json.arr wsArr).getArr? = .ok wsArr from rfl, except_bind_ok] at hok
-            by_cases hemp : wsArr.isEmpty = true
-            · simp only [hemp, ↓reduceIte, throw, throwThe, MonadExceptOf.throw,
-                except_bind_err] at hok
-              cases hok
-            · have hne_emp : wsArr.isEmpty = false := Bool.eq_false_iff.mpr hemp
-              have hws_pos : wsArr.size > 0 := by
-                rw [Array.isEmpty_iff] at hemp
-                have hne0 : wsArr.size ≠ 0 := fun h => hemp (Array.size_eq_zero_iff.mp h)
-                omega
-              simp only [hne_emp, Bool.false_eq_true, ↓reduceIte] at hok
-              have hokWs := parseConfigWorkspaces_extract wsArr _ _ _ hok (fun _ _ _ => rfl)
-              cases hloopWs :
-                  (forIn' (List.range' 0 wsArr.size 1)
-                    (Array.emptyWithCapacity wsArr.size, (#[] : Array String))
-                    fun idx h state => do
-                      let ws ← NoComments.Config.parseWorkspace idx (wsArr[idx]'(range'_zero_mem h))
-                      if state.2.contains ws.dir then
-                        throw s!"duplicate workspace dir '{ws.dir}' in config.workspaces"
-                      let seen' := state.2.push ws.dir
-                      let ws' := state.1.push ws
-                      return ForInStep.yield (ws', seen')) with
-              | error e =>
-                rw [hloopWs, except_bind_err] at hokWs
-                cases hokWs
-              | ok stateWs =>
-                have hspecWs := workspacesLoop_ok_or_err wsArr (List.range' 0 wsArr.size 1)
-                  (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity wsArr.size) #[]
-                  (by simp [Array.emptyWithCapacity])
-                  (by simp [Array.emptyWithCapacity]) (by simp)
-                rw [hloopWs] at hspecWs
-                rcases hspecWs with ⟨addedWs, haddedLen, haddedIdx, hwsList, hseenList, hnodup⟩
-                rw [hloopWs, except_bind_ok] at hokWs
-                have hwsEmptyList :
-                    (Array.emptyWithCapacity (α := NoComments.Config.WorkspaceConfig) wsArr.size).toList = [] := by
-                  simp [Array.emptyWithCapacity]
-                have hwsList' : stateWs.1.toList = addedWs := by
-                  simpa [hwsEmptyList] using hwsList
-                have hwsSize : stateWs.1.size = wsArr.size := by
-                  rw [← Array.length_toList, hwsList', haddedLen, List.length_range']
-                have hwsNodup : (stateWs.1.toList.map (·.dir)).Nodup := by
-                  have hseen' : stateWs.2.toList = stateWs.1.toList.map (·.dir) := by
-                    simpa [hwsList', hwsEmptyList] using hseenList
-                  rwa [← hseen']
-                have hwsIdxValid :
-                    ∀ (i : Nat) (_h : i < wsArr.size),
-                      ∃ (_hc : i < stateWs.1.size), ConfigSpec.ValidWorkspaceJson wsArr[i] stateWs.1[i] := by
-                  intro i hi
-                  have hiRange : i < (List.range' 0 wsArr.size 1).length := by simp [hi]
-                  rcases haddedIdx i hiRange with ⟨ha, hpk⟩
-                  have hgi : (List.range' 0 wsArr.size 1)[i] = i := range'_zero_getElem _ _ hiRange
-                  have hc : i < stateWs.1.size := by omega
-                  refine ⟨hc, ?_⟩
-                  have hel : stateWs.1[i] = addedWs[i] := by
-                    rw [← Array.getElem_toList]
-                    simp [hwsList']
-                  rw [hel]
-                  rw [parseWorkspace_iff] at hpk
-                  simpa [hgi] using hpk
-                cases hopt : obj.get? "exclude" with
-                | none =>
-                  rw [hopt] at hokWs
-                  rw [show (pure #[] : Except String (Array NoComments.Config.ExcludeRule)) = .ok #[] from rfl,
-                    except_bind_ok] at hokWs
+      | ok wsJson =>
+        rw [hwsReq, except_bind_ok] at hok
+        rw [getRequiredField_iff] at hwsReq
+        cases wsJson with
+        | arr wsArr =>
+          rw [show (Json.arr wsArr).getArr? = .ok wsArr from rfl, except_bind_ok] at hok
+          by_cases hemp : wsArr.isEmpty = true
+          · simp only [hemp, ↓reduceIte, throw, throwThe, MonadExceptOf.throw,
+              except_bind_err] at hok
+            cases hok
+          · have hne_emp : wsArr.isEmpty = false := Bool.eq_false_iff.mpr hemp
+            have hws_pos : wsArr.size > 0 := by
+              rw [Array.isEmpty_iff] at hemp
+              have hne0 : wsArr.size ≠ 0 := fun h => hemp (Array.size_eq_zero_iff.mp h)
+              omega
+            simp only [hne_emp, Bool.false_eq_true, ↓reduceIte] at hok
+            have hokWs := parseConfigWorkspaces_extract wsArr _ _ _ hok (fun _ _ _ => rfl)
+            cases hloopWs :
+                (forIn' (List.range' 0 wsArr.size 1)
+                  (Array.emptyWithCapacity wsArr.size, (#[] : Array String))
+                  fun idx h state => do
+                    let ws ← NoComments.Config.parseWorkspace idx (wsArr[idx]'(range'_zero_mem h))
+                    if state.2.contains ws.dir then
+                      throw s!"duplicate workspace dir '{ws.dir}' in config.workspaces"
+                    let seen' := state.2.push ws.dir
+                    let ws' := state.1.push ws
+                    return ForInStep.yield (ws', seen')) with
+            | error e =>
+              rw [hloopWs, except_bind_err] at hokWs
+              cases hokWs
+            | ok stateWs =>
+              have hspecWs := workspacesLoop_ok_or_err wsArr (List.range' 0 wsArr.size 1)
+                (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity wsArr.size) #[]
+                (by simp [Array.emptyWithCapacity])
+                (by simp [Array.emptyWithCapacity]) (by simp)
+              rw [hloopWs] at hspecWs
+              rcases hspecWs with ⟨addedWs, haddedLen, haddedIdx, hwsList, hseenList, hnodup⟩
+              rw [hloopWs, except_bind_ok] at hokWs
+              have hwsEmptyList :
+                  (Array.emptyWithCapacity (α := NoComments.Config.WorkspaceConfig) wsArr.size).toList = [] := by
+                simp [Array.emptyWithCapacity]
+              have hwsList' : stateWs.1.toList = addedWs := by
+                simpa [hwsEmptyList] using hwsList
+              have hwsSize : stateWs.1.size = wsArr.size := by
+                rw [← Array.length_toList, hwsList', haddedLen, List.length_range']
+              have hwsNodup : (stateWs.1.toList.map (·.dir)).Nodup := by
+                have hseen' : stateWs.2.toList = stateWs.1.toList.map (·.dir) := by
+                  simpa [hwsList', hwsEmptyList] using hseenList
+                rwa [← hseen']
+              have hwsIdxValid :
+                  ∀ (i : Nat) (_h : i < wsArr.size),
+                    ∃ (_hc : i < stateWs.1.size), ConfigSpec.ValidWorkspaceJson wsArr[i] stateWs.1[i] := by
+                intro i hi
+                have hiRange : i < (List.range' 0 wsArr.size 1).length := by simp [hi]
+                rcases haddedIdx i hiRange with ⟨ha, hpk⟩
+                have hgi : (List.range' 0 wsArr.size 1)[i] = i := range'_zero_getElem _ _ hiRange
+                have hc : i < stateWs.1.size := by omega
+                refine ⟨hc, ?_⟩
+                have hel : stateWs.1[i] = addedWs[i] := by
+                  rw [← Array.getElem_toList]
+                  simp [hwsList']
+                rw [hel]
+                rw [parseWorkspace_iff] at hpk
+                simpa [hgi] using hpk
+              cases hopt : obj.get? "exclude" with
+              | none =>
+                rw [hopt] at hokWs
+                rw [show (pure #[] : Except String (Array NoComments.Config.ExcludeRule)) = .ok #[] from rfl,
+                  except_bind_ok] at hokWs
+                dsimp only at hokWs
+                rcases parseConfigRatchetSuffix_ok obj stateWs.1 #[] cfg hokWs with
+                  ⟨ratchetRaw, hratReq, hnorm, hwsEq, hexEq⟩
+                refine ⟨obj, wsArr, ratchetRaw, rfl, hkeys, hwsReq, hws_pos, ?_, ?_, ?_,
+                  ?_, hratReq, hnorm⟩
+                · simpa [hwsEq] using hwsSize
+                · simpa [hwsEq] using hwsIdxValid
+                · simpa [hwsEq] using hwsNodup
+                · simp [hopt, hexEq]
+              | some v =>
+                rw [hopt] at hokWs
+                cases v with
+                | arr exclArr =>
                   dsimp only at hokWs
-                  rcases parseConfigRatchetSuffix_ok obj stateWs.1 #[] cfg hokWs with
-                    ⟨ratchetRaw, hratReq, hnorm, hwsEq, hexEq⟩
-                  refine ⟨obj, wsArr, ratchetRaw, hparse, hkeys, hwsReq, hws_pos, ?_, ?_, ?_,
-                    ?_, hratReq, hnorm⟩
-                  · simpa [hwsEq] using hwsSize
-                  · simpa [hwsEq] using hwsIdxValid
-                  · simpa [hwsEq] using hwsNodup
-                  · simp [hopt, hexEq]
-                | some v =>
-                  rw [hopt] at hokWs
-                  cases v with
-                  | arr exclArr =>
-                    dsimp only at hokWs
-                    rw [show (Json.arr exclArr).getArr? = .ok exclArr from rfl, except_bind_ok] at hokWs
-                    have hokEx := parseConfigExclude_extract exclArr _ _ _ hokWs
-                      (fun idx h __s => rfl)
-                    cases hloopEx :
-                        (forIn' (List.range' 0 exclArr.size 1) (Array.emptyWithCapacity exclArr.size)
-                          fun idx h rules => do
-                            return ForInStep.yield
-                              (rules.push (← NoComments.Config.parseExcludeRule idx
-                                (exclArr[idx]'(range'_zero_mem h))))) with
-                    | error e =>
-                      rw [hloopEx, except_bind_err] at hokEx
-                      cases hokEx
-                    | ok rules =>
-                      have hspecEx := excludeLoop_ok_or_err exclArr (List.range' 0 exclArr.size 1)
-                        (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity exclArr.size)
-                      rw [hloopEx] at hspecEx
-                      rcases hspecEx with ⟨addedEx, hlenEx, hidxEx, hlistEx⟩
-                      rw [hloopEx, except_bind_ok] at hokEx
-                      rw [show (pure rules : Except String (Array NoComments.Config.ExcludeRule)) = .ok rules from rfl,
-                        except_bind_ok] at hokEx
-                      have hexEmpty :
-                          (Array.emptyWithCapacity (α := NoComments.Config.ExcludeRule) exclArr.size).toList = [] := by
-                        simp [Array.emptyWithCapacity]
-                      have hlistEx' : rules.toList = addedEx := by
-                        simpa [hexEmpty] using hlistEx
-                      have hszEx : rules.size = exclArr.size := by
-                        rw [← Array.length_toList, hlistEx', hlenEx, List.length_range']
-                      have hexIdxValid :
-                          ∀ (i : Nat) (_h : i < exclArr.size),
-                            ∃ (_hc : i < rules.size), ConfigSpec.ValidExcludeJson exclArr[i] rules[i] := by
-                        intro i hi
-                        have hiRange : i < (List.range' 0 exclArr.size 1).length := by simp [hi]
-                        rcases hidxEx i hiRange with ⟨ha, hpk⟩
-                        have hgi : (List.range' 0 exclArr.size 1)[i] = i := range'_zero_getElem _ _ hiRange
-                        have hc : i < rules.size := by omega
-                        refine ⟨hc, ?_⟩
-                        have hel : rules[i] = addedEx[i] := by
-                          rw [← Array.getElem_toList]
-                          simp [hlistEx']
-                        rw [hel]
-                        rw [parseExcludeRule_iff] at hpk
-                        simpa [hgi] using hpk
-                      rcases parseConfigRatchetSuffix_ok obj stateWs.1 rules cfg hokEx with
-                        ⟨ratchetRaw, hratReq, hnorm, hwsEq, hexEq⟩
-                      refine ⟨obj, wsArr, ratchetRaw, hparse, hkeys, hwsReq, hws_pos, ?_, ?_, ?_,
-                        ?_, hratReq, hnorm⟩
-                      · simpa [hwsEq] using hwsSize
-                      · simpa [hwsEq] using hwsIdxValid
-                      · simpa [hwsEq] using hwsNodup
-                      · rw [hopt]
-                        refine ⟨?_, ?_⟩
-                        · simpa [hexEq] using hszEx
-                        · simpa [hexEq] using hexIdxValid
-                  | _ =>
-                    simp [Lean.Json.getArr?, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hokWs
-          | _ =>
-            simp [Lean.Json.getArr?, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hok
-    | _ =>
-      simp [Lean.Json.getObj?, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hok
+                  rw [show (Json.arr exclArr).getArr? = .ok exclArr from rfl, except_bind_ok] at hokWs
+                  have hokEx := parseConfigExclude_extract exclArr _ _ _ hokWs
+                    (fun idx h __s => rfl)
+                  cases hloopEx :
+                      (forIn' (List.range' 0 exclArr.size 1) (Array.emptyWithCapacity exclArr.size)
+                        fun idx h rules => do
+                          return ForInStep.yield
+                            (rules.push (← NoComments.Config.parseExcludeRule idx
+                              (exclArr[idx]'(range'_zero_mem h))))) with
+                  | error e =>
+                    rw [hloopEx, except_bind_err] at hokEx
+                    cases hokEx
+                  | ok rules =>
+                    have hspecEx := excludeLoop_ok_or_err exclArr (List.range' 0 exclArr.size 1)
+                      (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity exclArr.size)
+                    rw [hloopEx] at hspecEx
+                    rcases hspecEx with ⟨addedEx, hlenEx, hidxEx, hlistEx⟩
+                    rw [hloopEx, except_bind_ok] at hokEx
+                    rw [show (pure rules : Except String (Array NoComments.Config.ExcludeRule)) = .ok rules from rfl,
+                      except_bind_ok] at hokEx
+                    have hexEmpty :
+                        (Array.emptyWithCapacity (α := NoComments.Config.ExcludeRule) exclArr.size).toList = [] := by
+                      simp [Array.emptyWithCapacity]
+                    have hlistEx' : rules.toList = addedEx := by
+                      simpa [hexEmpty] using hlistEx
+                    have hszEx : rules.size = exclArr.size := by
+                      rw [← Array.length_toList, hlistEx', hlenEx, List.length_range']
+                    have hexIdxValid :
+                        ∀ (i : Nat) (_h : i < exclArr.size),
+                          ∃ (_hc : i < rules.size), ConfigSpec.ValidExcludeJson exclArr[i] rules[i] := by
+                      intro i hi
+                      have hiRange : i < (List.range' 0 exclArr.size 1).length := by simp [hi]
+                      rcases hidxEx i hiRange with ⟨ha, hpk⟩
+                      have hgi : (List.range' 0 exclArr.size 1)[i] = i := range'_zero_getElem _ _ hiRange
+                      have hc : i < rules.size := by omega
+                      refine ⟨hc, ?_⟩
+                      have hel : rules[i] = addedEx[i] := by
+                        rw [← Array.getElem_toList]
+                        simp [hlistEx']
+                      rw [hel]
+                      rw [parseExcludeRule_iff] at hpk
+                      simpa [hgi] using hpk
+                    rcases parseConfigRatchetSuffix_ok obj stateWs.1 rules cfg hokEx with
+                      ⟨ratchetRaw, hratReq, hnorm, hwsEq, hexEq⟩
+                    refine ⟨obj, wsArr, ratchetRaw, rfl, hkeys, hwsReq, hws_pos, ?_, ?_, ?_,
+                      ?_, hratReq, hnorm⟩
+                    · simpa [hwsEq] using hwsSize
+                    · simpa [hwsEq] using hwsIdxValid
+                    · simpa [hwsEq] using hwsNodup
+                    · rw [hopt]
+                      refine ⟨?_, ?_⟩
+                      · simpa [hexEq] using hszEx
+                      · simpa [hexEq] using hexIdxValid
+                | _ =>
+                  simp [Lean.Json.getArr?, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hokWs
+        | _ =>
+          simp [Lean.Json.getArr?, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hok
+  | _ =>
+    simp [Lean.Json.getObj?, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hok
 
 private theorem exists_not_mem_of_not_forall (l : List (String × Json)) (allowed : List String)
     (hnot : ¬ ∀ kv ∈ l, kv.1 ∈ allowed) :
@@ -1738,129 +1731,124 @@ private theorem exists_not_mem_of_not_forall (l : List (String × Json)) (allowe
       exact ⟨x, List.mem_cons_of_mem kv hx, hxn⟩
     · exact ⟨kv, List.mem_cons_self .., h⟩
 
-theorem parseConfigJson_err (text msg : String)
-    (herr : NoComments.Config.parseConfigJson text = .error msg) :
-    ConfigSpec.ConfigRefusal text := by
+theorem parseConfigJson_err (json : Json) (msg : String)
+    (herr : NoComments.Config.parseConfigJson json = .error msg) :
+    ConfigSpec.ConfigRefusal json := by
   unfold NoComments.Config.parseConfigJson at herr
-  cases hparse : Json.parse text with
-  | error e =>
-    exact ConfigRefusal.badJson fun j h => by rw [hparse] at h; cases h
-  | ok json =>
-    rw [hparse, except_bind_ok] at herr
-    cases json with
-    | obj obj =>
-      rw [show (Json.obj obj).getObj? = .ok obj from rfl, except_bind_ok] at herr
-      cases hkeys : NoComments.Config.checkAllowedKeys "config" obj #["workspaces", "exclude", "ratchet"] with
+  cases json with
+  | obj obj =>
+    rw [show (Json.obj obj).getObj? = .ok obj from rfl, except_bind_ok] at herr
+    cases hkeys : NoComments.Config.checkAllowedKeys "config" obj #["workspaces", "exclude", "ratchet"] with
+    | error e =>
+      have hnot : ¬ ∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"] := fun h => by
+        have hok := (checkAllowedKeys_iff "config" obj #["workspaces", "exclude", "ratchet"]).mpr h
+        rw [hkeys] at hok
+        cases hok
+      rcases exists_not_mem_of_not_forall obj.toList ["workspaces", "exclude", "ratchet"] hnot with
+        ⟨⟨k, v⟩, hkv, hk⟩
+      exact ConfigRefusal.unknownRootKey rfl hkv hk
+    | ok u =>
+      cases u
+      rw [hkeys, except_bind_ok] at herr
+      cases hwsReq : NoComments.Config.getRequiredField "config" obj "workspaces" with
       | error e =>
-        have hnot : ¬ ∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"] := fun h => by
-          have hok := (checkAllowedKeys_iff "config" obj #["workspaces", "exclude", "ratchet"]).mpr h
-          rw [hkeys] at hok
+        exact ConfigRefusal.badWorkspacesField rfl fun wsArr h => by
+          have hok := (getRequiredField_iff "config" obj "workspaces" (.arr wsArr)).mpr h
+          rw [hwsReq] at hok
           cases hok
-        rcases exists_not_mem_of_not_forall obj.toList ["workspaces", "exclude", "ratchet"] hnot with
-          ⟨⟨k, v⟩, hkv, hk⟩
-        exact ConfigRefusal.unknownRootKey hparse hkv hk
-      | ok u =>
-        cases u
-        rw [hkeys, except_bind_ok] at herr
-        cases hwsReq : NoComments.Config.getRequiredField "config" obj "workspaces" with
-        | error e =>
-          exact ConfigRefusal.badWorkspacesField hparse fun wsArr h => by
-            have hok := (getRequiredField_iff "config" obj "workspaces" (.arr wsArr)).mpr h
-            rw [hwsReq] at hok
-            cases hok
-        | ok wsJson =>
-          rw [hwsReq, except_bind_ok] at herr
-          rw [getRequiredField_iff] at hwsReq
-          cases wsJson with
-          | arr wsArr =>
-            rw [show (Json.arr wsArr).getArr? = .ok wsArr from rfl, except_bind_ok] at herr
-            by_cases hemp : wsArr.isEmpty = true
-            · exact ConfigRefusal.badWorkspacesField hparse fun wsArr' h => by
-                rw [hwsReq] at h
-                injection h with hw
-                injection hw with ha
-                subst ha
-                rw [Array.isEmpty_iff] at hemp
-                exact Array.size_eq_zero_iff.mpr hemp
-            · have hne_emp : wsArr.isEmpty = false := Bool.eq_false_iff.mpr hemp
-              simp only [hne_emp, Bool.false_eq_true, ↓reduceIte] at herr
-              have herrWs := parseConfigWorkspaces_extract wsArr _ _ _ herr (fun _ _ _ => rfl)
-              cases hloopWs :
-                  (forIn' (List.range' 0 wsArr.size 1)
-                    (Array.emptyWithCapacity wsArr.size, (#[] : Array String))
-                    fun idx h state => do
-                      let ws ← NoComments.Config.parseWorkspace idx (wsArr[idx]'(range'_zero_mem h))
-                      if state.2.contains ws.dir then
-                        throw s!"duplicate workspace dir '{ws.dir}' in config.workspaces"
-                      let seen' := state.2.push ws.dir
-                      let ws' := state.1.push ws
-                      return ForInStep.yield (ws', seen')) with
-              | error e =>
-                have hspecWs := workspacesLoop_ok_or_err wsArr (List.range' 0 wsArr.size 1)
-                  (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity wsArr.size) #[]
-                  (by simp [Array.emptyWithCapacity])
-                  (by simp [Array.emptyWithCapacity]) (by simp)
-                rw [hloopWs] at hspecWs
-                rcases hspecWs with ⟨k, hk, hbadWs⟩ | ⟨ws', k, hk, _, prev, hprev, _⟩ |
-                    ⟨k1, k2, hk1, hk2, ws1, ws2, hne, hv1, hv2, hdir⟩
-                · have hk' : k < wsArr.size := by simpa using hk
-                  have hgi : (List.range' 0 wsArr.size 1)[k] = k := range'_zero_getElem _ _ hk
-                  dsimp only at hbadWs
-                  exact ConfigRefusal.invalidWorkspace hk' hparse hwsReq
-                    (by simpa [hgi] using hbadWs)
-                · simp [Array.emptyWithCapacity] at hprev
-                · have hk1' : k1 < wsArr.size := by simpa using hk1
-                  have hk2' : k2 < wsArr.size := by simpa using hk2
-                  have hg1 : (List.range' 0 wsArr.size 1)[k1] = k1 := range'_zero_getElem _ _ hk1
-                  have hg2 : (List.range' 0 wsArr.size 1)[k2] = k2 := range'_zero_getElem _ _ hk2
-                  exact ConfigRefusal.duplicateWorkspaceDir hk1' hk2' hparse hwsReq hne
-                    (by simpa [hg1] using hv1) (by simpa [hg2] using hv2) hdir
-              | ok stateWs =>
-                rw [hloopWs, except_bind_ok] at herrWs
-                cases hopt : obj.get? "exclude" with
-                | none =>
-                  rw [hopt] at herrWs
-                  rw [show (pure #[] : Except String (Array NoComments.Config.ExcludeRule)) = .ok #[] from rfl,
-                    except_bind_ok] at herrWs
-                  dsimp only at herrWs
-                  exact parseConfigRatchetSuffix_err text msg obj stateWs.1 #[] hparse herrWs
-                | some v =>
-                  rw [hopt] at herrWs
-                  cases v with
-                  | arr exclArr =>
-                    dsimp only at herrWs
-                    rw [show (Json.arr exclArr).getArr? = .ok exclArr from rfl, except_bind_ok] at herrWs
-                    have herrEx := parseConfigExclude_extract exclArr _ _ _ herrWs
-                      (fun idx h __s => rfl)
-                    have hspecEx := excludeLoop_ok_or_err exclArr (List.range' 0 exclArr.size 1)
-                      (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity exclArr.size)
-                    cases hloopEx :
-                        (forIn' (List.range' 0 exclArr.size 1) (Array.emptyWithCapacity exclArr.size)
-                          fun idx h rules => do
-                            return ForInStep.yield
-                              (rules.push (← NoComments.Config.parseExcludeRule idx
-                                (exclArr[idx]'(range'_zero_mem h))))) with
-                    | ok rules =>
-                      rw [hloopEx, except_bind_ok] at herrEx
-                      rw [show (pure rules : Except String (Array NoComments.Config.ExcludeRule)) = .ok rules from rfl,
-                        except_bind_ok] at herrEx
-                      exact parseConfigRatchetSuffix_err text msg obj stateWs.1 rules hparse herrEx
-                    | error e'' =>
-                      rw [hloopEx] at hspecEx
-                      rcases hspecEx with ⟨k, hk, hbadEx⟩
-                      have hk' : k < exclArr.size := by simpa using hk
-                      have hgi : (List.range' 0 exclArr.size 1)[k] = k := range'_zero_getElem _ _ hk
-                      dsimp only at hbadEx
-                      exact ConfigRefusal.invalidExcludeRule hk' hparse hopt
-                        (by simpa [hgi] using hbadEx)
-                  | _ =>
-                    exact ConfigRefusal.badExcludeField hparse hopt fun arr h => by cases h
-          | _ =>
-            exact ConfigRefusal.badWorkspacesField hparse fun wsArr h => by
+      | ok wsJson =>
+        rw [hwsReq, except_bind_ok] at herr
+        rw [getRequiredField_iff] at hwsReq
+        cases wsJson with
+        | arr wsArr =>
+          rw [show (Json.arr wsArr).getArr? = .ok wsArr from rfl, except_bind_ok] at herr
+          by_cases hemp : wsArr.isEmpty = true
+          · exact ConfigRefusal.badWorkspacesField rfl fun wsArr' h => by
               rw [hwsReq] at h
-              cases h
-    | _ =>
-      exact ConfigRefusal.notObject hparse fun obj h => by cases h
+              injection h with hw
+              injection hw with ha
+              subst ha
+              rw [Array.isEmpty_iff] at hemp
+              exact Array.size_eq_zero_iff.mpr hemp
+          · have hne_emp : wsArr.isEmpty = false := Bool.eq_false_iff.mpr hemp
+            simp only [hne_emp, Bool.false_eq_true, ↓reduceIte] at herr
+            have herrWs := parseConfigWorkspaces_extract wsArr _ _ _ herr (fun _ _ _ => rfl)
+            cases hloopWs :
+                (forIn' (List.range' 0 wsArr.size 1)
+                  (Array.emptyWithCapacity wsArr.size, (#[] : Array String))
+                  fun idx h state => do
+                    let ws ← NoComments.Config.parseWorkspace idx (wsArr[idx]'(range'_zero_mem h))
+                    if state.2.contains ws.dir then
+                      throw s!"duplicate workspace dir '{ws.dir}' in config.workspaces"
+                    let seen' := state.2.push ws.dir
+                    let ws' := state.1.push ws
+                    return ForInStep.yield (ws', seen')) with
+            | error e =>
+              have hspecWs := workspacesLoop_ok_or_err wsArr (List.range' 0 wsArr.size 1)
+                (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity wsArr.size) #[]
+                (by simp [Array.emptyWithCapacity])
+                (by simp [Array.emptyWithCapacity]) (by simp)
+              rw [hloopWs] at hspecWs
+              rcases hspecWs with ⟨k, hk, hbadWs⟩ | ⟨ws', k, hk, _, prev, hprev, _⟩ |
+                  ⟨k1, k2, hk1, hk2, ws1, ws2, hne, hv1, hv2, hdir⟩
+              · have hk' : k < wsArr.size := by simpa using hk
+                have hgi : (List.range' 0 wsArr.size 1)[k] = k := range'_zero_getElem _ _ hk
+                dsimp only at hbadWs
+                exact ConfigRefusal.invalidWorkspace hk' rfl hwsReq
+                  (by simpa [hgi] using hbadWs)
+              · simp [Array.emptyWithCapacity] at hprev
+              · have hk1' : k1 < wsArr.size := by simpa using hk1
+                have hk2' : k2 < wsArr.size := by simpa using hk2
+                have hg1 : (List.range' 0 wsArr.size 1)[k1] = k1 := range'_zero_getElem _ _ hk1
+                have hg2 : (List.range' 0 wsArr.size 1)[k2] = k2 := range'_zero_getElem _ _ hk2
+                exact ConfigRefusal.duplicateWorkspaceDir hk1' hk2' rfl hwsReq hne
+                  (by simpa [hg1] using hv1) (by simpa [hg2] using hv2) hdir
+            | ok stateWs =>
+              rw [hloopWs, except_bind_ok] at herrWs
+              cases hopt : obj.get? "exclude" with
+              | none =>
+                rw [hopt] at herrWs
+                rw [show (pure #[] : Except String (Array NoComments.Config.ExcludeRule)) = .ok #[] from rfl,
+                  except_bind_ok] at herrWs
+                dsimp only at herrWs
+                exact parseConfigRatchetSuffix_err msg obj stateWs.1 #[] herrWs
+              | some v =>
+                rw [hopt] at herrWs
+                cases v with
+                | arr exclArr =>
+                  dsimp only at herrWs
+                  rw [show (Json.arr exclArr).getArr? = .ok exclArr from rfl, except_bind_ok] at herrWs
+                  have herrEx := parseConfigExclude_extract exclArr _ _ _ herrWs
+                    (fun idx h __s => rfl)
+                  have hspecEx := excludeLoop_ok_or_err exclArr (List.range' 0 exclArr.size 1)
+                    (fun _ h => range'_zero_mem h) (Array.emptyWithCapacity exclArr.size)
+                  cases hloopEx :
+                      (forIn' (List.range' 0 exclArr.size 1) (Array.emptyWithCapacity exclArr.size)
+                        fun idx h rules => do
+                          return ForInStep.yield
+                            (rules.push (← NoComments.Config.parseExcludeRule idx
+                              (exclArr[idx]'(range'_zero_mem h))))) with
+                  | ok rules =>
+                    rw [hloopEx, except_bind_ok] at herrEx
+                    rw [show (pure rules : Except String (Array NoComments.Config.ExcludeRule)) = .ok rules from rfl,
+                      except_bind_ok] at herrEx
+                    exact parseConfigRatchetSuffix_err msg obj stateWs.1 rules herrEx
+                  | error e'' =>
+                    rw [hloopEx] at hspecEx
+                    rcases hspecEx with ⟨k, hk, hbadEx⟩
+                    have hk' : k < exclArr.size := by simpa using hk
+                    have hgi : (List.range' 0 exclArr.size 1)[k] = k := range'_zero_getElem _ _ hk
+                    dsimp only at hbadEx
+                    exact ConfigRefusal.invalidExcludeRule hk' rfl hopt
+                      (by simpa [hgi] using hbadEx)
+                | _ =>
+                  exact ConfigRefusal.badExcludeField rfl hopt fun arr h => by cases h
+        | _ =>
+          exact ConfigRefusal.badWorkspacesField rfl fun wsArr h => by
+            rw [hwsReq] at h
+            cases h
+  | _ =>
+    exact ConfigRefusal.notObject fun obj h => by cases h
 
 theorem parseConfigJson_meets :
     parseConfigRecord.Meets NoComments.Config.parseConfigJson := by

@@ -16,7 +16,7 @@ def loadCurrentRatchet (repoRoot : System.FilePath) (ratchetRel : String) :
   unless real == path do
     throw <| IO.userError s!"ratchet path must not be a symlink: {path}"
   let content ← IO.FS.readFile path
-  match RatchetCore.parseRatchetJson content with
+  match Lean.Json.parse content >>= RatchetCore.parseRatchetJson with
   | .ok m => return m
   | .error e => throw <| IO.userError s!"invalid ratchet file {path}: {e}"
 
@@ -93,7 +93,7 @@ def resolveBaseRatchet (repoRoot : System.FilePath) (ratchetRel : String)
   let (showCode, showOut, showErr) ← runGit repoRoot #["show", s!"{baseSha}:{ratchetRel}"]
   if showCode != 0 then
     throw <| IO.userError s!"git show {baseSha}:{ratchetRel} failed: {showErr.trimAscii.toString}"
-  match RatchetCore.parseRatchetJson showOut with
+  match Lean.Json.parse showOut >>= RatchetCore.parseRatchetJson with
   | .ok m => return (baseSha, some m)
   | .error e => throw <| IO.userError s!"invalid base ratchet at {baseSha}:{ratchetRel}: {e}"
 

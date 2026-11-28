@@ -27,29 +27,28 @@ def ValidRatchetEntryJson (j : Json) (e : RatchetCore.RatchetEntry) : Prop :=
     e.fingerprints.values.size = e.comments ∧
     (∀ fp ∈ e.fingerprints.values.toList, CoreSpec.IsFingerprint fp)
 
-def ValidRatchetJson (text : String) (m : Std.HashMap String RatchetCore.RatchetEntry) : Prop :=
+def ValidRatchetJson (json : Json) (m : Std.HashMap String RatchetCore.RatchetEntry) : Prop :=
   ∃ arr, ∃ entries : List RatchetCore.RatchetEntry,
-    Json.parse text = .ok (Json.arr arr) ∧
+    json = Json.arr arr ∧
     entries.length = arr.size ∧
     (∀ (i : Nat) (_h : i < arr.size),
       ∃ (_he : i < entries.length), ValidRatchetEntryJson arr[i] entries[i]) ∧
     (entries.map (·.file)).Nodup ∧
     (∀ k, m[k]? = entries.find? (·.file == k))
 
-inductive RatchetRefusal (text : String) : Prop where
-  | badJson : (∀ j, Json.parse text ≠ .ok j) → RatchetRefusal text
-  | notArray {j} : Json.parse text = .ok j → (∀ arr, j ≠ Json.arr arr) → RatchetRefusal text
+inductive RatchetRefusal (json : Json) : Prop where
+  | notArray : (∀ arr, json ≠ Json.arr arr) → RatchetRefusal json
   | invalidEntry {arr i} (hi : i < arr.size) :
-      Json.parse text = .ok (Json.arr arr) →
+      json = Json.arr arr →
       (∀ e, ¬ ValidRatchetEntryJson arr[i] e) →
-      RatchetRefusal text
+      RatchetRefusal json
   | duplicateFile {arr i j e1 e2} (hi : i < arr.size) (hj : j < arr.size) :
-      Json.parse text = .ok (Json.arr arr) →
+      json = Json.arr arr →
       i ≠ j →
       ValidRatchetEntryJson arr[i] e1 →
       ValidRatchetEntryJson arr[j] e2 →
       e1.file = e2.file →
-      RatchetRefusal text
+      RatchetRefusal json
 
 def AnalyzeCommentsSpec (file : String) (comments : Array Core.Comment)
     (out : RatchetCore.FileAnalysis) : Prop :=

@@ -567,24 +567,24 @@ def missingFromExplained : Explanation missingFromRecord where
 
 theorem parseConfig_healthy_entailment :
     ∀ f : ParseConfigFn, parseConfigRecord.Meets f →
-      ∀ text, Healthy.ConfigText text → ∃ cfg, f text = .ok cfg :=
-  fun f hf text hh => parseConfig_healthy_owed f text hf hh
+      ∀ json, Healthy.ConfigJson json → ∃ cfg, f json = .ok cfg :=
+  fun f hf json hh => parseConfig_healthy_owed f json hf hh
 
 theorem parseConfig_allows_custom_error :
     ∃ f : ParseConfigFn, parseConfigRecord.Meets f ∧
-      ((∀ j, Json.parse "" ≠ .ok j) → f "" = .error "denied") := by
-  refine ⟨parseConfigModelWith "denied", parseConfigModelWith_meets "denied", fun hempty => ?_⟩
-  have hna : ¬ ∃ cfg, ValidConfigJson "" cfg := by
+      f Json.null = .error "denied" := by
+  refine ⟨parseConfigModelWith "denied", parseConfigModelWith_meets "denied", ?_⟩
+  have hna : ¬ ∃ cfg, ValidConfigJson Json.null cfg := by
     rintro ⟨cfg, hv⟩
-    exact validConfigJson_and_refusal_disjoint hv (.badJson hempty)
+    exact validConfigJson_and_refusal_disjoint hv (.notObject fun _ h => by cases h)
   dsimp [parseConfigModelWith]
   simp [hna]
 
 def parseConfigExplained : Explanation parseConfigRecord where
   shape :=
-    { requires := "parseConfigJson is a total pure function from String to Except String RepoConfig."
+    { requires := "parseConfigJson is a total pure function from Json to Except String RepoConfig."
       rulesOut := "Any subject with external side effects, partiality, or another signature."
-      allows := "Every pure function of type String -> Except String RepoConfig until restricted by properties."
+      allows := "Every pure function of type Json -> Except String RepoConfig until restricted by properties."
       freedom := "Only fixes the pure function signature." }
   dom := []
   props := [
@@ -607,20 +607,20 @@ def parseConfigExplained : Explanation parseConfigRecord where
       freedom := "Disjoint complement of ValidConfigJson." } ]
   restatement := ownerStanding
   consequences := [
-    { consequence := ⟨"succeeds on every healthy configuration string", .entailment,
-        fun f => ∀ text, Healthy.ConfigText text → ∃ cfg, f text = .ok cfg⟩
+    { consequence := ⟨"succeeds on every healthy configuration JSON value", .entailment,
+        fun f => ∀ json, Healthy.ConfigJson json → ∃ cfg, f json = .ok cfg⟩
       holds := parseConfig_healthy_entailment
       gloss :=
-        { requires := "Any valid healthy config parses to .ok cfg."
+        { requires := "Any valid healthy config JSON value decodes to .ok cfg."
           rulesOut := "False config rejections."
-          allows := "Any schema-compliant parser."
-          freedom := "Success guaranteed on healthy config text." }
+          allows := "Any schema-compliant decoder."
+          freedom := "Success guaranteed on healthy config JSON." }
       settled := .derived },
-    { consequence := ⟨"leaves refusal error wording free on malformed JSON", .possibility,
-        fun f => (∀ j, Json.parse "" ≠ .ok j) → f "" = .error "denied"⟩
+    { consequence := ⟨"leaves refusal error wording free on invalid config JSON", .possibility,
+        fun f => f Json.null = .error "denied"⟩
       holds := parseConfig_allows_custom_error
       gloss :=
-        { requires := "Some conforming config parser returns \"denied\" on unparseable empty input."
+        { requires := "Some conforming config decoder returns \"denied\" on non-object JSON null."
           rulesOut := "Nothing; establishes refusal-message freedom."
           allows := "Different human-readable error strings."
           freedom := "Error formatting decided below owner level (O5 ParseConfigFreedom)." }
@@ -785,22 +785,22 @@ def analyzeCommentsExplained : Explanation analyzeCommentsRecord where
 
 theorem parseRatchet_healthy_entailment :
     ∀ f : ParseRatchetFn, parseRatchetRecord.Meets f →
-      ∀ text, Healthy.RatchetText text → ∃ m, f text = .ok m :=
-  fun f hf text hh => parseRatchet_healthy_owed f text hf hh
+      ∀ json, Healthy.RatchetJson json → ∃ m, f json = .ok m :=
+  fun f hf json hh => parseRatchet_healthy_owed f json hf hh
 
 theorem parseRatchet_allows_custom_error :
     ∃ f : ParseRatchetFn, parseRatchetRecord.Meets f ∧
-      ((∀ j, Json.parse "" ≠ .ok j) → f "" = .error "denied") := by
-  refine ⟨parseRatchetModelWith "denied", parseRatchetModelWith_meets "denied", fun hempty => ?_⟩
-  have hna : ¬ ∃ m, ValidRatchetJson "" m := by
+      f Json.null = .error "denied" := by
+  refine ⟨parseRatchetModelWith "denied", parseRatchetModelWith_meets "denied", ?_⟩
+  have hna : ¬ ∃ m, ValidRatchetJson Json.null m := by
     rintro ⟨m, hv⟩
-    exact validRatchetJson_and_refusal_disjoint hv (.badJson hempty)
+    exact validRatchetJson_and_refusal_disjoint hv (.notArray fun _ h => by cases h)
   dsimp [parseRatchetModelWith]
   simp [hna]
 
 def parseRatchetExplained : Explanation parseRatchetRecord where
   shape :=
-    { requires := "parseRatchetJson is a total pure function from String to Except String (HashMap String RatchetEntry)."
+    { requires := "parseRatchetJson is a total pure function from Json to Except String (HashMap String RatchetEntry)."
       rulesOut := "Any subject with external side effects, partiality, or another signature."
       allows := "Every pure function of that signature until restricted by properties."
       freedom := "Only fixes the pure function signature." }
@@ -825,20 +825,20 @@ def parseRatchetExplained : Explanation parseRatchetRecord where
       freedom := "Disjoint from ValidRatchetJson." } ]
   restatement := ownerStanding
   consequences := [
-    { consequence := ⟨"succeeds on every healthy ratchet manifest", .entailment,
-        fun f => ∀ text, Healthy.RatchetText text → ∃ m, f text = .ok m⟩
+    { consequence := ⟨"succeeds on every healthy ratchet JSON manifest", .entailment,
+        fun f => ∀ json, Healthy.RatchetJson json → ∃ m, f json = .ok m⟩
       holds := parseRatchet_healthy_entailment
       gloss :=
-        { requires := "Every healthy ratchet JSON text parses to .ok m."
+        { requires := "Every healthy ratchet JSON value decodes to .ok m."
           rulesOut := "Spurious rejections on valid ratchets."
-          allows := "Any compliant ratchet parser."
+          allows := "Any compliant ratchet decoder."
           freedom := "Success guaranteed on healthy ratchet manifests." }
       settled := .derived },
-    { consequence := ⟨"leaves refusal message string free on unparseable JSON", .possibility,
-        fun f => (∀ j, Json.parse "" ≠ .ok j) → f "" = .error "denied"⟩
+    { consequence := ⟨"leaves refusal message string free on invalid ratchet JSON", .possibility,
+        fun f => f Json.null = .error "denied"⟩
       holds := parseRatchet_allows_custom_error
       gloss :=
-        { requires := "Some conforming ratchet parser returns \"denied\" on empty text."
+        { requires := "Some conforming ratchet decoder returns \"denied\" on non-array JSON null."
           rulesOut := "Nothing; documents diagnostic message freedom."
           allows := "Custom error messages."
           freedom := "Error text decided below owner level (O5 ParseRatchetFreedom)." }

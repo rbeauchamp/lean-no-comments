@@ -327,9 +327,9 @@ def ValidExcludeJson (j : Json) : Prop :=
     (∃ pfxRaw pfxOut, obj.get? "prefix" = some (Json.str pfxRaw) ∧ ValidPrefix pfxRaw pfxOut) ∧
     (∃ reasonRaw, obj.get? "reason" = some (Json.str reasonRaw) ∧ reasonRaw.trimAscii.toString ≠ "")
 
-def ConfigText (text : String) : Prop :=
+def ConfigJson (json : Json) : Prop :=
   ∃ obj wsArr, ∃ dirs : List String, ∃ ratchetRaw ratchetOut,
-    Json.parse text = .ok (Json.obj obj) ∧
+    json = Json.obj obj ∧
     (∀ kv ∈ obj.toList, kv.1 ∈ ["workspaces", "exclude", "ratchet"]) ∧
     obj.get? "workspaces" = some (Json.arr wsArr) ∧
     wsArr.size > 0 ∧
@@ -388,9 +388,9 @@ def ValidRatchetEntryJson (j : Json) (fileOut : String) : Prop :=
     (∀ fp ∈ fpsStrs, isFingerprintStr fp) ∧
     fpsStrs.Pairwise (· ≤ ·)
 
-def RatchetText (text : String) : Prop :=
+def RatchetJson (json : Json) : Prop :=
   ∃ arr, ∃ files : List String,
-    Json.parse text = .ok (Json.arr arr) ∧
+    json = Json.arr arr ∧
     files.length = arr.size ∧
     files.Nodup ∧
     ∀ (i : Nat) (h : i < arr.size),

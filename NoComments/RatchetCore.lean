@@ -72,8 +72,7 @@ def parseRatchetEntry (idx : Nat) (j : Lean.Json) : Except String RatchetEntry :
       fingerprints := ⟨fpsRaw, hsorted⟩
     }
 
-def parseRatchetJson (text : String) : Except String (Std.HashMap String RatchetEntry) := do
-  let json ← Lean.Json.parse text
+def parseRatchetJson (json : Lean.Json) : Except String (Std.HashMap String RatchetEntry) := do
   let arr ← json.getArr?
   let mut map : Std.HashMap String RatchetEntry := {}
   for h : idx in [:arr.size] do

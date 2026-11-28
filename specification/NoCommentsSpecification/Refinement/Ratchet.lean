@@ -1019,95 +1019,84 @@ private theorem parseRatchet_extract (arr : Array Json)
   funext idx h m
   exact (hbody idx _ m).symm
 
-theorem parseRatchetJson_ok (text : String)
+theorem parseRatchetJson_ok (json : Json)
     (m : Std.HashMap String NoComments.RatchetCore.RatchetEntry)
-    (hok : NoComments.RatchetCore.parseRatchetJson text = .ok m) :
-    ValidRatchetJson text m := by
+    (hok : NoComments.RatchetCore.parseRatchetJson json = .ok m) :
+    ValidRatchetJson json m := by
   unfold NoComments.RatchetCore.parseRatchetJson at hok
   dsimp only at hok
-  cases hparse : Json.parse text with
-  | error e =>
-    rw [hparse, except_bind_err] at hok
+  cases json with
+  | arr arr =>
+    rw [show (Json.arr arr).getArr? = .ok arr from rfl, except_bind_ok] at hok
+    have hex := parseRatchet_extract arr _ _ (.ok m) hok (fun _ _ _ => rfl)
+    have hspec := parseRatchetLoop_ok_or_err arr (List.range' 0 arr.size 1)
+      (List.nodup_range') (fun _ h => Refinement.Config.range'_zero_mem h)
+      [] [] (fun _ h => nomatch h) (fun _ h => nomatch h) rfl
+      (fun k hk _ => nomatch hk) List.nodup_nil {} (fun k => Std.HashMap.getElem?_empty)
+    cases hloop :
+        (forIn' (List.range' 0 arr.size 1)
+          ({} : Std.HashMap String NoComments.RatchetCore.RatchetEntry) fun idx h m0 => do
+          let entry ← NoComments.RatchetCore.parseRatchetEntry idx
+            (arr[idx]'(Refinement.Config.range'_zero_mem h))
+          if m0.contains entry.file then
+            throw s!"duplicate ratchet entry for '{entry.file}'"
+          let m0 := m0.insert entry.file entry
+          return ForInStep.yield m0) with
+    | error e =>
+      rw [hloop, except_bind_err] at hex
+      cases hex
+    | ok outMap =>
+      rw [hloop] at hspec
+      rcases hspec with ⟨entries, hlen, hvalid, hnodup, hmap⟩
+      rw [hloop, except_bind_ok] at hex
+      have hout : outMap = m := by
+        simpa [pure, Except.pure] using hex
+      subst hout
+      have hlen' : entries.length = arr.size := by simpa using hlen
+      refine ⟨arr, entries, rfl, hlen', fun i hi => ?_, hnodup, hmap⟩
+      have hk : i < entries.length := by omega
+      rcases hvalid i hk (by simp [hi]) with ⟨_, hv⟩
+      have hgi : (List.range' 0 arr.size 1)[i]'(by simp [hi]) = i :=
+        Refinement.Config.range'_zero_getElem arr.size i (by simp [hi])
+      refine ⟨hk, ?_⟩
+      simpa [hgi] using hv
+  | _ =>
+    simp only [Lean.Json.getArr?, throw, throwThe, MonadExceptOf.throw, except_bind_err] at hok
     cases hok
-  | ok j =>
-    rw [hparse, except_bind_ok] at hok
-    cases j with
-    | arr arr =>
-      rw [show (Json.arr arr).getArr? = .ok arr from rfl, except_bind_ok] at hok
-      have hex := parseRatchet_extract arr _ _ (.ok m) hok (fun _ _ _ => rfl)
-      have hspec := parseRatchetLoop_ok_or_err arr (List.range' 0 arr.size 1)
-        (List.nodup_range') (fun _ h => Refinement.Config.range'_zero_mem h)
-        [] [] (fun _ h => nomatch h) (fun _ h => nomatch h) rfl
-        (fun k hk _ => nomatch hk) List.nodup_nil {} (fun k => Std.HashMap.getElem?_empty)
-      cases hloop :
-          (forIn' (List.range' 0 arr.size 1)
-            ({} : Std.HashMap String NoComments.RatchetCore.RatchetEntry) fun idx h m0 => do
-            let entry ← NoComments.RatchetCore.parseRatchetEntry idx
-              (arr[idx]'(Refinement.Config.range'_zero_mem h))
-            if m0.contains entry.file then
-              throw s!"duplicate ratchet entry for '{entry.file}'"
-            let m0 := m0.insert entry.file entry
-            return ForInStep.yield m0) with
-      | error e =>
-        rw [hloop, except_bind_err] at hex
-        cases hex
-      | ok outMap =>
-        rw [hloop] at hspec
-        rcases hspec with ⟨entries, hlen, hvalid, hnodup, hmap⟩
-        rw [hloop, except_bind_ok] at hex
-        have hout : outMap = m := by
-          simpa [pure, Except.pure] using hex
-        subst hout
-        have hlen' : entries.length = arr.size := by simpa using hlen
-        refine ⟨arr, entries, hparse, hlen', fun i hi => ?_, hnodup, hmap⟩
-        have hk : i < entries.length := by omega
-        rcases hvalid i hk (by simp [hi]) with ⟨_, hv⟩
-        have hgi : (List.range' 0 arr.size 1)[i]'(by simp [hi]) = i :=
-          Refinement.Config.range'_zero_getElem arr.size i (by simp [hi])
-        refine ⟨hk, ?_⟩
-        simpa [hgi] using hv
-    | _ =>
-      simp only [Lean.Json.getArr?, throw, throwThe, MonadExceptOf.throw, except_bind_err] at hok
-      cases hok
 
-theorem parseRatchetJson_err (text msg : String)
-    (herr : NoComments.RatchetCore.parseRatchetJson text = .error msg) :
-    RatchetRefusal text := by
+theorem parseRatchetJson_err (json : Json) (msg : String)
+    (herr : NoComments.RatchetCore.parseRatchetJson json = .error msg) :
+    RatchetRefusal json := by
   unfold NoComments.RatchetCore.parseRatchetJson at herr
   dsimp only at herr
-  cases hparse : Json.parse text with
-  | error e =>
-    exact RatchetRefusal.badJson fun j hj => by rw [hparse] at hj; cases hj
-  | ok j =>
-    rw [hparse, except_bind_ok] at herr
-    cases j with
-    | arr arr =>
-      rw [show (Json.arr arr).getArr? = .ok arr from rfl, except_bind_ok] at herr
-      have hex := parseRatchet_extract arr _ _ (.error msg) herr (fun _ _ _ => rfl)
-      have hspec := parseRatchetLoop_ok_or_err arr (List.range' 0 arr.size 1)
-        (List.nodup_range') (fun _ h => Refinement.Config.range'_zero_mem h)
-        [] [] (fun _ h => nomatch h) (fun _ h => nomatch h) rfl
-        (fun k hk _ => nomatch hk) List.nodup_nil {} (fun k => Std.HashMap.getElem?_empty)
-      cases hloop :
-          (forIn' (List.range' 0 arr.size 1)
-            ({} : Std.HashMap String NoComments.RatchetCore.RatchetEntry) fun idx h m0 => do
-            let entry ← NoComments.RatchetCore.parseRatchetEntry idx
-              (arr[idx]'(Refinement.Config.range'_zero_mem h))
-            if m0.contains entry.file then
-              throw s!"duplicate ratchet entry for '{entry.file}'"
-            let m0 := m0.insert entry.file entry
-            return ForInStep.yield m0) with
-      | ok outMap =>
-        rw [hloop, except_bind_ok] at hex
-        dsimp only [pure, Except.pure] at hex
-        cases hex
-      | error e =>
-        rw [hloop] at hspec
-        rcases hspec with ⟨idx, hi, hbad⟩ | ⟨i, j, e1, e2, hi, hj, hne, hv1, hv2, heq⟩
-        · exact RatchetRefusal.invalidEntry hi hparse hbad
-        · exact RatchetRefusal.duplicateFile hi hj hparse hne hv1 hv2 heq
-    | _ =>
-      exact RatchetRefusal.notArray hparse fun arr h => by cases h
+  cases json with
+  | arr arr =>
+    rw [show (Json.arr arr).getArr? = .ok arr from rfl, except_bind_ok] at herr
+    have hex := parseRatchet_extract arr _ _ (.error msg) herr (fun _ _ _ => rfl)
+    have hspec := parseRatchetLoop_ok_or_err arr (List.range' 0 arr.size 1)
+      (List.nodup_range') (fun _ h => Refinement.Config.range'_zero_mem h)
+      [] [] (fun _ h => nomatch h) (fun _ h => nomatch h) rfl
+      (fun k hk _ => nomatch hk) List.nodup_nil {} (fun k => Std.HashMap.getElem?_empty)
+    cases hloop :
+        (forIn' (List.range' 0 arr.size 1)
+          ({} : Std.HashMap String NoComments.RatchetCore.RatchetEntry) fun idx h m0 => do
+          let entry ← NoComments.RatchetCore.parseRatchetEntry idx
+            (arr[idx]'(Refinement.Config.range'_zero_mem h))
+          if m0.contains entry.file then
+            throw s!"duplicate ratchet entry for '{entry.file}'"
+          let m0 := m0.insert entry.file entry
+          return ForInStep.yield m0) with
+    | ok outMap =>
+      rw [hloop, except_bind_ok] at hex
+      dsimp only [pure, Except.pure] at hex
+      cases hex
+    | error e =>
+      rw [hloop] at hspec
+      rcases hspec with ⟨idx, hi, hbad⟩ | ⟨i, j, e1, e2, hi, hj, hne, hv1, hv2, heq⟩
+      · exact RatchetRefusal.invalidEntry hi rfl hbad
+      · exact RatchetRefusal.duplicateFile hi hj rfl hne hv1 hv2 heq
+  | _ =>
+    exact RatchetRefusal.notArray fun arr h => by cases h
 
 theorem parseRatchetJson_meets :
     parseRatchetRecord.Meets NoComments.RatchetCore.parseRatchetJson := by

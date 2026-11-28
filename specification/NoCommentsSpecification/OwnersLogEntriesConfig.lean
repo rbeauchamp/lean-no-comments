@@ -9,12 +9,13 @@ r###"lean-intent statement 1
 kind answer
 project lean-no-comments
 id restatement-parseConfig
-date 2026-11-22
-reference https://github.com/rbeauchamp/lean-no-comments/issues/2#issuecomment-7079657185
+date 2026-11-28
+words 1
+| Owner @rbeauchamp confirmed Option A on rbeauchamp/lean-no-comments#12: parseConfigRecord is a pure total function Lean.Json -> Except String Config.RepoConfig with ValidConfigJson/ConfigRefusal and ParseConfigFreedom preserved, JsonConfigOracle removed, and Lean.Json.parse plus .badJson moved to NoCommentsCLI (ConfigIO.loadConfig) with zero net TCB expansion.
 by rbeauchamp
 as owner
 record NoCommentsSpecification.ConfigRecords.parseConfigRecord
-revision 1167
+revision 1161
 | # The intent record NoCommentsSpecification.ConfigRecords.parseConfigRecord
 | 
 | Each statement is printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened. The plain words after it are written by a model and are trusted, not proved.
@@ -24,12 +25,12 @@ revision 1167
 | ### The subject
 | 
 | ```lean
-| LeanIntent.Shape.function.{0} String (fun (a : String) => Except.{0, 0} String NoComments.Config.RepoConfig)
+| LeanIntent.Shape.function.{0} Lean.Json (fun (a : Lean.Json) => Except.{0, 0} String NoComments.Config.RepoConfig)
 | ```
 | 
-| - **Requires:** parseConfigJson is a total pure function from String to Except String RepoConfig.
+| - **Requires:** parseConfigJson is a total pure function from Json to Except String RepoConfig.
 | - **Rules out:** Any subject with external side effects, partiality, or another signature.
-| - **Still allows:** Every pure function of type String -> Except String RepoConfig until restricted by properties.
+| - **Still allows:** Every pure function of type Json -> Except String RepoConfig until restricted by properties.
 | - **Freedom O5 leaves:** Only fixes the pure function signature.
 | 
 | ## Domain hypotheses
@@ -41,7 +42,7 @@ revision 1167
 | ### ok_valid_repo_config
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (text : String), ∀ (cfg : NoComments.Config.RepoConfig), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f text) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg) → NoCommentsSpecification.ConfigSpec.ValidConfigJson text cfg
+| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (json : Lean.Json), ∀ (cfg : NoComments.Config.RepoConfig), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f json) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg) → NoCommentsSpecification.ConfigSpec.ValidConfigJson json cfg
 | ```
 | 
 | - **Requires:** Returns .ok cfg only when ValidConfigJson holds with normalized paths, allowed keys, and unique dirs.
@@ -52,7 +53,7 @@ revision 1167
 | ### refusal_sound
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (text : String), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f text) (@Except.error.{0, 0} String NoComments.Config.RepoConfig msg) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (json : Lean.Json), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f json) (@Except.error.{0, 0} String NoComments.Config.RepoConfig msg) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | - **Requires:** Returns .error only when ConfigRefusal holds.
@@ -62,10 +63,10 @@ revision 1167
 | 
 | ## Vocabulary
 | 
-| ### ValidConfigJson, a predicate over `Prod.{0, 0} String NoComments.Config.RepoConfig`
+| ### ValidConfigJson, a predicate over `Prod.{0, 0} Lean.Json NoComments.Config.RepoConfig`
 | 
 | ```lean
-| fun (p : Prod.{0, 0} String NoComments.Config.RepoConfig) => NoCommentsSpecification.ConfigSpec.ValidConfigJson (@Prod.fst.{0, 0} String NoComments.Config.RepoConfig p) (@Prod.snd.{0, 0} String NoComments.Config.RepoConfig p)
+| fun (p : Prod.{0, 0} Lean.Json NoComments.Config.RepoConfig) => NoCommentsSpecification.ConfigSpec.ValidConfigJson (@Prod.fst.{0, 0} Lean.Json NoComments.Config.RepoConfig p) (@Prod.snd.{0, 0} Lean.Json NoComments.Config.RepoConfig p)
 | ```
 | 
 | - **Requires:** ValidConfigJson characterizes schema, allowed keys, normalized paths, and non-duplicate dirs.
@@ -73,7 +74,7 @@ revision 1167
 | - **Still allows:** Normalized valid configs.
 | - **Freedom O5 leaves:** Exact schema validation.
 | 
-| ### ConfigRefusal, a predicate over `String`
+| ### ConfigRefusal, a predicate over `Lean.Json`
 | 
 | ```lean
 | NoCommentsSpecification.ConfigSpec.ConfigRefusal
@@ -86,24 +87,24 @@ revision 1167
 | 
 | ## Consequences
 | 
-| ### succeeds on every healthy configuration string, an entailment: every subject that meets the record satisfies it
+| ### succeeds on every healthy configuration JSON value, an entailment: every subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (text : String), NoCommentsSpecification.Healthy.ConfigText text → @Exists.{1} NoComments.Config.RepoConfig (fun (cfg : NoComments.Config.RepoConfig) => @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f text) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg))
+| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (json : Lean.Json), NoCommentsSpecification.Healthy.ConfigJson json → @Exists.{1} NoComments.Config.RepoConfig (fun (cfg : NoComments.Config.RepoConfig) => @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f json) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg))
 | ```
 | 
-| - **Requires:** Any valid healthy config parses to .ok cfg.
+| - **Requires:** Any valid healthy config JSON value decodes to .ok cfg.
 | - **Rules out:** False config rejections.
-| - **Still allows:** Any schema-compliant parser.
-| - **Freedom O5 leaves:** Success guaranteed on healthy config text.
+| - **Still allows:** Any schema-compliant decoder.
+| - **Freedom O5 leaves:** Success guaranteed on healthy config JSON.
 | 
-| ### leaves refusal error wording free on malformed JSON, a possibility: some subject that meets the record satisfies it
+| ### leaves refusal error wording free on invalid config JSON, a possibility: some subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse "") (@Except.ok.{0, 0} String Lean.Json j)) → @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f "") (@Except.error.{0, 0} String NoComments.Config.RepoConfig "denied")
+| fun (f : NoCommentsSpecification.ParseConfigFn) => @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f Lean.Json.null) (@Except.error.{0, 0} String NoComments.Config.RepoConfig "denied")
 | ```
 | 
-| - **Requires:** Some conforming config parser returns "denied" on unparseable empty input.
+| - **Requires:** Some conforming config decoder returns "denied" on non-object JSON null.
 | - **Rules out:** Nothing; establishes refusal-message freedom.
 | - **Still allows:** Different human-readable error strings.
 | - **Freedom O5 leaves:** Error formatting decided below owner level (O5 ParseConfigFreedom).
@@ -239,7 +240,7 @@ revision 1167
 | Its value:
 | 
 | ```lean
-| String → Except.{0, 0} String NoComments.Config.RepoConfig
+| Lean.Json → Except.{0, 0} String NoComments.Config.RepoConfig
 | ```
 | 
 | ### NoCommentsSpecification.ConfigSpec.ValidConfigJson
@@ -247,13 +248,13 @@ revision 1167
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), ∀ (cfg : NoComments.Config.RepoConfig), Prop
+| ∀ (json : Lean.Json), ∀ (cfg : NoComments.Config.RepoConfig), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => fun (cfg : NoComments.Config.RepoConfig) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} String (fun (ratchetRaw : String) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj))) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)) (@Array.size.{0} Lean.Json wsArr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) => NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.WorkspaceConfig) Nat NoComments.Config.WorkspaceConfig (fun (xs : Array.{0} NoComments.Config.WorkspaceConfig) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.WorkspaceConfig xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.WorkspaceConfig) (NoComments.Config.RepoConfig.workspaces cfg) i _hc))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.Config.WorkspaceConfig String (fun (x : NoComments.Config.WorkspaceConfig) => NoComments.Config.WorkspaceConfig.dir x) (@Array.toList.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)))) (And (NoCommentsSpecification.ConfigSpec.ValidConfigJson.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg)) (@Array.size.{0} Lean.Json exclArr)) (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) => NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.ExcludeRule) Nat NoComments.Config.ExcludeRule (fun (xs : Array.{0} NoComments.Config.ExcludeRule) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.ExcludeRule xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) i _hc)))) (fun (val : Lean.Json) => False) (fun («_» : Unit) => @Eq.{1} (Array.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) (@List.toArray.{0} NoComments.Config.ExcludeRule (@List.nil.{0} NoComments.Config.ExcludeRule)))) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.ConfigSpec.NormRelFile ratchetRaw (NoComments.Config.RepoConfig.ratchet cfg)))))))))))))
+| fun (json : Lean.Json) => fun (cfg : NoComments.Config.RepoConfig) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} String (fun (ratchetRaw : String) => And (@Eq.{1} Lean.Json json (Lean.Json.obj obj)) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)) (@Array.size.{0} Lean.Json wsArr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) => NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.WorkspaceConfig) Nat NoComments.Config.WorkspaceConfig (fun (xs : Array.{0} NoComments.Config.WorkspaceConfig) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.WorkspaceConfig xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.WorkspaceConfig) (NoComments.Config.RepoConfig.workspaces cfg) i _hc))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.Config.WorkspaceConfig String (fun (x : NoComments.Config.WorkspaceConfig) => NoComments.Config.WorkspaceConfig.dir x) (@Array.toList.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)))) (And (NoCommentsSpecification.ConfigSpec.ValidConfigJson.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg)) (@Array.size.{0} Lean.Json exclArr)) (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) => NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.ExcludeRule) Nat NoComments.Config.ExcludeRule (fun (xs : Array.{0} NoComments.Config.ExcludeRule) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.ExcludeRule xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) i _hc)))) (fun (val : Lean.Json) => False) (fun («_» : Unit) => @Eq.{1} (Array.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) (@List.toArray.{0} NoComments.Config.ExcludeRule (@List.nil.{0} NoComments.Config.ExcludeRule)))) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.ConfigSpec.NormRelFile ratchetRaw (NoComments.Config.RepoConfig.ratchet cfg)))))))))))))
 | ```
 | 
 | ### NoComments.Config.RepoConfig.workspaces
@@ -611,77 +612,71 @@ revision 1167
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Of the arguments its type takes, the first 1 are parameters and the other 0 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
-| #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badJson
-| 
-| ```lean
-| ∀ {text : String}, (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
-| ```
-| 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.notObject
 | 
 | ```lean
-| ∀ {text : String}, ∀ {j : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j) → (∀ (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)), @Ne.{1} Lean.Json j (Lean.Json.obj obj)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, (∀ (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)), @Ne.{1} Lean.Json json (Lean.Json.obj obj)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.unknownRootKey
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {k : String}, ∀ {v : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) (@Prod.mk.{0, 0} String Lean.Json k v) → Not (@Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) k) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {k : String}, ∀ {v : Lean.Json}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) (@Prod.mk.{0, 0} String Lean.Json k v) → Not (@Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) k) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badWorkspacesField
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → (∀ (wsArr : Array.{0} Lean.Json), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Eq.{1} Nat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → (∀ (wsArr : Array.{0} Lean.Json), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Eq.{1} Nat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.invalidWorkspace
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → (∀ (ws : NoComments.Config.WorkspaceConfig), Not (NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → (∀ (ws : NoComments.Config.WorkspaceConfig), Not (NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.duplicateWorkspaceDir
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {ws1 : NoComments.Config.WorkspaceConfig}, ∀ {ws2 : NoComments.Config.WorkspaceConfig}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Ne.{1} Nat i j → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws1 → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr j hj) ws2 → @Eq.{1} String (NoComments.Config.WorkspaceConfig.dir ws1) (NoComments.Config.WorkspaceConfig.dir ws2) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {ws1 : NoComments.Config.WorkspaceConfig}, ∀ {ws2 : NoComments.Config.WorkspaceConfig}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Ne.{1} Nat i j → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws1 → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr j hj) ws2 → @Eq.{1} String (NoComments.Config.WorkspaceConfig.dir ws1) (NoComments.Config.WorkspaceConfig.dir ws2) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badExcludeField
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {v : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json v) → (∀ (exclArr : Array.{0} Lean.Json), @Ne.{1} Lean.Json v (Lean.Json.arr exclArr)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {v : Lean.Json}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json v) → (∀ (exclArr : Array.{0} Lean.Json), @Ne.{1} Lean.Json v (Lean.Json.arr exclArr)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.invalidExcludeRule
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {exclArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr)) → (∀ (r : NoComments.Config.ExcludeRule), Not (NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i hi) r)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {exclArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr)) → (∀ (r : NoComments.Config.ExcludeRule), Not (NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i hi) r)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badRatchetField
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → (∀ (raw : String), ∀ (out : String), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str raw)) → Not (NoCommentsSpecification.ConfigSpec.NormRelFile raw out)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → (∀ (raw : String), ∀ (out : String), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str raw)) → Not (NoCommentsSpecification.ConfigSpec.NormRelFile raw out)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.ConfigText
+| ### NoCommentsSpecification.Healthy.ConfigJson
 | 
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (dirs : List.{0} String) => @Exists.{1} String (fun (ratchetRaw : String) => @Exists.{1} String (fun (ratchetOut : String) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj))) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@List.length.{0} String dirs) (@Array.size.{0} Lean.Json wsArr)) (And (@List.Nodup.{0} String dirs) (And (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) (fun (hd : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) => NoCommentsSpecification.Healthy.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) dirs i hd))) (And (NoCommentsSpecification.Healthy.ConfigText.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => ∀ (item : Lean.Json), @Membership.mem.{0, 0} Lean.Json (List.{0} Lean.Json) (@List.instMembership.{0} Lean.Json) (@Array.toList.{0} Lean.Json exclArr) item → NoCommentsSpecification.Healthy.ValidExcludeJson item) (fun (val : Lean.Json) => False) (fun («_» : Unit) => True)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.Healthy.ValidRelFile ratchetRaw ratchetOut))))))))))))))
+| fun (json : Lean.Json) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (dirs : List.{0} String) => @Exists.{1} String (fun (ratchetRaw : String) => @Exists.{1} String (fun (ratchetOut : String) => And (@Eq.{1} Lean.Json json (Lean.Json.obj obj)) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@List.length.{0} String dirs) (@Array.size.{0} Lean.Json wsArr)) (And (@List.Nodup.{0} String dirs) (And (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) (fun (hd : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) => NoCommentsSpecification.Healthy.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) dirs i hd))) (And (NoCommentsSpecification.Healthy.ConfigJson.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => ∀ (item : Lean.Json), @Membership.mem.{0, 0} Lean.Json (List.{0} Lean.Json) (@List.instMembership.{0} Lean.Json) (@Array.toList.{0} Lean.Json exclArr) item → NoCommentsSpecification.Healthy.ValidExcludeJson item) (fun (val : Lean.Json) => False) (fun («_» : Unit) => True)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.Healthy.ValidRelFile ratchetRaw ratchetOut))))))))))))))
 | ```
 | 
 | ### NoCommentsSpecification.Healthy.ValidWorkspaceJson
@@ -898,7 +893,7 @@ revision 1167
 | fun (raw : String) => fun (out : String) => And (@Ne.{1} String raw "") (And (@Eq.{1} Bool (NoCommentsSpecification.Healthy.cleanStr raw) Bool.true) (And (@Eq.{1} Bool (@BEq.beq.{0} (Option.{0} Char) (@instBEqOption.{0} Char (@instBEqOfDecidableEq.{0} Char instDecidableEqChar)) (@List.head?.{0} Char (String.toList raw)) (@Option.some.{0} Char (Char.ofNat (nat_lit 47)))) Bool.false) (have cleaned : String := NoCommentsSpecification.Healthy.stripDotSlash raw; And (@Ne.{1} String cleaned "") (And (@Ne.{1} String cleaned ".") (And (@Ne.{1} String cleaned "./") (have trailing : Bool := @BEq.beq.{0} (Option.{0} Char) (@instBEqOption.{0} Char (@instBEqOfDecidableEq.{0} Char instDecidableEqChar)) (@List.getLast?.{0} Char (String.toList cleaned)) (@Option.some.{0} Char (Char.ofNat (nat_lit 47))); have body : String := @ite.{1} String (@Eq.{1} Bool trailing Bool.true) (instDecidableEqBool trailing Bool.true) (String.ofList (@List.dropLast.{0} Char (String.toList cleaned))) cleaned; And (@Ne.{1} String body "") (And (@Eq.{1} Bool (NoCommentsSpecification.Healthy.validSegmentsBool body) Bool.true) (@Eq.{1} String out (@ite.{1} String (@Eq.{1} Bool trailing Bool.true) (instDecidableEqBool trailing Bool.true) (@HAppend.hAppend.{0, 0, 0} String String String (@instHAppendOfAppend.{0} String instAppendString) body "/") body)))))))))
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.ConfigText.match_1
+| ### NoCommentsSpecification.Healthy.ConfigJson.match_1
 | 
 | A definition. It has the universe parameter u_1. Its type:
 | 
@@ -909,10 +904,10 @@ revision 1167
 | Its value:
 | 
 | ```lean
-| fun (motive : Option.{0} Lean.Json → Sort u_1) => fun (x : Option.{0} Lean.Json) => fun (h_1 : ∀ (exclArr : Array.{0} Lean.Json), motive (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr))) => fun (h_2 : ∀ (val : Lean.Json), motive (@Option.some.{0} Lean.Json val)) => fun (h_3 : ∀ («_» : Unit), motive (@Option.none.{0} Lean.Json)) => @Option.casesOn.{u_1, 0} Lean.Json (fun (x_1 : Option.{0} Lean.Json) => motive x_1) x (h_3 Unit.unit) (fun (val : Lean.Json) => @NoCommentsSpecification.Healthy.ConfigText._sparseCasesOn_1.{u_1} (fun (x_1 : Lean.Json) => motive (@Option.some.{0} Lean.Json x_1)) val (fun (elems : Array.{0} Lean.Json) => h_1 elems) (fun (h : Nat.hasNotBit (nat_lit 16) (Lean.Json.ctorIdx val)) => h_2 val))
+| fun (motive : Option.{0} Lean.Json → Sort u_1) => fun (x : Option.{0} Lean.Json) => fun (h_1 : ∀ (exclArr : Array.{0} Lean.Json), motive (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr))) => fun (h_2 : ∀ (val : Lean.Json), motive (@Option.some.{0} Lean.Json val)) => fun (h_3 : ∀ («_» : Unit), motive (@Option.none.{0} Lean.Json)) => @Option.casesOn.{u_1, 0} Lean.Json (fun (x_1 : Option.{0} Lean.Json) => motive x_1) x (h_3 Unit.unit) (fun (val : Lean.Json) => @NoCommentsSpecification.Healthy.ConfigJson._sparseCasesOn_1.{u_1} (fun (x_1 : Lean.Json) => motive (@Option.some.{0} Lean.Json x_1)) val (fun (elems : Array.{0} Lean.Json) => h_1 elems) (fun (h : Nat.hasNotBit (nat_lit 16) (Lean.Json.ctorIdx val)) => h_2 val))
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.ConfigText._sparseCasesOn_1
+| ### NoCommentsSpecification.Healthy.ConfigJson._sparseCasesOn_1
 | 
 | A definition. It has the universe parameter u. Its type:
 | 
@@ -1194,13 +1189,13 @@ r###"lean-intent statement 1
 kind answer
 project lean-no-comments
 id delegated-parseConfig
-date 2026-11-22
+date 2026-11-28
 words 1
 | Decided below owner level under agent delegation and confirmed against the system contract on 2026-11-22.
 by antigravity
 under agent-delegation
 record NoCommentsSpecification.ConfigRecords.parseConfigRecord
-revision 1167
+revision 1161
 | # The intent record NoCommentsSpecification.ConfigRecords.parseConfigRecord
 | 
 | Each statement is printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened. The plain words after it are written by a model and are trusted, not proved.
@@ -1210,12 +1205,12 @@ revision 1167
 | ### The subject
 | 
 | ```lean
-| LeanIntent.Shape.function.{0} String (fun (a : String) => Except.{0, 0} String NoComments.Config.RepoConfig)
+| LeanIntent.Shape.function.{0} Lean.Json (fun (a : Lean.Json) => Except.{0, 0} String NoComments.Config.RepoConfig)
 | ```
 | 
-| - **Requires:** parseConfigJson is a total pure function from String to Except String RepoConfig.
+| - **Requires:** parseConfigJson is a total pure function from Json to Except String RepoConfig.
 | - **Rules out:** Any subject with external side effects, partiality, or another signature.
-| - **Still allows:** Every pure function of type String -> Except String RepoConfig until restricted by properties.
+| - **Still allows:** Every pure function of type Json -> Except String RepoConfig until restricted by properties.
 | - **Freedom O5 leaves:** Only fixes the pure function signature.
 | 
 | ## Domain hypotheses
@@ -1227,7 +1222,7 @@ revision 1167
 | ### ok_valid_repo_config
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (text : String), ∀ (cfg : NoComments.Config.RepoConfig), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f text) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg) → NoCommentsSpecification.ConfigSpec.ValidConfigJson text cfg
+| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (json : Lean.Json), ∀ (cfg : NoComments.Config.RepoConfig), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f json) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg) → NoCommentsSpecification.ConfigSpec.ValidConfigJson json cfg
 | ```
 | 
 | - **Requires:** Returns .ok cfg only when ValidConfigJson holds with normalized paths, allowed keys, and unique dirs.
@@ -1238,7 +1233,7 @@ revision 1167
 | ### refusal_sound
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (text : String), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f text) (@Except.error.{0, 0} String NoComments.Config.RepoConfig msg) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (json : Lean.Json), ∀ (msg : String), @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f json) (@Except.error.{0, 0} String NoComments.Config.RepoConfig msg) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | - **Requires:** Returns .error only when ConfigRefusal holds.
@@ -1248,10 +1243,10 @@ revision 1167
 | 
 | ## Vocabulary
 | 
-| ### ValidConfigJson, a predicate over `Prod.{0, 0} String NoComments.Config.RepoConfig`
+| ### ValidConfigJson, a predicate over `Prod.{0, 0} Lean.Json NoComments.Config.RepoConfig`
 | 
 | ```lean
-| fun (p : Prod.{0, 0} String NoComments.Config.RepoConfig) => NoCommentsSpecification.ConfigSpec.ValidConfigJson (@Prod.fst.{0, 0} String NoComments.Config.RepoConfig p) (@Prod.snd.{0, 0} String NoComments.Config.RepoConfig p)
+| fun (p : Prod.{0, 0} Lean.Json NoComments.Config.RepoConfig) => NoCommentsSpecification.ConfigSpec.ValidConfigJson (@Prod.fst.{0, 0} Lean.Json NoComments.Config.RepoConfig p) (@Prod.snd.{0, 0} Lean.Json NoComments.Config.RepoConfig p)
 | ```
 | 
 | - **Requires:** ValidConfigJson characterizes schema, allowed keys, normalized paths, and non-duplicate dirs.
@@ -1259,7 +1254,7 @@ revision 1167
 | - **Still allows:** Normalized valid configs.
 | - **Freedom O5 leaves:** Exact schema validation.
 | 
-| ### ConfigRefusal, a predicate over `String`
+| ### ConfigRefusal, a predicate over `Lean.Json`
 | 
 | ```lean
 | NoCommentsSpecification.ConfigSpec.ConfigRefusal
@@ -1272,24 +1267,24 @@ revision 1167
 | 
 | ## Consequences
 | 
-| ### succeeds on every healthy configuration string, an entailment: every subject that meets the record satisfies it
+| ### succeeds on every healthy configuration JSON value, an entailment: every subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (text : String), NoCommentsSpecification.Healthy.ConfigText text → @Exists.{1} NoComments.Config.RepoConfig (fun (cfg : NoComments.Config.RepoConfig) => @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f text) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg))
+| fun (f : NoCommentsSpecification.ParseConfigFn) => ∀ (json : Lean.Json), NoCommentsSpecification.Healthy.ConfigJson json → @Exists.{1} NoComments.Config.RepoConfig (fun (cfg : NoComments.Config.RepoConfig) => @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f json) (@Except.ok.{0, 0} String NoComments.Config.RepoConfig cfg))
 | ```
 | 
-| - **Requires:** Any valid healthy config parses to .ok cfg.
+| - **Requires:** Any valid healthy config JSON value decodes to .ok cfg.
 | - **Rules out:** False config rejections.
-| - **Still allows:** Any schema-compliant parser.
-| - **Freedom O5 leaves:** Success guaranteed on healthy config text.
+| - **Still allows:** Any schema-compliant decoder.
+| - **Freedom O5 leaves:** Success guaranteed on healthy config JSON.
 | 
-| ### leaves refusal error wording free on malformed JSON, a possibility: some subject that meets the record satisfies it
+| ### leaves refusal error wording free on invalid config JSON, a possibility: some subject that meets the record satisfies it
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse "") (@Except.ok.{0, 0} String Lean.Json j)) → @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f "") (@Except.error.{0, 0} String NoComments.Config.RepoConfig "denied")
+| fun (f : NoCommentsSpecification.ParseConfigFn) => @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f Lean.Json.null) (@Except.error.{0, 0} String NoComments.Config.RepoConfig "denied")
 | ```
 | 
-| - **Requires:** Some conforming config parser returns "denied" on unparseable empty input.
+| - **Requires:** Some conforming config decoder returns "denied" on non-object JSON null.
 | - **Rules out:** Nothing; establishes refusal-message freedom.
 | - **Still allows:** Different human-readable error strings.
 | - **Freedom O5 leaves:** Error formatting decided below owner level (O5 ParseConfigFreedom).
@@ -1425,7 +1420,7 @@ revision 1167
 | Its value:
 | 
 | ```lean
-| String → Except.{0, 0} String NoComments.Config.RepoConfig
+| Lean.Json → Except.{0, 0} String NoComments.Config.RepoConfig
 | ```
 | 
 | ### NoCommentsSpecification.ConfigSpec.ValidConfigJson
@@ -1433,13 +1428,13 @@ revision 1167
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), ∀ (cfg : NoComments.Config.RepoConfig), Prop
+| ∀ (json : Lean.Json), ∀ (cfg : NoComments.Config.RepoConfig), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => fun (cfg : NoComments.Config.RepoConfig) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} String (fun (ratchetRaw : String) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj))) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)) (@Array.size.{0} Lean.Json wsArr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) => NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.WorkspaceConfig) Nat NoComments.Config.WorkspaceConfig (fun (xs : Array.{0} NoComments.Config.WorkspaceConfig) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.WorkspaceConfig xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.WorkspaceConfig) (NoComments.Config.RepoConfig.workspaces cfg) i _hc))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.Config.WorkspaceConfig String (fun (x : NoComments.Config.WorkspaceConfig) => NoComments.Config.WorkspaceConfig.dir x) (@Array.toList.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)))) (And (NoCommentsSpecification.ConfigSpec.ValidConfigJson.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg)) (@Array.size.{0} Lean.Json exclArr)) (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) => NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.ExcludeRule) Nat NoComments.Config.ExcludeRule (fun (xs : Array.{0} NoComments.Config.ExcludeRule) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.ExcludeRule xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) i _hc)))) (fun (val : Lean.Json) => False) (fun («_» : Unit) => @Eq.{1} (Array.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) (@List.toArray.{0} NoComments.Config.ExcludeRule (@List.nil.{0} NoComments.Config.ExcludeRule)))) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.ConfigSpec.NormRelFile ratchetRaw (NoComments.Config.RepoConfig.ratchet cfg)))))))))))))
+| fun (json : Lean.Json) => fun (cfg : NoComments.Config.RepoConfig) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} String (fun (ratchetRaw : String) => And (@Eq.{1} Lean.Json json (Lean.Json.obj obj)) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)) (@Array.size.{0} Lean.Json wsArr)) (And (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg))) => NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.WorkspaceConfig) Nat NoComments.Config.WorkspaceConfig (fun (xs : Array.{0} NoComments.Config.WorkspaceConfig) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.WorkspaceConfig xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.WorkspaceConfig) (NoComments.Config.RepoConfig.workspaces cfg) i _hc))) (And (@List.Nodup.{0} String (@List.map.{0, 0} NoComments.Config.WorkspaceConfig String (fun (x : NoComments.Config.WorkspaceConfig) => NoComments.Config.WorkspaceConfig.dir x) (@Array.toList.{0} NoComments.Config.WorkspaceConfig (NoComments.Config.RepoConfig.workspaces cfg)))) (And (NoCommentsSpecification.ConfigSpec.ValidConfigJson.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => And (@Eq.{1} Nat (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg)) (@Array.size.{0} Lean.Json exclArr)) (∀ (i : Nat), ∀ (_h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) (fun (_hc : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} NoComments.Config.ExcludeRule (NoComments.Config.RepoConfig.exclude cfg))) => NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i _h) (@GetElem.getElem.{0, 0, 0} (Array.{0} NoComments.Config.ExcludeRule) Nat NoComments.Config.ExcludeRule (fun (xs : Array.{0} NoComments.Config.ExcludeRule) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} NoComments.Config.ExcludeRule xs)) (@Array.instGetElemNatLtSize.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) i _hc)))) (fun (val : Lean.Json) => False) (fun («_» : Unit) => @Eq.{1} (Array.{0} NoComments.Config.ExcludeRule) (NoComments.Config.RepoConfig.exclude cfg) (@List.toArray.{0} NoComments.Config.ExcludeRule (@List.nil.{0} NoComments.Config.ExcludeRule)))) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.ConfigSpec.NormRelFile ratchetRaw (NoComments.Config.RepoConfig.ratchet cfg)))))))))))))
 | ```
 | 
 | ### NoComments.Config.RepoConfig.workspaces
@@ -1797,77 +1792,71 @@ revision 1167
 | An inductive type. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Of the arguments its type takes, the first 1 are parameters and the other 0 indices. Its recursor is the one Lean's kernel derives from this declaration. Its constructors, in order, each with its type:
 | 
-| #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badJson
-| 
-| ```lean
-| ∀ {text : String}, (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
-| ```
-| 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.notObject
 | 
 | ```lean
-| ∀ {text : String}, ∀ {j : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json j) → (∀ (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)), @Ne.{1} Lean.Json j (Lean.Json.obj obj)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, (∀ (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)), @Ne.{1} Lean.Json json (Lean.Json.obj obj)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.unknownRootKey
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {k : String}, ∀ {v : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) (@Prod.mk.{0, 0} String Lean.Json k v) → Not (@Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) k) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {k : String}, ∀ {v : Lean.Json}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) (@Prod.mk.{0, 0} String Lean.Json k v) → Not (@Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) k) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badWorkspacesField
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → (∀ (wsArr : Array.{0} Lean.Json), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Eq.{1} Nat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → (∀ (wsArr : Array.{0} Lean.Json), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Eq.{1} Nat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.invalidWorkspace
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → (∀ (ws : NoComments.Config.WorkspaceConfig), Not (NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → (∀ (ws : NoComments.Config.WorkspaceConfig), Not (NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.duplicateWorkspaceDir
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {ws1 : NoComments.Config.WorkspaceConfig}, ∀ {ws2 : NoComments.Config.WorkspaceConfig}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Ne.{1} Nat i j → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws1 → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr j hj) ws2 → @Eq.{1} String (NoComments.Config.WorkspaceConfig.dir ws1) (NoComments.Config.WorkspaceConfig.dir ws2) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {wsArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ {j : Nat}, ∀ {ws1 : NoComments.Config.WorkspaceConfig}, ∀ {ws2 : NoComments.Config.WorkspaceConfig}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), ∀ (hj : @LT.lt.{0} Nat instLTNat j (@Array.size.{0} Lean.Json wsArr)), @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr)) → @Ne.{1} Nat i j → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i hi) ws1 → NoCommentsSpecification.ConfigSpec.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr j hj) ws2 → @Eq.{1} String (NoComments.Config.WorkspaceConfig.dir ws1) (NoComments.Config.WorkspaceConfig.dir ws2) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badExcludeField
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {v : Lean.Json}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json v) → (∀ (exclArr : Array.{0} Lean.Json), @Ne.{1} Lean.Json v (Lean.Json.arr exclArr)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {v : Lean.Json}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json v) → (∀ (exclArr : Array.{0} Lean.Json), @Ne.{1} Lean.Json v (Lean.Json.arr exclArr)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.invalidExcludeRule
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {exclArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr)) → (∀ (r : NoComments.Config.ExcludeRule), Not (NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i hi) r)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, ∀ {exclArr : Array.{0} Lean.Json}, ∀ {i : Nat}, ∀ (hi : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json exclArr)), @Eq.{1} Lean.Json json (Lean.Json.obj obj) → @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr)) → (∀ (r : NoComments.Config.ExcludeRule), Not (NoCommentsSpecification.ConfigSpec.ValidExcludeJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) exclArr i hi) r)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
 | #### NoCommentsSpecification.ConfigSpec.ConfigRefusal.badRatchetField
 | 
 | ```lean
-| ∀ {text : String}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj)) → (∀ (raw : String), ∀ (out : String), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str raw)) → Not (NoCommentsSpecification.ConfigSpec.NormRelFile raw out)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal text
+| ∀ {json : Lean.Json}, ∀ {obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)}, @Eq.{1} Lean.Json json (Lean.Json.obj obj) → (∀ (raw : String), ∀ (out : String), @Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str raw)) → Not (NoCommentsSpecification.ConfigSpec.NormRelFile raw out)) → NoCommentsSpecification.ConfigSpec.ConfigRefusal json
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.ConfigText
+| ### NoCommentsSpecification.Healthy.ConfigJson
 | 
 | A definition. It has no universe parameter. Its type:
 | 
 | ```lean
-| ∀ (text : String), Prop
+| ∀ (json : Lean.Json), Prop
 | ```
 | 
 | Its value:
 | 
 | ```lean
-| fun (text : String) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (dirs : List.{0} String) => @Exists.{1} String (fun (ratchetRaw : String) => @Exists.{1} String (fun (ratchetOut : String) => And (@Eq.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse text) (@Except.ok.{0, 0} String Lean.Json (Lean.Json.obj obj))) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@List.length.{0} String dirs) (@Array.size.{0} Lean.Json wsArr)) (And (@List.Nodup.{0} String dirs) (And (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) (fun (hd : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) => NoCommentsSpecification.Healthy.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) dirs i hd))) (And (NoCommentsSpecification.Healthy.ConfigText.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => ∀ (item : Lean.Json), @Membership.mem.{0, 0} Lean.Json (List.{0} Lean.Json) (@List.instMembership.{0} Lean.Json) (@Array.toList.{0} Lean.Json exclArr) item → NoCommentsSpecification.Healthy.ValidExcludeJson item) (fun (val : Lean.Json) => False) (fun («_» : Unit) => True)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.Healthy.ValidRelFile ratchetRaw ratchetOut))))))))))))))
+| fun (json : Lean.Json) => @Exists.{1} (Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) (fun (obj : Std.TreeMap.Raw.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd)) => @Exists.{1} (Array.{0} Lean.Json) (fun (wsArr : Array.{0} Lean.Json) => @Exists.{1} (List.{0} String) (fun (dirs : List.{0} String) => @Exists.{1} String (fun (ratchetRaw : String) => @Exists.{1} String (fun (ratchetOut : String) => And (@Eq.{1} Lean.Json json (Lean.Json.obj obj)) (And (∀ (kv : Prod.{0, 0} String Lean.Json), @Membership.mem.{0, 0} (Prod.{0, 0} String Lean.Json) (List.{0} (Prod.{0, 0} String Lean.Json)) (@List.instMembership.{0} (Prod.{0, 0} String Lean.Json)) (@Std.TreeMap.Raw.toList.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj) kv → @Membership.mem.{0, 0} String (List.{0} String) (@List.instMembership.{0} String) (@List.cons.{0} String "workspaces" (@List.cons.{0} String "exclude" (@List.cons.{0} String "ratchet" (@List.nil.{0} String)))) (@Prod.fst.{0, 0} String Lean.Json kv)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "workspaces") (@Option.some.{0} Lean.Json (Lean.Json.arr wsArr))) (And (@GT.gt.{0} Nat instLTNat (@Array.size.{0} Lean.Json wsArr) (@OfNat.ofNat.{0} Nat (nat_lit 0) (instOfNatNat (nat_lit 0)))) (And (@Eq.{1} Nat (@List.length.{0} String dirs) (@Array.size.{0} Lean.Json wsArr)) (And (@List.Nodup.{0} String dirs) (And (∀ (i : Nat), ∀ (h : @LT.lt.{0} Nat instLTNat i (@Array.size.{0} Lean.Json wsArr)), @Exists.{0} (@LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) (fun (hd : @LT.lt.{0} Nat instLTNat i (@List.length.{0} String dirs)) => NoCommentsSpecification.Healthy.ValidWorkspaceJson (@GetElem.getElem.{0, 0, 0} (Array.{0} Lean.Json) Nat Lean.Json (fun (xs : Array.{0} Lean.Json) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@Array.size.{0} Lean.Json xs)) (@Array.instGetElemNatLtSize.{0} Lean.Json) wsArr i h) (@GetElem.getElem.{0, 0, 0} (List.{0} String) Nat String (fun (as : List.{0} String) => fun (x : Nat) => @LT.lt.{0} Nat instLTNat x (@List.length.{0} String as)) (@List.instGetElemNatLtLength.{0} String) dirs i hd))) (And (NoCommentsSpecification.Healthy.ConfigJson.match_1.{1} (fun (x : Option.{0} Lean.Json) => Prop) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "exclude") (fun (exclArr : Array.{0} Lean.Json) => ∀ (item : Lean.Json), @Membership.mem.{0, 0} Lean.Json (List.{0} Lean.Json) (@List.instMembership.{0} Lean.Json) (@Array.toList.{0} Lean.Json exclArr) item → NoCommentsSpecification.Healthy.ValidExcludeJson item) (fun (val : Lean.Json) => False) (fun («_» : Unit) => True)) (And (@Eq.{1} (Option.{0} Lean.Json) (@Std.TreeMap.Raw.get?.{0, 0} String Lean.Json (@Ord.compare.{0} String String.instOrd) obj "ratchet") (@Option.some.{0} Lean.Json (Lean.Json.str ratchetRaw))) (NoCommentsSpecification.Healthy.ValidRelFile ratchetRaw ratchetOut))))))))))))))
 | ```
 | 
 | ### NoCommentsSpecification.Healthy.ValidWorkspaceJson
@@ -2084,7 +2073,7 @@ revision 1167
 | fun (raw : String) => fun (out : String) => And (@Ne.{1} String raw "") (And (@Eq.{1} Bool (NoCommentsSpecification.Healthy.cleanStr raw) Bool.true) (And (@Eq.{1} Bool (@BEq.beq.{0} (Option.{0} Char) (@instBEqOption.{0} Char (@instBEqOfDecidableEq.{0} Char instDecidableEqChar)) (@List.head?.{0} Char (String.toList raw)) (@Option.some.{0} Char (Char.ofNat (nat_lit 47)))) Bool.false) (have cleaned : String := NoCommentsSpecification.Healthy.stripDotSlash raw; And (@Ne.{1} String cleaned "") (And (@Ne.{1} String cleaned ".") (And (@Ne.{1} String cleaned "./") (have trailing : Bool := @BEq.beq.{0} (Option.{0} Char) (@instBEqOption.{0} Char (@instBEqOfDecidableEq.{0} Char instDecidableEqChar)) (@List.getLast?.{0} Char (String.toList cleaned)) (@Option.some.{0} Char (Char.ofNat (nat_lit 47))); have body : String := @ite.{1} String (@Eq.{1} Bool trailing Bool.true) (instDecidableEqBool trailing Bool.true) (String.ofList (@List.dropLast.{0} Char (String.toList cleaned))) cleaned; And (@Ne.{1} String body "") (And (@Eq.{1} Bool (NoCommentsSpecification.Healthy.validSegmentsBool body) Bool.true) (@Eq.{1} String out (@ite.{1} String (@Eq.{1} Bool trailing Bool.true) (instDecidableEqBool trailing Bool.true) (@HAppend.hAppend.{0, 0, 0} String String String (@instHAppendOfAppend.{0} String instAppendString) body "/") body)))))))))
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.ConfigText.match_1
+| ### NoCommentsSpecification.Healthy.ConfigJson.match_1
 | 
 | A definition. It has the universe parameter u_1. Its type:
 | 
@@ -2095,10 +2084,10 @@ revision 1167
 | Its value:
 | 
 | ```lean
-| fun (motive : Option.{0} Lean.Json → Sort u_1) => fun (x : Option.{0} Lean.Json) => fun (h_1 : ∀ (exclArr : Array.{0} Lean.Json), motive (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr))) => fun (h_2 : ∀ (val : Lean.Json), motive (@Option.some.{0} Lean.Json val)) => fun (h_3 : ∀ («_» : Unit), motive (@Option.none.{0} Lean.Json)) => @Option.casesOn.{u_1, 0} Lean.Json (fun (x_1 : Option.{0} Lean.Json) => motive x_1) x (h_3 Unit.unit) (fun (val : Lean.Json) => @NoCommentsSpecification.Healthy.ConfigText._sparseCasesOn_1.{u_1} (fun (x_1 : Lean.Json) => motive (@Option.some.{0} Lean.Json x_1)) val (fun (elems : Array.{0} Lean.Json) => h_1 elems) (fun (h : Nat.hasNotBit (nat_lit 16) (Lean.Json.ctorIdx val)) => h_2 val))
+| fun (motive : Option.{0} Lean.Json → Sort u_1) => fun (x : Option.{0} Lean.Json) => fun (h_1 : ∀ (exclArr : Array.{0} Lean.Json), motive (@Option.some.{0} Lean.Json (Lean.Json.arr exclArr))) => fun (h_2 : ∀ (val : Lean.Json), motive (@Option.some.{0} Lean.Json val)) => fun (h_3 : ∀ («_» : Unit), motive (@Option.none.{0} Lean.Json)) => @Option.casesOn.{u_1, 0} Lean.Json (fun (x_1 : Option.{0} Lean.Json) => motive x_1) x (h_3 Unit.unit) (fun (val : Lean.Json) => @NoCommentsSpecification.Healthy.ConfigJson._sparseCasesOn_1.{u_1} (fun (x_1 : Lean.Json) => motive (@Option.some.{0} Lean.Json x_1)) val (fun (elems : Array.{0} Lean.Json) => h_1 elems) (fun (h : Nat.hasNotBit (nat_lit 16) (Lean.Json.ctorIdx val)) => h_2 val))
 | ```
 | 
-| ### NoCommentsSpecification.Healthy.ConfigText._sparseCasesOn_1
+| ### NoCommentsSpecification.Healthy.ConfigJson._sparseCasesOn_1
 | 
 | A definition. It has the universe parameter u. Its type:
 | 
@@ -2368,7 +2357,7 @@ revision 1167
 | 
 | The declarations of Lean's own libraries (Init, Std, Lean and Lake) are not printed: they are those of Lean 4.36.0, commit 611c117bfaf7b7ae1cfcf246ce6fba31e8f509e9, which made this text. A declaration is counted as Lean's own when Lean found the module that declares it in that release's library directory.
 | 
-consequence leaves refusal error wording free on malformed JSON
+consequence leaves refusal error wording free on invalid config JSON
 shown as possibility
 predicate 438
 | # A consequence's predicate
@@ -2376,7 +2365,7 @@ predicate 438
 | Printed exactly: as Lean syntax that Lean elaborates back to the term its kernel checks, binder names and metadata aside, from the root namespace with nothing opened.
 | 
 | ```lean
-| fun (f : NoCommentsSpecification.ParseConfigFn) => (∀ (j : Lean.Json), @Ne.{1} (Except.{0, 0} String Lean.Json) (Lean.Json.parse "") (@Except.ok.{0, 0} String Lean.Json j)) → @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f "") (@Except.error.{0, 0} String NoComments.Config.RepoConfig "denied")
+| fun (f : NoCommentsSpecification.ParseConfigFn) => @Eq.{1} (Except.{0, 0} String NoComments.Config.RepoConfig) (f Lean.Json.null) (@Except.error.{0, 0} String NoComments.Config.RepoConfig "denied")
 | ```
 | 
 | ## Definitions the predicate reaches
@@ -2394,7 +2383,7 @@ predicate 438
 | Its value:
 | 
 | ```lean
-| String → Except.{0, 0} String NoComments.Config.RepoConfig
+| Lean.Json → Except.{0, 0} String NoComments.Config.RepoConfig
 | ```
 | 
 | ### NoComments.Config.RepoConfig

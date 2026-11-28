@@ -205,56 +205,52 @@ theorem hashMapOfEntries_lookup {entries : List RatchetCore.RatchetEntry}
   rw [foldl_insert_getElem?_of_nodup entries Std.HashMap.emptyWithCapacity hnd (fun _ _ => by simp)]
   cases entries.find? (·.file == k) <;> simp
 
-theorem validRatchetJson_total (text : String) :
-    (∃ m, ValidRatchetJson text m) ∨ RatchetRefusal text := by
-  cases hp : Json.parse text with
-  | error _ => exact .inr (.badJson fun j h => by rw [hp] at h; cases h)
-  | ok j =>
-    cases j with
-    | arr arr =>
-      by_cases hElts : ∀ (i : Nat) (_ : i < arr.size), ∃ e, ValidRatchetEntryJson arr[i] e
-      · let entries : List RatchetCore.RatchetEntry :=
-          List.ofFn fun idx : Fin arr.size => Classical.choose (hElts idx.1 idx.2)
-        have hlen : entries.length = arr.size := List.length_ofFn
-        have helts : ∀ (i : Nat) (h : i < arr.size),
-            ∃ (he : i < entries.length), ValidRatchetEntryJson arr[i] entries[i] := by
-          intro i hi
-          refine ⟨by omega, ?_⟩
-          have hget : entries[i]'(by omega) = Classical.choose (hElts i hi) := by
-            simp [entries]
-          rw [hget]
-          exact Classical.choose_spec (hElts i hi)
-        by_cases hnd : (entries.map (·.file)).Nodup
-        · exact .inl ⟨hashMapOfEntries entries, arr, entries, hp, hlen, helts, hnd,
-            hashMapOfEntries_lookup hnd⟩
-        · obtain ⟨i, j, hi, hj, hne, heq⟩ := (list_not_nodup_iff_dup_idx (entries.map (·.file))).mp hnd
-          simp only [List.length_map, hlen] at hi hj
-          obtain ⟨_, hv1⟩ := helts i hi
-          obtain ⟨_, hv2⟩ := helts j hj
-          have hfeq : entries[i].file = entries[j].file := by
-            simpa [List.getElem_map] using heq
-          exact .inr (.duplicateFile hi hj hp hne hv1 hv2 hfeq)
-      · have hnot : ∃ i, ∃ (_ : i < arr.size), ∀ e, ¬ ValidRatchetEntryJson arr[i] e := by
-          obtain ⟨i, hni⟩ := Classical.not_forall.mp hElts
-          obtain ⟨hi, hne⟩ := Classical.not_forall.mp hni
-          exact ⟨i, hi, fun e he => hne ⟨e, he⟩⟩
-        obtain ⟨i, hi, hne⟩ := hnot
-        exact .inr (.invalidEntry hi hp hne)
-    | _ => exact .inr (.notArray hp fun _ h => by cases h)
+theorem validRatchetJson_total (json : Json) :
+    (∃ m, ValidRatchetJson json m) ∨ RatchetRefusal json := by
+  cases json with
+  | arr arr =>
+    by_cases hElts : ∀ (i : Nat) (_ : i < arr.size), ∃ e, ValidRatchetEntryJson arr[i] e
+    · let entries : List RatchetCore.RatchetEntry :=
+        List.ofFn fun idx : Fin arr.size => Classical.choose (hElts idx.1 idx.2)
+      have hlen : entries.length = arr.size := List.length_ofFn
+      have helts : ∀ (i : Nat) (h : i < arr.size),
+          ∃ (he : i < entries.length), ValidRatchetEntryJson arr[i] entries[i] := by
+        intro i hi
+        refine ⟨by omega, ?_⟩
+        have hget : entries[i]'(by omega) = Classical.choose (hElts i hi) := by
+          simp [entries]
+        rw [hget]
+        exact Classical.choose_spec (hElts i hi)
+      by_cases hnd : (entries.map (·.file)).Nodup
+      · exact .inl ⟨hashMapOfEntries entries, arr, entries, rfl, hlen, helts, hnd,
+          hashMapOfEntries_lookup hnd⟩
+      · obtain ⟨i, j, hi, hj, hne, heq⟩ := (list_not_nodup_iff_dup_idx (entries.map (·.file))).mp hnd
+        simp only [List.length_map, hlen] at hi hj
+        obtain ⟨_, hv1⟩ := helts i hi
+        obtain ⟨_, hv2⟩ := helts j hj
+        have hfeq : entries[i].file = entries[j].file := by
+          simpa [List.getElem_map] using heq
+        exact .inr (.duplicateFile hi hj rfl hne hv1 hv2 hfeq)
+    · have hnot : ∃ i, ∃ (_ : i < arr.size), ∀ e, ¬ ValidRatchetEntryJson arr[i] e := by
+        obtain ⟨i, hni⟩ := Classical.not_forall.mp hElts
+        obtain ⟨hi, hne⟩ := Classical.not_forall.mp hni
+        exact ⟨i, hi, fun e he => hne ⟨e, he⟩⟩
+      obtain ⟨i, hi, hne⟩ := hnot
+      exact .inr (.invalidEntry hi rfl hne)
+  | _ => exact .inr (.notArray fun _ h => by cases h)
 
-theorem validRatchetJson_and_refusal_disjoint {text : String}
+theorem validRatchetJson_and_refusal_disjoint {json : Json}
     {m : Std.HashMap String RatchetCore.RatchetEntry}
-    (hv : ValidRatchetJson text m) (hr : RatchetRefusal text) : False := by
-  rcases hv with ⟨arr, entries, hp, hlen, helts, hnd, _⟩
+    (hv : ValidRatchetJson json m) (hr : RatchetRefusal json) : False := by
+  rcases hv with ⟨arr, entries, rfl, hlen, helts, hnd, _⟩
   cases hr with
-  | badJson hbad => exact hbad _ hp
-  | notArray hp2 hna => rw [hp] at hp2; cases hp2; exact hna arr rfl
-  | @invalidEntry arr2 i hi hp2 hne =>
-    rw [hp] at hp2; cases hp2
+  | notArray hna => exact hna arr rfl
+  | @invalidEntry arr2 i hi heq hne =>
+    cases heq
     obtain ⟨_, hve⟩ := helts i hi
     exact hne _ hve
-  | @duplicateFile arr2 i j e1 e2 hi hj hp2 hne hv1 hv2 hfeq =>
-    rw [hp] at hp2; cases hp2
+  | @duplicateFile arr2 i j e1 e2 hi hj heq hne hv1 hv2 hfeq =>
+    cases heq
     obtain ⟨hei, hvi⟩ := helts i hi
     obtain ⟨hej, hvj⟩ := helts j hj
     have hf1 : e1.file = entries[i].file := validRatchetEntryJson_file_unique hv1 hvi
@@ -293,8 +289,8 @@ theorem validRatchetEntry_iff_healthy (j : Json) (fileOut : String) :
     · intro fp hmem
       exact (healthy_isFpStr_iff _).mp (hval fp (by simpa [entry, sf] using hmem))
 
-theorem validRatchetJson_iff_healthy {text : String} :
-    (∃ m, ValidRatchetJson text m) ↔ Healthy.RatchetText text := by
+theorem validRatchetJson_iff_healthy {json : Json} :
+    (∃ m, ValidRatchetJson json m) ↔ Healthy.RatchetJson json := by
   constructor
   · rintro ⟨m, arr, entries, hp, hlen, helts, hnd, _⟩
     refine ⟨arr, entries.map (·.file), hp, by simpa using hlen, hnd, fun i hi => ?_⟩
@@ -328,8 +324,8 @@ theorem validRatchetJson_iff_healthy {text : String} :
 
 noncomputable def parseRatchetModelWith (errMsg : String) : ParseRatchetFn :=
   open Classical in
-  fun text =>
-    if h : ∃ m, ValidRatchetJson text m then .ok (Classical.choose h)
+  fun json =>
+    if h : ∃ m, ValidRatchetJson json m then .ok (Classical.choose h)
     else .error errMsg
 
 noncomputable def parseRatchetModel : ParseRatchetFn :=
@@ -339,7 +335,7 @@ theorem parseRatchetModelWith_meets (errMsg : String) :
     parseRatchetRecord.Meets (parseRatchetModelWith errMsg) := by
   refine ⟨(fun _ h => nomatch h), fun p hp => ?_⟩
   rcases List.mem_cons.mp hp with rfl | hp
-  · intro text m hok
+  · intro json m hok
     dsimp [parseRatchetModelWith] at hok
     split at hok
     · rename_i h
@@ -347,12 +343,12 @@ theorem parseRatchetModelWith_meets (errMsg : String) :
       exact Classical.choose_spec h
     · contradiction
   rcases List.mem_cons.mp hp with rfl | hp
-  · intro text msg herr
+  · intro json msg herr
     dsimp [parseRatchetModelWith] at herr
     split at herr
     · contradiction
     · rename_i hno
-      rcases validRatchetJson_total text with hok | href
+      rcases validRatchetJson_total json with hok | href
       · exact absurd hok hno
       · exact href
   exact nomatch hp
@@ -360,39 +356,45 @@ theorem parseRatchetModelWith_meets (errMsg : String) :
 theorem parseRatchetModel_meets : parseRatchetRecord.Meets parseRatchetModel :=
   parseRatchetModelWith_meets "invalid ratchet"
 
-def JsonRatchetOracle : Prop :=
-  (∀ j, Json.parse "" ≠ .ok j) ∧ ∃ text m, ValidRatchetJson text m
+def emptyRatchetJson : Json := Json.arr #[]
 
-theorem parseRatchet_o2_of_oracle (ho : JsonRatchetOracle) : O2 parseRatchetRecord := by
+theorem emptyRatchetJson_valid :
+    ValidRatchetJson emptyRatchetJson ({} : Std.HashMap String RatchetCore.RatchetEntry) :=
+  ⟨#[], [], rfl, rfl, fun _ hi => absurd hi (Nat.not_lt_zero _), List.nodup_nil,
+    fun _ => Std.HashMap.getElem?_empty⟩
+
+theorem null_ratchet_refusal : RatchetRefusal Json.null :=
+  .notArray fun _ h => by cases h
+
+theorem parseRatchet_o2 : O2 parseRatchetRecord := by
   refine (o2_correct _).mpr ⟨⟨parseRatchetModel, (fun _ h => nomatch h)⟩, ?_⟩
   intro p hp
   rcases List.mem_cons.mp hp with rfl | hp
-  · rcases ho.2 with ⟨text, m, hv⟩
-    exact ⟨(text, m), hv⟩
+  · exact ⟨(emptyRatchetJson, ({} : Std.HashMap String RatchetCore.RatchetEntry)), emptyRatchetJson_valid⟩
   rcases List.mem_cons.mp hp with rfl | hp
-  · exact ⟨"", .badJson ho.1⟩
+  · exact ⟨Json.null, null_ratchet_refusal⟩
   exact nomatch hp
 
 theorem parseRatchet_o2Run : O2Run parseRatchetRecord :=
   o2Run_of_meets parseRatchetModel_meets
 
-theorem parseRatchet_o3_of_oracle (ho : JsonRatchetOracle) : O3 parseRatchetRecord := by
+theorem parseRatchet_o3 : O3 parseRatchetRecord := by
   refine (o3_correct _).mpr fun c hc => ?_
-  rcases ho with ⟨hempty, text, m, hv⟩
   rcases List.mem_cons.mp hc with rfl | hc
-  · refine ⟨fun _ => .ok m, fun h => ?_⟩
-    exact validRatchetJson_and_refusal_disjoint (h "" m rfl) (.badJson hempty)
+  · refine ⟨fun _ => .ok ({} : Std.HashMap String RatchetCore.RatchetEntry), fun h => ?_⟩
+    exact validRatchetJson_and_refusal_disjoint (h Json.null {} rfl) null_ratchet_refusal
   rcases List.mem_cons.mp hc with rfl | hc
   · refine ⟨fun _ => .error "always", fun h => ?_⟩
-    exact validRatchetJson_and_refusal_disjoint hv (h text "always" rfl)
+    exact validRatchetJson_and_refusal_disjoint emptyRatchetJson_valid
+      (h emptyRatchetJson "always" rfl)
   exact nomatch hc
 
 theorem parseRatchet_o4 : O4 parseRatchetRecord := o4_function _ rfl
 
 def ParseRatchetFreedom : Freedom ParseRatchetFn :=
-  .rel fun f g => ∀ text,
-    ((f text).isOk = (g text).isOk) ∧
-    (∀ m1 m2, f text = .ok m1 → g text = .ok m2 → ∀ (k : String), m1[k]? = m2[k]?)
+  .rel fun f g => ∀ json,
+    ((f json).isOk = (g json).isOk) ∧
+    (∀ m1 m2, f json = .ok m1 → g json = .ok m2 → ∀ (k : String), m1[k]? = m2[k]?)
 
 theorem validRatchetEntryJson_unique {j : Json} {e1 e2 : RatchetCore.RatchetEntry}
     (h1 : ValidRatchetEntryJson j e1) (h2 : ValidRatchetEntryJson j e2) : e1 = e2 := by
@@ -435,13 +437,13 @@ theorem validRatchetEntryJson_unique {j : Json} {e1 e2 : RatchetCore.RatchetEntr
   subst hfile hcom hlines hsf
   rfl
 
-theorem validRatchetJson_lookup_unique {text : String}
+theorem validRatchetJson_lookup_unique {json : Json}
     {m1 m2 : Std.HashMap String RatchetCore.RatchetEntry}
-    (h1 : ValidRatchetJson text m1) (h2 : ValidRatchetJson text m2) :
+    (h1 : ValidRatchetJson json m1) (h2 : ValidRatchetJson json m2) :
     ∀ (k : String), m1[k]? = m2[k]? := by
-  rcases h1 with ⟨arr1, es1, hp1, hl1, he1, _, lk1⟩
-  rcases h2 with ⟨arr2, es2, hp2, hl2, he2, _, lk2⟩
-  rw [hp1] at hp2; cases hp2
+  rcases h1 with ⟨arr1, es1, rfl, hl1, he1, _, lk1⟩
+  rcases h2 with ⟨arr2, es2, heqArr, hl2, he2, _, lk2⟩
+  cases heqArr
   have heq : es1 = es2 := by
     apply List.ext_getElem
     · rw [hl1, hl2]
@@ -455,45 +457,44 @@ theorem validRatchetJson_lookup_unique {text : String}
   rw [lk1 k, lk2 k]
 
 theorem parseRatchet_healthy_owed :
-    ∀ f text, parseRatchetRecord.Meets f →
-      Healthy.RatchetText text → ∃ m, f text = .ok m := by
-  intro f text hf hh
-  cases hfv : f text with
+    ∀ f json, parseRatchetRecord.Meets f →
+      Healthy.RatchetJson json → ∃ m, f json = .ok m := by
+  intro f json hf hh
+  cases hfv : f json with
   | ok m => exact ⟨m, rfl⟩
   | error msg =>
     exfalso
-    have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text msg hfv
+    have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json msg hfv
     obtain ⟨m, hv⟩ := validRatchetJson_iff_healthy.mpr hh
     exact validRatchetJson_and_refusal_disjoint hv href
 
 theorem parseRatchet_o5 : O5 parseRatchetRecord ParseRatchetFreedom := by
-  refine ⟨fun f g hf hg text => ?_, trivial⟩
-  have hfok := hf.2 _ List.mem_cons_self text
-  have hferr := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text
-  have hgok := hg.2 _ List.mem_cons_self text
-  have hgerr := hg.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text
+  refine ⟨fun f g hf hg json => ?_, trivial⟩
+  have hfok := hf.2 _ List.mem_cons_self json
+  have hferr := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json
+  have hgok := hg.2 _ List.mem_cons_self json
+  have hgerr := hg.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json
   refine ⟨?_, fun m1 m2 h1 h2 => validRatchetJson_lookup_unique (hfok m1 h1) (hgok m2 h2)⟩
-  cases h1 : f text with
+  cases h1 : f json with
   | ok m1 =>
-    cases h2 : g text with
+    cases h2 : g json with
     | ok _ => rfl
     | error msg =>
       exfalso
       exact validRatchetJson_and_refusal_disjoint (hfok m1 h1) (hgerr msg h2)
   | error msg =>
-    cases h2 : g text with
+    cases h2 : g json with
     | error _ => rfl
     | ok m2 =>
       exfalso
       exact validRatchetJson_and_refusal_disjoint (hgok m2 h2) (hferr msg h1)
 
-theorem parseRatchet_not_o5_eq_of_oracle (ho : JsonRatchetOracle) :
-    ¬ O5 parseRatchetRecord .eq := by
+theorem parseRatchet_not_o5_eq : ¬ O5 parseRatchetRecord .eq := by
   refine not_o5_eq parseRatchetModel_meets (parseRatchetModelWith_meets "denied") fun heq => ?_
-  have hdiff := congrFun heq ""
-  have hna : ¬ ∃ m, ValidRatchetJson "" m := by
+  have hdiff := congrFun heq Json.null
+  have hna : ¬ ∃ m, ValidRatchetJson Json.null m := by
     rintro ⟨m, hv⟩
-    exact validRatchetJson_and_refusal_disjoint hv (.badJson ho.1)
+    exact validRatchetJson_and_refusal_disjoint hv null_ratchet_refusal
   dsimp [parseRatchetModel, parseRatchetModelWith] at hdiff
   simp [hna] at hdiff
 
@@ -503,7 +504,7 @@ theorem parseRatchet_oPair_whole :
     ⟨parseRatchetModel, parseRatchetModel_meets, fun _ => parseRatchetModel_meets.2 c hc⟩
 
 def parseRatchetPerInputPair : Pair ParseRatchetFn where
-  Input := String
+  Input := Json
   pre := fun _ => True
   post := fun i f => ∀ m, f i = .ok m → ValidRatchetJson i m
 
@@ -520,42 +521,40 @@ theorem parseRatchet_perInput_pairOf :
 
 theorem parseRatchet_perInput_table_attack :
     ∀ i : parseRatchetPerInputPair.Input, parseRatchetPerInputPair.pre i →
-      ∃ f : ParseRatchetFn, (∀ s, f s = f "") ∧ parseRatchetPerInputPair.post i f := by
+      ∃ f : ParseRatchetFn, (∀ j, f j = f Json.null) ∧ parseRatchetPerInputPair.post i f := by
   intro _ _
   refine ⟨fun _ => .error "table", fun _ => rfl, ?_⟩
   intro _ h; contradiction
 
-theorem parseRatchet_interim_const_fails_of_oracle (ho : JsonRatchetOracle) :
+theorem parseRatchet_interim_const_fails :
     ∀ c, ¬ parseRatchetRecord.Meets (fun _ => c) := by
-  rcases ho with ⟨hempty, text, _, hv⟩
   intro c hm
   cases c with
   | ok m =>
-    have hbad := hm.2 _ List.mem_cons_self "" m rfl
-    exact validRatchetJson_and_refusal_disjoint hbad (.badJson hempty)
+    have hbad := hm.2 _ List.mem_cons_self Json.null m rfl
+    exact validRatchetJson_and_refusal_disjoint hbad null_ratchet_refusal
   | error msg =>
-    have href := hm.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text msg rfl
-    exact validRatchetJson_and_refusal_disjoint hv href
+    have href := hm.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) emptyRatchetJson msg rfl
+    exact validRatchetJson_and_refusal_disjoint emptyRatchetJson_valid href
 
-theorem parseRatchet_healthy_nonempty_of_oracle (ho : JsonRatchetOracle) :
-    ∃ text, Healthy.RatchetText text :=
-  let ⟨text, m, hv⟩ := ho.2
-  ⟨text, validRatchetJson_iff_healthy.mp ⟨m, hv⟩⟩
+theorem parseRatchet_healthy_nonempty : ∃ json, Healthy.RatchetJson json :=
+  ⟨emptyRatchetJson,
+    validRatchetJson_iff_healthy.mp ⟨{}, emptyRatchetJson_valid⟩⟩
 
-theorem parseRatchet_negative_external_model_of_oracle (ho : JsonRatchetOracle) :
-    ∃ (f : ParseRatchetFn), ∃ text,
-      (∀ s m, f s = .ok m → ValidRatchetJson s m) ∧
-      Healthy.RatchetText text ∧
-      ¬ ∃ m, f text = .ok m := by
-  rcases ho.2 with ⟨text, m, hv⟩
-  refine ⟨fun _ => .error "denied", text, (fun _ _ h => nomatch h),
-    validRatchetJson_iff_healthy.mp ⟨m, hv⟩, fun ⟨_, h⟩ => nomatch h⟩
+theorem parseRatchet_negative_external_model :
+    ∃ (f : ParseRatchetFn), ∃ json,
+      (∀ j m, f j = .ok m → ValidRatchetJson j m) ∧
+      Healthy.RatchetJson json ∧
+      ¬ ∃ m, f json = .ok m :=
+  ⟨fun _ => .error "denied", emptyRatchetJson, (fun _ _ h => nomatch h),
+    validRatchetJson_iff_healthy.mp ⟨{}, emptyRatchetJson_valid⟩,
+    fun ⟨_, h⟩ => nomatch h⟩
 
 theorem parseRatchet_reason_classified :
-    ∀ f text msg, parseRatchetRecord.Meets f → f text = .error msg →
-      RatchetRefusal text ∧ ¬ Healthy.RatchetText text := by
-  intro f text msg hf herr
-  have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) text msg herr
+    ∀ f json msg, parseRatchetRecord.Meets f → f json = .error msg →
+      RatchetRefusal json ∧ ¬ Healthy.RatchetJson json := by
+  intro f json msg hf herr
+  have href := hf.2 _ (List.mem_cons_of_mem _ List.mem_cons_self) json msg herr
   exact ⟨href, fun hh =>
     let ⟨_, hv⟩ := validRatchetJson_iff_healthy.mpr hh
     validRatchetJson_and_refusal_disjoint hv href⟩

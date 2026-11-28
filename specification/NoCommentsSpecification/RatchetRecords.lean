@@ -27,13 +27,13 @@ def parseRatchetRecord : IntentRecord ParseRatchetFn where
   shape := .function _ _
   dom := []
   props :=
-    [ ⟨"ok_valid_ratchet_map", fun f => ∀ text m, f text = .ok m → ValidRatchetJson text m⟩
-    , ⟨"refusal_sound", fun f => ∀ text msg, f text = .error msg → RatchetRefusal text⟩ ]
+    [ ⟨"ok_valid_ratchet_map", fun f => ∀ json m, f json = .ok m → ValidRatchetJson json m⟩
+    , ⟨"refusal_sound", fun f => ∀ json msg, f json = .error msg → RatchetRefusal json⟩ ]
   vocab :=
     [ ⟨"ValidRatchetJson",
-        String × Std.HashMap String RatchetCore.RatchetEntry,
+        Lean.Json × Std.HashMap String RatchetCore.RatchetEntry,
         fun p => ValidRatchetJson p.1 p.2⟩
-    , ⟨"RatchetRefusal", String, RatchetRefusal⟩ ]
+    , ⟨"RatchetRefusal", Lean.Json, RatchetRefusal⟩ ]
 
 def checkExactSyncRecord : IntentRecord CheckExactSyncFn where
   shape := .function _ _
